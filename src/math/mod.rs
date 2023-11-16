@@ -6,6 +6,7 @@ pub mod generic;
 pub mod interval;
 pub mod matrix2;
 pub mod matrix3;
+pub mod pixel;
 pub mod point;
 pub mod rect;
 pub mod rgba8;

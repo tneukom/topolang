@@ -8,7 +8,7 @@ use crate::{
     utils::ReflectEnum,
 };
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Direction {
     Left,
     Right,
@@ -18,6 +18,15 @@ pub enum Direction {
 
 impl Direction {
     pub const ALL: [Self; 4] = [Self::Left, Self::Right, Self::Up, Self::Down];
+
+    pub fn reverse(self) -> Self {
+        match self {
+            Self::Left => Self::Right,
+            Self::Right => Self::Left,
+            Self::Up => Self::Down,
+            Self::Down => Self::Up,
+        }
+    }
 
     /// A step of length one in the given direction
     pub fn unit_step(self) -> Point<i64> {
@@ -81,4 +90,16 @@ impl ReflectEnum for Direction {
             Self::Down => "Down",
         }
     }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum DiagonalDirection {
+    UpLeft,
+    UpRight,
+    DownLeft,
+    DownRight,
+}
+
+impl DiagonalDirection {
+    pub const ALL: [Self; 4] = [Self::UpLeft, Self::UpRight, Self::DownLeft, Self::DownRight];
 }

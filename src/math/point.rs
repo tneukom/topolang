@@ -147,8 +147,6 @@ impl<T: Ord> Point<T> {
 //     }
 // }
 
-pub type FPoint = Point<f64>;
-
 impl Point<usize> {
     pub fn to_f64(self) -> Point<f64> {
         Point::new(self.x as f64, self.y as f64)
