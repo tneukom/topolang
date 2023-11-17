@@ -78,6 +78,12 @@ impl<T> GridPoint<T> {
     }
 }
 
+impl<T> From<Point<i64>> for GridPoint<T> {
+    fn from(value: Point<i64>) -> Self {
+        GridPoint::new(value.x, value.y)
+    }
+}
+
 impl<T> Add<Point<i64>> for GridPoint<T> {
     type Output = GridPoint<T>;
 
@@ -131,7 +137,7 @@ impl Pixel {
     }
 
     pub fn left_side_ccw(self) -> Side {
-        Side::new(self.top_right_corner(), Direction::Down)
+        Side::new(self.top_left_corner(), Direction::Down)
     }
 
     pub fn bottom_side_ccw(self) -> Side {
@@ -153,6 +159,15 @@ impl Pixel {
             Direction::Up => self.top_side_ccw(),
             Direction::Down => self.bottom_side_ccw(),
         }
+    }
+
+    pub fn sides_ccw(self) -> [Side; 4] {
+        [
+            self.left_side_ccw(),
+            self.bottom_side_ccw(),
+            self.right_side_ccw(),
+            self.top_side_ccw(),
+        ]
     }
 }
 

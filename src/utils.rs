@@ -93,3 +93,10 @@ pub fn array_take_nth<T, const N: usize>(array: [T; N], n: usize) -> T {
     // https://doc.rust-lang.org/src/core/array/iter.rs.html
     array.into_iter().nth(n).unwrap()
 }
+
+pub fn all_equal<T: Eq>(mut iter: impl Iterator<Item = T>) -> bool {
+    match iter.next() {
+        None => true,
+        Some(first) => iter.all(|el| el == first),
+    }
+}

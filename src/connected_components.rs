@@ -1,0 +1,167 @@
+use crate::{
+    bitmap::Bitmap,
+    math::{
+        direction::Direction,
+        pixel::{Pixel, Side},
+        rgba8::Rgba8,
+    },
+};
+use std::collections::{HashMap, HashSet};
+
+pub struct ConnectedComponent {
+    interior: HashSet<Pixel>,
+    sides: HashSet<Side>,
+}
+
+pub fn flood_fill(
+    seed: Pixel,
+    is_boundary: impl Fn(Pixel, Side) -> bool,
+) -> (HashSet<Pixel>, HashSet<Side>) {
+    let mut interior: HashSet<Pixel> = HashSet::new();
+    let mut sides: HashSet<Side> = HashSet::new();
+
+    let mut todo: Vec<Pixel> = vec![seed];
+
+    while !todo.is_empty() {
+        let pixel = todo.pop().unwrap();
+
+        if interior.contains(&pixel) {
+            continue;
+        }
+
+        interior.insert(pixel);
+
+        for direction in Direction::ALL {
+            let neighbor_pixel = pixel.neighbor(direction);
+            let neighbor_side = pixel.side_ccw(direction);
+
+            if is_boundary(neighbor_pixel, neighbor_side) {
+                sides.insert(neighbor_side);
+            } else {
+                todo.push(neighbor_pixel);
+            }
+        }
+    }
+
+    (interior, sides)
+}
+
+pub fn connected_components<T: Copy + Eq>(pixels: &HashMap<Pixel, T>) -> Vec<ConnectedComponent> {
+    let mut rest: HashSet<_> = pixels.keys().cloned().collect();
+    let mut components: Vec<ConnectedComponent> = Vec::new();
+
+    while !rest.is_empty() {
+        let &seed = rest.iter().next().unwrap();
+        let seed_color = pixels.get(&seed).unwrap();
+
+        let is_boundary = |pixel: Pixel, _side: Side| pixels.get(&pixel) != Some(seed_color);
+        let (interior, sides) = flood_fill(seed, is_boundary);
+
+        // Remove component interior from rest
+        for pixel in &interior {
+            rest.remove(pixel);
+        }
+
+        let component = ConnectedComponent { interior, sides };
+        components.push(component);
+    }
+
+    components
+}
+
+pub fn color_dict_from_bitmap(bitmap: &Bitmap) -> HashMap<Pixel, Rgba8> {
+    let mut dict: HashMap<Pixel, Rgba8> = HashMap::new();
+    for idx in bitmap.indices() {
+        let color = bitmap[idx];
+        if color != Rgba8::TRANSPARENT {
+            let pixel: Pixel = idx.cwise_try_into::<i64>().unwrap().into();
+            dict.insert(pixel, color);
+        }
+    }
+    dict
+}
+
+#[cfg(test)]
+mod test {
+    use itertools::Itertools;
+    use std::collections::{HashMap, HashSet};
+    // TODO: Make sure color of pixels in components is constant
+    use crate::{
+        bitmap::Bitmap,
+        connected_components::{color_dict_from_bitmap, connected_components, ConnectedComponent},
+        math::{pixel::Pixel, rgba8::Rgba8},
+        utils::all_equal,
+    };
+
+    /// Make sure the color of each pixel in the component is the same
+    fn assert_constant_color(component: &ConnectedComponent, pixelmap: &HashMap<Pixel, Rgba8>) {
+        let is_constant = all_equal(component.interior.iter().map(|pixel| pixelmap[pixel]));
+        assert!(is_constant);
+    }
+
+    fn assert_proper_components(filename: &str, count: usize) {
+        let folder = "test_resources/connected_components";
+        let path = format!("{folder}/{filename}");
+
+        let bitmap = Bitmap::from_path(path).unwrap();
+        let whole = color_dict_from_bitmap(&bitmap);
+        let components = connected_components(&whole);
+        assert_eq!(components.len(), count);
+
+        for component in &components {
+            // Components cannot be empty
+            assert_ne!(component.interior.len(), 0);
+
+            assert_constant_color(component, &whole);
+
+            // Make sure the boundary of each component is proper
+            assert_proper_sides(component);
+        }
+
+        assert_total_union(&components, &whole);
+
+        // Make sure the total number of pixels in all components is the same as the number of
+        // pixels in the whole. Together with assert_total_union this implies non intersection.
+        let components_pixel_count: usize = components.iter().map(|comp| comp.interior.len()).sum();
+        assert_eq!(components_pixel_count, whole.len());
+    }
+
+    // Assert that the union of all component interiors is equal to the whole
+    fn assert_total_union(components: &Vec<ConnectedComponent>, whole: &HashMap<Pixel, Rgba8>) {
+        let union: HashSet<_> = components
+            .iter()
+            .flat_map(|comp| comp.interior.iter().cloned())
+            .collect();
+        let whole_pixels = whole.keys().cloned().collect();
+        assert_eq!(union, whole_pixels);
+    }
+
+    fn assert_proper_sides(component: &ConnectedComponent) {
+        let all_sides: HashSet<_> = component
+            .interior
+            .iter()
+            .flat_map(|pixel| pixel.sides_ccw())
+            .collect();
+        let boundary_sides: HashSet<_> = all_sides
+            .into_iter()
+            .filter(|side| {
+                let left_interior = component.interior.contains(&side.left_pixel());
+                let right_interior = component.interior.contains(&side.right_pixel());
+                left_interior != right_interior
+            })
+            .collect();
+        assert_eq!(boundary_sides, component.sides);
+    }
+
+    #[test]
+    fn component_bitmaps() {
+        assert_proper_components("1a.png", 1);
+        assert_proper_components("2a.png", 2);
+        assert_proper_components("2b.png", 2);
+        assert_proper_components("2c.png", 2);
+        assert_proper_components("2d.png", 2);
+        assert_proper_components("2e.png", 2);
+        assert_proper_components("3a.png", 3);
+        assert_proper_components("4a.png", 4);
+    }
+}
