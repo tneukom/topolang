@@ -6,19 +6,20 @@ use crate::{
         rgba8::Rgba8,
     },
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub struct ConnectedComponent {
-    interior: HashSet<Pixel>,
-    sides: HashSet<Side>,
+    pub interior: BTreeSet<Pixel>,
+    pub sides: BTreeSet<Side>,
+    pub color: Rgba8,
 }
 
 pub fn flood_fill(
     seed: Pixel,
     is_boundary: impl Fn(Pixel, Side) -> bool,
-) -> (HashSet<Pixel>, HashSet<Side>) {
-    let mut interior: HashSet<Pixel> = HashSet::new();
-    let mut sides: HashSet<Side> = HashSet::new();
+) -> (BTreeSet<Pixel>, BTreeSet<Side>) {
+    let mut interior: BTreeSet<Pixel> = BTreeSet::new();
+    let mut sides: BTreeSet<Side> = BTreeSet::new();
 
     let mut todo: Vec<Pixel> = vec![seed];
 
@@ -46,8 +47,8 @@ pub fn flood_fill(
     (interior, sides)
 }
 
-pub fn connected_components<T: Copy + Eq>(pixels: &HashMap<Pixel, T>) -> Vec<ConnectedComponent> {
-    let mut rest: HashSet<_> = pixels.keys().cloned().collect();
+pub fn connected_components(pixels: &BTreeMap<Pixel, Rgba8>) -> Vec<ConnectedComponent> {
+    let mut rest: BTreeSet<_> = pixels.keys().cloned().collect();
     let mut components: Vec<ConnectedComponent> = Vec::new();
 
     while !rest.is_empty() {
@@ -62,15 +63,19 @@ pub fn connected_components<T: Copy + Eq>(pixels: &HashMap<Pixel, T>) -> Vec<Con
             rest.remove(pixel);
         }
 
-        let component = ConnectedComponent { interior, sides };
+        let component = ConnectedComponent {
+            interior,
+            sides,
+            color: *seed_color,
+        };
         components.push(component);
     }
 
     components
 }
 
-pub fn color_dict_from_bitmap(bitmap: &Bitmap) -> HashMap<Pixel, Rgba8> {
-    let mut dict: HashMap<Pixel, Rgba8> = HashMap::new();
+pub fn color_dict_from_bitmap(bitmap: &Bitmap) -> BTreeMap<Pixel, Rgba8> {
+    let mut dict: BTreeMap<Pixel, Rgba8> = BTreeMap::new();
     for idx in bitmap.indices() {
         let color = bitmap[idx];
         if color != Rgba8::TRANSPARENT {
@@ -83,8 +88,7 @@ pub fn color_dict_from_bitmap(bitmap: &Bitmap) -> HashMap<Pixel, Rgba8> {
 
 #[cfg(test)]
 mod test {
-    use itertools::Itertools;
-    use std::collections::{HashMap, HashSet};
+    use std::collections::{BTreeMap, BTreeSet, HashSet};
     // TODO: Make sure color of pixels in components is constant
     use crate::{
         bitmap::Bitmap,
@@ -94,7 +98,7 @@ mod test {
     };
 
     /// Make sure the color of each pixel in the component is the same
-    fn assert_constant_color(component: &ConnectedComponent, pixelmap: &HashMap<Pixel, Rgba8>) {
+    fn assert_constant_color(component: &ConnectedComponent, pixelmap: &BTreeMap<Pixel, Rgba8>) {
         let is_constant = all_equal(component.interior.iter().map(|pixel| pixelmap[pixel]));
         assert!(is_constant);
     }
@@ -127,7 +131,7 @@ mod test {
     }
 
     // Assert that the union of all component interiors is equal to the whole
-    fn assert_total_union(components: &Vec<ConnectedComponent>, whole: &HashMap<Pixel, Rgba8>) {
+    fn assert_total_union(components: &Vec<ConnectedComponent>, whole: &BTreeMap<Pixel, Rgba8>) {
         let union: HashSet<_> = components
             .iter()
             .flat_map(|comp| comp.interior.iter().cloned())
@@ -142,7 +146,7 @@ mod test {
             .iter()
             .flat_map(|pixel| pixel.sides_ccw())
             .collect();
-        let boundary_sides: HashSet<_> = all_sides
+        let boundary_sides: BTreeSet<_> = all_sides
             .into_iter()
             .filter(|side| {
                 let left_interior = component.interior.contains(&side.left_pixel());

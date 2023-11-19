@@ -19,7 +19,7 @@ pub enum Direction {
 impl Direction {
     pub const ALL: [Self; 4] = [Self::Left, Self::Right, Self::Up, Self::Down];
 
-    pub fn reverse(self) -> Self {
+    pub fn reversed(self) -> Self {
         match self {
             Self::Left => Self::Right,
             Self::Right => Self::Left,
@@ -75,6 +75,15 @@ impl Direction {
             }
         }
     }
+
+    pub fn unicode_symbol(self) -> char {
+        match self {
+            Self::Left => '←',
+            Self::Right => '→',
+            Self::Up => '↑',
+            Self::Down => '↓',
+        }
+    }
 }
 
 impl ReflectEnum for Direction {
@@ -102,4 +111,13 @@ pub enum DiagonalDirection {
 
 impl DiagonalDirection {
     pub const ALL: [Self; 4] = [Self::UpLeft, Self::UpRight, Self::DownLeft, Self::DownRight];
+
+    pub fn unicode_symbol(self) -> char {
+        match self {
+            Self::UpLeft => '↖',
+            Self::UpRight => '↗',
+            Self::DownLeft => '↙',
+            Self::DownRight => '↘',
+        }
+    }
 }

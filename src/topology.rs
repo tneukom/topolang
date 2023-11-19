@@ -1,1 +1,320 @@
+use crate::{
+    connected_components::connected_components,
+    math::{
+        pixel::{Corner, Pixel, Side},
+        rgba8::Rgba8,
+    },
+};
+use std::{
+    collections::BTreeMap,
+    fmt,
+    fmt::{Display, Formatter},
+};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Seam {
+    pub start: Side,
+    pub stop: Side,
+}
+
+impl Seam {
+    pub fn new(start: Side, stop: Side) -> Self {
+        Seam { start, stop }
+    }
+
+    pub fn reversed(&self) -> Seam {
+        Self::new(self.stop.reversed(), self.start.reversed())
+    }
+}
+
+impl Display for Seam {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Seam({} -> {})", self.start, self.stop)
+    }
+}
+
+pub struct Border {
+    pub cycle: Vec<Side>,
+    pub seams: Vec<Seam>,
+    pub left_component: usize,
+}
+
+/// The boundary is counter clockwise. Is mutable so color can be changed.
+pub struct Component {
+    pub color: Rgba8,
+    pub boundary: Vec<Border>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SeamIndex {
+    pub i_component: usize,
+    pub i_border: usize,
+    pub i_seam: usize,
+}
+
+impl SeamIndex {
+    pub fn new(i_component: usize, i_border: usize, i_seam: usize) -> Self {
+        Self {
+            i_component,
+            i_border,
+            i_seam,
+        }
+    }
+}
+
+pub struct Topology {
+    pub components: Vec<Component>,
+    /// Maps seams to (component index, border index, seam index)
+    pub seam_indices: BTreeMap<Seam, SeamIndex>,
+}
+
+impl Topology {
+    pub fn new(pixelmap: &BTreeMap<Pixel, Rgba8>) -> Self {
+        let connected_components = connected_components(pixelmap);
+
+        let mut components = Vec::new();
+        let mut seam_indices: BTreeMap<Seam, SeamIndex> = BTreeMap::new();
+
+        for connected_component in &connected_components {
+            // Each cycle in the sides is a border
+            let mut boundary = Vec::new();
+            let i_component = components.len();
+
+            for cycle in split_into_cycles(&connected_component.sides) {
+                let i_border = boundary.len();
+                let seams =
+                    split_cycle_into_seams(&cycle, |side| pixelmap.get(&side.right_pixel()));
+
+                for (i_seam, &seam) in seams.iter().enumerate() {
+                    let seam_index = SeamIndex::new(i_component, i_border, i_seam);
+                    seam_indices.insert(seam, seam_index);
+                }
+
+                let border = Border {
+                    cycle,
+                    seams,
+                    left_component: i_component,
+                };
+                boundary.push(border);
+            }
+
+            let component = Component {
+                boundary,
+                color: connected_component.color,
+            };
+            components.push(component);
+        }
+
+        Topology {
+            components,
+            seam_indices,
+        }
+    }
+
+    pub fn contains_seam(&self, seam: &Seam) -> bool {
+        self.seam_indices.contains_key(seam)
+    }
+
+    /// Returns the border of a given seam
+    /// Only fails if seam is not self.contains_seam(seam)
+    pub fn seam_border(&self, seam: &Seam) -> Option<&Border> {
+        let seam_index = self.seam_indices.get(seam)?;
+        Some(&self.components[seam_index.i_component].boundary[seam_index.i_border])
+    }
+
+    /// Return the component on the left side of a given seam
+    /// Only fails if seam is not self.contains_seam(seam)
+    pub fn seam_left_component(&self, seam: &Seam) -> Option<&Component> {
+        let seam_index = self.seam_indices.get(seam)?;
+        Some(&self.components[seam_index.i_component])
+    }
+
+    pub fn seam_right_component(&self, seam: &Seam) -> Option<&Component> {
+        self.seam_left_component(&seam.reversed())
+    }
+
+    /// Only fails if seam is not self.contains_seam(seam)
+    pub fn next_seam(&self, seam: &Seam) -> Option<&Seam> {
+        let seam_index = self.seam_indices.get(seam)?;
+        let border = &self.components[seam_index.i_component].boundary[seam_index.i_border];
+        Some(&border.seams[(seam_index.i_seam + 1) % border.seams.len()])
+    }
+
+    /// Only fails if seam is not self.contains_seam(seam)
+    pub fn previous_seam(&self, seam: &Seam) -> Option<&Seam> {
+        let seam_index = self.seam_indices.get(seam)?;
+        let border = &self.components[seam_index.i_component].boundary[seam_index.i_border];
+        Some(&border.seams[(seam_index.i_seam - 1) % border.seams.len()])
+    }
+}
+
+impl Display for Topology {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let indent = "    ";
+
+        for (i_component, component) in self.components.iter().enumerate() {
+            writeln!(f, "Component {i_component}")?;
+            for (i_border, border) in component.boundary.iter().enumerate() {
+                writeln!(f, "{indent}Border {i_border}")?;
+                for seam in &border.seams {
+                    writeln!(f, "{indent}{indent}{seam}")?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Extract the side cycle that starts (and stops) at start_corner
+pub fn extract_cycle(side_graph: &mut BTreeMap<Corner, Side>, mut corner: Corner) -> Vec<Side> {
+    let mut cycle = Vec::new();
+    while let Some(side) = side_graph.remove(&corner) {
+        cycle.push(side);
+        corner = side.stop_corner();
+    }
+    assert_eq!(
+        cycle.first().unwrap().start_corner(),
+        cycle.last().unwrap().stop_corner()
+    );
+    cycle
+}
+
+/// Split a set of sides into cycles. The start point of every cycle is its minimum
+/// (lexicographic order x, y). `sides` must be an iterable of Side.
+pub fn split_into_cycles<'a>(sides: impl IntoIterator<Item = &'a Side>) -> Vec<Vec<Side>> {
+    // Maps corner to side that starts at the corner
+    let mut side_graph: BTreeMap<Corner, Side> = sides
+        .into_iter()
+        .map(|&side| (side.start_corner(), side))
+        .collect();
+
+    let mut cycles = Vec::new();
+
+    while let Some((&corner, _)) = side_graph.first_key_value() {
+        let cycle = extract_cycle(&mut side_graph, corner);
+        cycles.push(cycle);
+    }
+
+    cycles
+}
+
+/// Split a side cycle into segments based on a function f: Side -> T
+/// Each segment has constant f
+pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -> Vec<Seam> {
+    let mut iter = cycle.iter();
+    let Some(&first_side) = iter.next() else {
+        return Vec::new();
+    };
+
+    // Group cycle sides into seams, (groups of constant f)
+    let mut seams: Vec<Seam> = Vec::new();
+    let mut seam = Seam::new(first_side, first_side);
+    for &side in iter {
+        if f(seam.start) == f(side) {
+            seam.stop = side;
+        } else {
+            // Start a new seam at the current side
+            seams.push(seam);
+            seam = Seam::new(side, side);
+        }
+    }
+
+    // Handle unfinished last seam, if f(seam) == f(first_seam), first_seam is merged with seam,
+    // otherwise it is appended to seams
+    match seams.first_mut() {
+        Some(first_seam) if f(first_seam.start) == f(seam.stop) => first_seam.start = seam.start,
+        _ => seams.push(seam),
+    }
+
+    seams
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        bitmap::Bitmap,
+        connected_components::color_dict_from_bitmap,
+        math::rgba8::Rgba8,
+        seam_graph::{SeamGraph, UndirectedEdge},
+        topology::Topology,
+    };
+    use std::collections::BTreeSet;
+
+    fn load_topology(filename: &str) -> Topology {
+        let path = format!("test_resources/topology/{filename}");
+        let bitmap = Bitmap::from_path(path).unwrap();
+        let pixelmap = color_dict_from_bitmap(&bitmap);
+        let topology = Topology::new(&pixelmap);
+        topology
+    }
+
+    fn load_rgb_seam_graph(filename: &str) -> BTreeSet<UndirectedEdge<Rgba8>> {
+        let topo = load_topology(filename);
+        let seam_graph = SeamGraph::from_topology(&topo);
+        seam_graph.rgb_edges()
+    }
+
+    fn rgb_edges_from<const N: usize>(
+        rgb_edges: [(Rgba8, Rgba8); N],
+    ) -> BTreeSet<UndirectedEdge<Rgba8>> {
+        rgb_edges
+            .into_iter()
+            .map(|(a, b)| UndirectedEdge::new(a, b))
+            .collect()
+    }
+
+    #[test]
+    fn image_2a() {
+        let rgb_edges = load_rgb_seam_graph("2a.png");
+        let expected_rgb_edges = rgb_edges_from([(Rgba8::RED, Rgba8::BLUE)]);
+        assert_eq!(rgb_edges, expected_rgb_edges);
+    }
+
+    #[test]
+    fn image_2b() {
+        let rgb_edges = load_rgb_seam_graph("2b.png");
+        let expected_rgb_edges = rgb_edges_from([(Rgba8::RED, Rgba8::BLUE)]);
+        assert_eq!(rgb_edges, expected_rgb_edges);
+    }
+
+    #[test]
+    fn image_3a() {
+        let rgb_edges = load_rgb_seam_graph("3a.png");
+        let expected_rgb_edges =
+            rgb_edges_from([(Rgba8::RED, Rgba8::GREEN), (Rgba8::RED, Rgba8::BLUE)]);
+        assert_eq!(rgb_edges, expected_rgb_edges);
+    }
+
+    #[test]
+    fn image_3b() {
+        let rgb_edges = load_rgb_seam_graph("3b.png");
+        let expected_rgb_edges =
+            rgb_edges_from([(Rgba8::RED, Rgba8::GREEN), (Rgba8::GREEN, Rgba8::BLUE)]);
+        assert_eq!(rgb_edges, expected_rgb_edges);
+    }
+
+    #[test]
+    fn image_3c() {
+        let rgb_edges = load_rgb_seam_graph("3c.png");
+        let expected_rgb_edges = rgb_edges_from([
+            (Rgba8::RED, Rgba8::YELLOW),
+            (Rgba8::RED, Rgba8::BLUE),
+            (Rgba8::YELLOW, Rgba8::BLUE),
+        ]);
+        assert_eq!(rgb_edges, expected_rgb_edges);
+    }
+
+    #[test]
+    fn image_4a() {
+        let rgb_edges = load_rgb_seam_graph("4a.png");
+        let expected_rgb_edges = rgb_edges_from([
+            (Rgba8::RED, Rgba8::BLUE),
+            (Rgba8::BLUE, Rgba8::GREEN),
+            (Rgba8::GREEN, Rgba8::CYAN),
+            (Rgba8::BLUE, Rgba8::CYAN),
+            (Rgba8::RED, Rgba8::CYAN),
+        ]);
+        assert_eq!(rgb_edges, expected_rgb_edges);
+    }
+}

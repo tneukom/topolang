@@ -3,15 +3,16 @@ use crate::math::{
     point::Point,
 };
 use std::{
+    fmt::{Debug, Display, Formatter},
     marker::PhantomData,
     ops::{Add, Sub},
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GridPoint<T> {
     pub x: i64,
     pub y: i64,
-    grid_type: PhantomData<T>,
+    _grid_type: PhantomData<T>,
 }
 
 impl<T> GridPoint<T> {
@@ -19,7 +20,7 @@ impl<T> GridPoint<T> {
         Self {
             x,
             y,
-            grid_type: PhantomData::default(),
+            _grid_type: PhantomData::default(),
         }
     }
 
@@ -198,8 +199,20 @@ impl Corner {
     }
 }
 
+impl Display for GridPoint<PixelGrid> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Pixel({}, {})", self.x, self.y)
+    }
+}
+
+impl Display for GridPoint<CornerGrid> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Corner({}, {})", self.x, self.y)
+    }
+}
+
 /// Directed side, has start and end corners
-#[derive(Clone, Copy, Debug, PartialOrd, PartialEq, Ord, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Ord, Eq, Hash)]
 pub struct Side {
     corner: Corner,
     direction: Direction,
@@ -218,10 +231,10 @@ impl Side {
         self.corner.neighbor(self.direction)
     }
 
-    pub fn reverse(self) -> Self {
+    pub fn reversed(self) -> Self {
         Self::new(
             self.corner.neighbor(self.direction),
-            self.direction.reverse(),
+            self.direction.reversed(),
         )
     }
 
@@ -235,6 +248,18 @@ impl Side {
     }
 
     pub fn right_pixel(self) -> Pixel {
-        self.reverse().left_pixel()
+        self.reversed().left_pixel()
+    }
+}
+
+impl Display for Side {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Side({}, {}, {})",
+            self.corner.x,
+            self.corner.y,
+            self.direction.unicode_symbol()
+        )
     }
 }
