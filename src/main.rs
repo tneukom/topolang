@@ -13,6 +13,7 @@ mod array_2d;
 mod bitmap;
 mod connected_components;
 mod math;
+mod morphism;
 mod reduce;
 mod seam_graph;
 mod serialize;

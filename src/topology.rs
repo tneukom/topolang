@@ -9,6 +9,7 @@ use std::{
     collections::BTreeMap,
     fmt,
     fmt::{Display, Formatter},
+    ops::Index,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -25,6 +26,14 @@ impl Seam {
     pub fn reversed(&self) -> Seam {
         Self::new(self.stop.reversed(), self.start.reversed())
     }
+
+    pub fn start_corner(&self) -> Corner {
+        self.start.start_corner()
+    }
+
+    pub fn stop_corner(&self) -> Corner {
+        self.stop.stop_corner()
+    }
 }
 
 impl Display for Seam {
@@ -33,29 +42,39 @@ impl Display for Seam {
     }
 }
 
+pub type RegionKey = usize;
+
+#[derive(Debug, Clone)]
 pub struct Border {
     pub cycle: Vec<Side>,
     pub seams: Vec<Seam>,
-    pub left_component: usize,
+    pub left: RegionKey,
 }
 
 /// The boundary is counter clockwise. Is mutable so color can be changed.
-pub struct Component {
+#[derive(Debug, Clone)]
+pub struct Region {
     pub color: Rgba8,
     pub boundary: Vec<Border>,
 }
 
+impl Region {
+    pub fn iter_seams(&self) -> impl Iterator<Item = &Seam> {
+        self.boundary.iter().flat_map(|border| border.seams.iter())
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SeamIndex {
-    pub i_component: usize,
+    pub region_key: RegionKey,
     pub i_border: usize,
     pub i_seam: usize,
 }
 
 impl SeamIndex {
-    pub fn new(i_component: usize, i_border: usize, i_seam: usize) -> Self {
+    pub fn new(region_key: usize, i_border: usize, i_seam: usize) -> Self {
         Self {
-            i_component,
+            region_key,
             i_border,
             i_seam,
         }
@@ -63,8 +82,8 @@ impl SeamIndex {
 }
 
 pub struct Topology {
-    pub components: Vec<Component>,
-    /// Maps seams to (component index, border index, seam index)
+    pub regions: Vec<Region>,
+    /// Maps seams to (region key, border index, seam index)
     pub seam_indices: BTreeMap<Seam, SeamIndex>,
 }
 
@@ -72,13 +91,13 @@ impl Topology {
     pub fn new(pixelmap: &BTreeMap<Pixel, Rgba8>) -> Self {
         let connected_components = connected_components(pixelmap);
 
-        let mut components = Vec::new();
+        let mut regions = Vec::new();
         let mut seam_indices: BTreeMap<Seam, SeamIndex> = BTreeMap::new();
 
         for connected_component in &connected_components {
             // Each cycle in the sides is a border
             let mut boundary = Vec::new();
-            let i_component = components.len();
+            let region_key = regions.len();
 
             for cycle in split_into_cycles(&connected_component.sides) {
                 let i_border = boundary.len();
@@ -86,27 +105,27 @@ impl Topology {
                     split_cycle_into_seams(&cycle, |side| pixelmap.get(&side.right_pixel()));
 
                 for (i_seam, &seam) in seams.iter().enumerate() {
-                    let seam_index = SeamIndex::new(i_component, i_border, i_seam);
+                    let seam_index = SeamIndex::new(region_key, i_border, i_seam);
                     seam_indices.insert(seam, seam_index);
                 }
 
                 let border = Border {
                     cycle,
                     seams,
-                    left_component: i_component,
+                    left: region_key,
                 };
                 boundary.push(border);
             }
 
-            let component = Component {
+            let region = Region {
                 boundary,
                 color: connected_component.color,
             };
-            components.push(component);
+            regions.push(region);
         }
 
         Topology {
-            components,
+            regions,
             seam_indices,
         }
     }
@@ -117,34 +136,52 @@ impl Topology {
 
     /// Returns the border of a given seam
     /// Only fails if seam is not self.contains_seam(seam)
-    pub fn seam_border(&self, seam: &Seam) -> Option<&Border> {
-        let seam_index = self.seam_indices.get(seam)?;
-        Some(&self.components[seam_index.i_component].boundary[seam_index.i_border])
+    pub fn seam_border(&self, seam: &Seam) -> &Border {
+        let seam_index = self.seam_indices[seam];
+        &self.regions[seam_index.region_key].boundary[seam_index.i_border]
     }
 
-    /// Return the component on the left side of a given seam
+    /// Return the region key on the left side of a given seam
     /// Only fails if seam is not self.contains_seam(seam)
-    pub fn seam_left_component(&self, seam: &Seam) -> Option<&Component> {
-        let seam_index = self.seam_indices.get(seam)?;
-        Some(&self.components[seam_index.i_component])
+    pub fn left_of(&self, seam: &Seam) -> RegionKey {
+        let seam_index = &self.seam_indices[seam];
+        seam_index.region_key
     }
 
-    pub fn seam_right_component(&self, seam: &Seam) -> Option<&Component> {
-        self.seam_left_component(&seam.reversed())
-    }
-
-    /// Only fails if seam is not self.contains_seam(seam)
-    pub fn next_seam(&self, seam: &Seam) -> Option<&Seam> {
-        let seam_index = self.seam_indices.get(seam)?;
-        let border = &self.components[seam_index.i_component].boundary[seam_index.i_border];
-        Some(&border.seams[(seam_index.i_seam + 1) % border.seams.len()])
+    pub fn right_of(&self, seam: &Seam) -> RegionKey {
+        let seam_index = &self.seam_indices[&seam.reversed()];
+        seam_index.region_key
     }
 
     /// Only fails if seam is not self.contains_seam(seam)
-    pub fn previous_seam(&self, seam: &Seam) -> Option<&Seam> {
-        let seam_index = self.seam_indices.get(seam)?;
-        let border = &self.components[seam_index.i_component].boundary[seam_index.i_border];
-        Some(&border.seams[(seam_index.i_seam - 1) % border.seams.len()])
+    pub fn next_seam(&self, seam: &Seam) -> &Seam {
+        let seam_index = self.seam_indices[seam];
+        let border = &self.regions[seam_index.region_key].boundary[seam_index.i_border];
+        &border.seams[(seam_index.i_seam + 1) % border.seams.len()]
+    }
+
+    /// Only fails if seam is not self.contains_seam(seam)
+    pub fn previous_seam(&self, seam: &Seam) -> &Seam {
+        let seam_index = self.seam_indices[seam];
+        let border = &self.regions[seam_index.region_key].boundary[seam_index.i_border];
+        &border.seams[(seam_index.i_seam - 1) % border.seams.len()]
+    }
+
+    /// Seam between left and right region
+    /// Component index errors cause panic
+    pub fn seam_between(&self, left: RegionKey, right: RegionKey) -> Option<&Seam> {
+        let left_comp = &self.regions[left];
+        left_comp
+            .iter_seams()
+            .find(|&seam| self.right_of(seam) == right)
+    }
+}
+
+impl Index<RegionKey> for Topology {
+    type Output = Region;
+
+    fn index(&self, index: RegionKey) -> &Self::Output {
+        &self.regions[index]
     }
 }
 
@@ -152,9 +189,9 @@ impl Display for Topology {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let indent = "    ";
 
-        for (i_component, component) in self.components.iter().enumerate() {
-            writeln!(f, "Component {i_component}")?;
-            for (i_border, border) in component.boundary.iter().enumerate() {
+        for (region_key, region) in self.regions.iter().enumerate() {
+            writeln!(f, "Component {region_key}")?;
+            for (i_border, border) in region.boundary.iter().enumerate() {
                 writeln!(f, "{indent}Border {i_border}")?;
                 for seam in &border.seams {
                     writeln!(f, "{indent}{indent}{seam}")?;

@@ -26,11 +26,11 @@ impl<T: Ord> UndirectedEdge<T> {
 /// Does not contain one sides Seams
 #[derive(Debug, Clone)]
 pub struct SeamGraph {
-    /// Seams are edges between components, the right component can be empty space
+    /// Seams are edges between regions, the right region can be empty space
     pub edges: BTreeSet<UndirectedEdge<usize>>,
 
     /// Vertex labels
-    pub component_colors: Vec<Rgba8>,
+    pub region_colors: Vec<Rgba8>,
 }
 
 impl SeamGraph {
@@ -39,32 +39,30 @@ impl SeamGraph {
         for (seam, seam_indices) in &topo.seam_indices {
             let revered_seam = seam.reversed();
             if let Some(reversed_seam_indices) = topo.seam_indices.get(&revered_seam) {
-                let edge = UndirectedEdge::new(
-                    seam_indices.i_component,
-                    reversed_seam_indices.i_component,
-                );
+                let edge =
+                    UndirectedEdge::new(seam_indices.region_key, reversed_seam_indices.region_key);
                 edges.insert(edge);
             }
         }
 
-        let component_colors = topo.components.iter().map(|comp| comp.color).collect();
+        let region_colors = topo.regions.iter().map(|comp| comp.color).collect();
 
         SeamGraph {
             edges,
-            component_colors,
+            region_colors,
         }
     }
 
-    /// Use colors for edges instead of the component index.
+    /// Use colors for edges instead of the region keys.
     pub fn rgb_edges(&self) -> BTreeSet<UndirectedEdge<Rgba8>> {
-        // Only works if all components are different
-        assert!(self.component_colors.iter().all_unique());
+        // Only works if all regions have different colors.
+        assert!(self.region_colors.iter().all_unique());
 
         self.edges
             .iter()
             .map(|edge| {
-                let a_rgb = self.component_colors[edge.a];
-                let b_rgb = self.component_colors[edge.b];
+                let a_rgb = self.region_colors[edge.a];
+                let b_rgb = self.region_colors[edge.b];
                 UndirectedEdge::new(a_rgb, b_rgb)
             })
             .collect()
@@ -80,8 +78,8 @@ impl Display for SeamGraph {
         }
 
         writeln!(f, "Component colors")?;
-        for (i_component, color) in self.component_colors.iter().enumerate() {
-            writeln!(f, "{}: {}", i_component, color)?;
+        for (i_region, color) in self.region_colors.iter().enumerate() {
+            writeln!(f, "{}: {}", i_region, color)?;
         }
 
         Ok(())
