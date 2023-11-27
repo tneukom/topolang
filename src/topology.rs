@@ -11,6 +11,10 @@ use std::{
     fmt::{Display, Formatter},
     ops::Index,
 };
+use std::path::Path;
+use itertools::Itertools;
+use crate::bitmap::Bitmap;
+use crate::connected_components::pixelmap_from_bitmap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Seam {
@@ -130,6 +134,20 @@ impl Topology {
         }
     }
 
+    pub fn iter_seams(&self) -> impl Iterator<Item = &Seam> + Clone {
+        self.seam_indices.keys()
+    }
+
+    pub fn iter_regions(&self) -> impl Iterator<Item = RegionKey> + Clone {
+        0..self.regions.len()
+    }
+
+    pub fn from_bitmap_path(path: impl AsRef<Path>) -> anyhow::Result<Topology> {
+        let bitmap = Bitmap::from_path(path)?;
+        let pixelmap = pixelmap_from_bitmap(&bitmap);
+        Ok(Topology::new(&pixelmap))
+    }
+
     pub fn contains_seam(&self, seam: &Seam) -> bool {
         self.seam_indices.contains_key(seam)
     }
@@ -148,9 +166,10 @@ impl Topology {
         seam_index.region_key
     }
 
-    pub fn right_of(&self, seam: &Seam) -> RegionKey {
-        let seam_index = &self.seam_indices[&seam.reversed()];
-        seam_index.region_key
+    /// Not every seam has a region on the right, it can be empty space
+    pub fn right_of(&self, seam: &Seam) -> Option<RegionKey> {
+        let seam_index = self.seam_indices.get(&seam.reversed())?;
+        Some(seam_index.region_key)
     }
 
     /// Only fails if seam is not self.contains_seam(seam)
@@ -169,11 +188,16 @@ impl Topology {
 
     /// Seam between left and right region
     /// Component index errors cause panic
-    pub fn seam_between(&self, left: RegionKey, right: RegionKey) -> Option<&Seam> {
+    pub fn seams_between(&self, left: RegionKey, right: RegionKey) -> impl Iterator<Item = &Seam> {
         let left_comp = &self.regions[left];
         left_comp
             .iter_seams()
-            .find(|&seam| self.right_of(seam) == right)
+            .filter(move |&seam| self.right_of(seam) == Some(right))
+    }
+
+    /// Is the right side of the seam void? The left side is always a proper region.
+    pub fn touches_void(&self, seam: &Seam) -> bool {
+        self.seam_indices.contains_key(&seam.reversed())
     }
 }
 
@@ -271,7 +295,7 @@ pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -
 mod test {
     use crate::{
         bitmap::Bitmap,
-        connected_components::color_dict_from_bitmap,
+        connected_components::pixelmap_from_bitmap,
         math::rgba8::Rgba8,
         seam_graph::{SeamGraph, UndirectedEdge},
         topology::Topology,
@@ -281,7 +305,7 @@ mod test {
     fn load_topology(filename: &str) -> Topology {
         let path = format!("test_resources/topology/{filename}");
         let bitmap = Bitmap::from_path(path).unwrap();
-        let pixelmap = color_dict_from_bitmap(&bitmap);
+        let pixelmap = pixelmap_from_bitmap(&bitmap);
         let topology = Topology::new(&pixelmap);
         topology
     }

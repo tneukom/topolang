@@ -74,7 +74,7 @@ pub fn connected_components(pixels: &BTreeMap<Pixel, Rgba8>) -> Vec<ConnectedCom
     components
 }
 
-pub fn color_dict_from_bitmap(bitmap: &Bitmap) -> BTreeMap<Pixel, Rgba8> {
+pub fn pixelmap_from_bitmap(bitmap: &Bitmap) -> BTreeMap<Pixel, Rgba8> {
     let mut dict: BTreeMap<Pixel, Rgba8> = BTreeMap::new();
     for idx in bitmap.indices() {
         let color = bitmap[idx];
@@ -92,7 +92,7 @@ mod test {
     // TODO: Make sure color of pixels in components is constant
     use crate::{
         bitmap::Bitmap,
-        connected_components::{color_dict_from_bitmap, connected_components, ConnectedComponent},
+        connected_components::{pixelmap_from_bitmap, connected_components, ConnectedComponent},
         math::{pixel::Pixel, rgba8::Rgba8},
         utils::all_equal,
     };
@@ -108,7 +108,7 @@ mod test {
         let path = format!("{folder}/{filename}");
 
         let bitmap = Bitmap::from_path(path).unwrap();
-        let whole = color_dict_from_bitmap(&bitmap);
+        let whole = pixelmap_from_bitmap(&bitmap);
         let components = connected_components(&whole);
         assert_eq!(components.len(), count);
 

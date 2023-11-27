@@ -2,6 +2,7 @@ use crate::{
     math::pixel::Corner,
     topology::{RegionKey, Seam, Topology},
 };
+use itertools::{ExactlyOneError, Itertools};
 use std::{
     collections::{btree_map::Entry, BTreeMap},
     ops::Index,
@@ -49,18 +50,67 @@ impl Index<&Corner> for Morphism {
 }
 
 impl Morphism {
+    pub fn induced_from_seam_map(
+        dom: &Topology,
+        codom: &Topology,
+        seam_map: BTreeMap<Seam, Seam>,
+    ) -> Option<Self> {
+        let region_map = induced_region_map(dom, codom, &seam_map)?;
+        let corner_map = induced_corner_map(&seam_map)?;
+        Some(Self {
+            region_map,
+            corner_map,
+            seam_map,
+        })
+    }
+
+    /// Maps regions to regions of the same color
+    pub fn preserves_colors(&self, dom: &Topology, codom: &Topology) -> bool {
+        self.region_map
+            .iter()
+            .all(|(&region, &phi_region)| dom[region].color == codom[phi_region].color)
+    }
+
     /// Check if φ : A → B preserves structure, (neighbor and next_neighbor), i.e.
     ///     start ∘ φ = φ ∘ start
     ///     stop ∘ φ = φ ∘ stop
     ///
     ///     left ∘ φ = φ ∘ left
     ///     right ∘ φ = φ ∘ right
-    pub fn is_homomorphism(&self, dom: &Topology, codom: &Topology) -> bool {
+    pub fn preserves_structure(&self, dom: &Topology, codom: &Topology) -> bool {
         self.seam_map.iter().all(|(seam, phi_seam)| {
-            self[&dom.left_of(seam)] != codom.left_of(phi_seam)
-                && self[&seam.start_corner()] != phi_seam.start_corner()
-                && self[&seam.stop_corner()] != phi_seam.stop_corner()
+            self[&dom.left_of(seam)] == codom.left_of(phi_seam)
+                && self[&seam.start_corner()] == phi_seam.start_corner()
+                && self[&seam.stop_corner()] == phi_seam.stop_corner()
         })
+    }
+
+    /// Preserves structure and colors
+    pub fn is_homomorphism(&self, dom: &Topology, codom: &Topology) -> bool {
+        self.preserves_structure(dom, codom) && self.preserves_colors(dom, codom)
+    }
+
+    /// Maps all regions, seams, seam corners of dom
+    pub fn is_total(&self, dom: &Topology, include_void_seams: bool) -> bool {
+        let seam_total = dom
+            .iter_seams()
+            .filter(|&seam| include_void_seams || !dom.touches_void(seam))
+            .all(|seam| {
+                // Seams & corners
+                self.seam_map.contains_key(seam)
+                    && self.corner_map.contains_key(&seam.start_corner())
+                    && self.corner_map.contains_key(&seam.stop_corner())
+            });
+
+        if !seam_total {
+            return false;
+        }
+
+        let regions_total = dom.iter_regions().all(|region| {
+            // Regions
+            self.region_map.contains_key(&region)
+        });
+        regions_total
     }
 }
 
@@ -76,6 +126,37 @@ pub fn extend_map<K: Ord, V: Eq>(map: &mut BTreeMap<K, V>, key: K, value: V) -> 
     }
 }
 
+/// Does not work for topologies with two regions that are connected by multiple seams, returns an
+/// error in that case.
+/// Very slow! Could be done faster by iterating over regions, seams around that region while
+/// checking if there are duplicate neighbors.
+pub fn induced_seam_map(
+    dom: &Topology,
+    region_phi: &BTreeMap<RegionKey, RegionKey>,
+) -> anyhow::Result<Option<BTreeMap<Seam, Seam>>> {
+    let mut seam_phi: BTreeMap<Seam, Seam> = BTreeMap::new();
+
+    for (&region_a, &phi_region_a) in region_phi {
+        for (&region_b, &phi_region_b) in region_phi {
+            let &seam = match dom.seams_between(region_a, region_b).at_most_one() {
+                Ok(Some(seam)) => seam,
+                Ok(None) => continue,
+                Err(_) => anyhow::bail!("Multiple seam between two regions not implemented"),
+            };
+
+            let Ok(&phi_seam) = dom.seams_between(phi_region_a, phi_region_b).exactly_one() else {
+                return Ok(None);
+            };
+
+            if !extend_map(&mut seam_phi, seam, phi_seam) {
+                return Ok(None);
+            }
+        }
+    }
+
+    Ok(Some(seam_phi))
+}
+
 /// The resulting map satisfies
 ///     left ∘ φ = φ ∘ left
 ///     right ∘ φ = φ ∘ right
@@ -83,26 +164,51 @@ pub fn induced_region_map(
     dom: &Topology,
     codom: &Topology,
     seam_phi: &BTreeMap<Seam, Seam>,
-) -> Option<BTreeMap<usize, usize>> {
-    let mut comp_phi: BTreeMap<usize, RegionKey> = BTreeMap::new();
+) -> Option<BTreeMap<RegionKey, RegionKey>> {
+    let mut region_phi: BTreeMap<RegionKey, RegionKey> = BTreeMap::new();
 
     for (seam, phi_seam) in seam_phi {
         // check left side
-        let comp = dom.left_of(seam);
-        let phi_comp = codom.left_of(phi_seam);
-        if !extend_map(&mut comp_phi, comp, phi_comp) {
+        let region = dom.left_of(seam);
+        let phi_region = codom.left_of(phi_seam);
+        if !extend_map(&mut region_phi, region, phi_region) {
             return None;
         }
 
         // check right side, is this necessary?
-        let comp = dom.right_of(seam);
-        let phi_comp = codom.right_of(phi_seam);
-        if !extend_map(&mut comp_phi, comp, phi_comp) {
+        if let (Some(region), Some(phi_region)) = (dom.right_of(seam), codom.right_of(phi_seam)) {
+            if !extend_map(&mut region_phi, region, phi_region) {
+                return None;
+            }
+        }
+    }
+
+    Some(region_phi)
+}
+
+/// The resulting map satisfies
+///     start ∘ φ = φ ∘ start
+///     stop ∘ φ = φ ∘ stop
+pub fn induced_corner_map(seam_phi: &BTreeMap<Seam, Seam>) -> Option<BTreeMap<Corner, Corner>> {
+    let mut corner_map: BTreeMap<Corner, Corner> = BTreeMap::new();
+
+    for (seam, phi_seam) in seam_phi {
+        // start corner
+        if !extend_map(
+            &mut corner_map,
+            seam.start_corner(),
+            phi_seam.start_corner(),
+        ) {
+            return None;
+        }
+
+        // stop corner
+        if !extend_map(&mut corner_map, seam.stop_corner(), phi_seam.stop_corner()) {
             return None;
         }
     }
 
-    Some(comp_phi)
+    Some(corner_map)
 }
 
 // /// Induced Morphism from a map of the components.
@@ -139,3 +245,70 @@ pub fn induced_region_map(
 //
 //     return boundarymap
 // end
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        morphism::{induced_seam_map, Morphism},
+        topology::{RegionKey, Seam, Topology},
+    };
+    use itertools::Itertools;
+    use std::collections::BTreeMap;
+
+    /// Region map determined by region colors, requires that the colors in dom and codom are
+    /// unique.
+    fn region_map_from_colors(
+        dom: &Topology,
+        codom: &Topology,
+    ) -> Option<BTreeMap<RegionKey, RegionKey>> {
+        if !dom.regions.iter().map(|region| region.color).all_unique() {
+            return None;
+        }
+
+        let mut region_phi: BTreeMap<RegionKey, RegionKey> = BTreeMap::new();
+        for region in dom.iter_regions() {
+            let Some(phi_region) = codom
+                .iter_regions()
+                .filter(|&phi_region| codom[phi_region].color == dom[region].color)
+                .exactly_one()
+                .ok()
+            else {
+                return None;
+            };
+            region_phi.insert(region, phi_region);
+        }
+
+        Some(region_phi)
+    }
+
+    /// Map each seam of a Topology to itself
+    fn trivial_seam_automorphism(topo: &Topology) -> BTreeMap<Seam, Seam> {
+        topo.iter_seams().map(|&seam| (seam, seam)).collect()
+    }
+
+    #[test]
+    fn test_induced_trivial_automorphism() {
+        let filenames = ["2a.png", "2b.png", "3a.png", "3b.png", "3c.png", "4a.png"];
+        for filename in filenames {
+            let path = format!("test_resources/topology/{filename}");
+            let topology = Topology::from_bitmap_path(&path).unwrap();
+            let seam_phi = trivial_seam_automorphism(&topology);
+            let phi = Morphism::induced_from_seam_map(&topology, &topology, seam_phi).unwrap();
+            assert!(phi.is_total(&topology, true));
+            assert!(phi.is_homomorphism(&topology, &topology));
+        }
+    }
+
+    #[test]
+    fn morphism_a() {
+        let dom = Topology::from_bitmap_path("test_resources/morphism/b.png").unwrap();
+        let codom = Topology::from_bitmap_path("test_resources/morphism/phi_b.png").unwrap();
+        let region_phi = region_map_from_colors(&dom, &codom).unwrap();
+        let seam_phi = induced_seam_map(&dom, &region_phi).unwrap().unwrap();
+        println!("region_phi: {region_phi:?}");
+        println!("seam_phi: {seam_phi:?}");
+        let phi = Morphism::induced_from_seam_map(&dom, &codom, seam_phi).unwrap();
+        assert!(phi.is_homomorphism(&dom, &codom));
+        assert!(phi.is_total(&dom, false));
+    }
+}

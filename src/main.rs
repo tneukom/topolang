@@ -5,7 +5,7 @@
 // #![allow(unsafe_code)]
 
 use crate::{
-    bitmap::Bitmap, connected_components::color_dict_from_bitmap, seam_graph::SeamGraph,
+    bitmap::Bitmap, connected_components::pixelmap_from_bitmap, seam_graph::SeamGraph,
     topology::Topology,
 };
 
@@ -28,7 +28,7 @@ pub fn main() {
 
     let path = "test_resources/topology/3b.png";
     let bitmap = Bitmap::from_path(path).unwrap();
-    let pixelmap = color_dict_from_bitmap(&bitmap);
+    let pixelmap = pixelmap_from_bitmap(&bitmap);
     let topology = Topology::new(&pixelmap);
     println!("{topology}");
     let seam_graph = SeamGraph::from_topology(&topology);
