@@ -1,3 +1,7 @@
+/// https://en.wikipedia.org/wiki/Regular_grid
+/// Vertices,
+/// Elements (Cells) are Pixels,
+/// Sides
 use crate::math::{
     direction::{DiagonalDirection, Direction},
     point::Point,
@@ -105,30 +109,30 @@ impl<T> Sub<GridPoint<T>> for GridPoint<T> {
 pub struct PixelGrid {}
 
 #[derive(Clone, Copy, Debug, PartialOrd, PartialEq, Ord, Eq, Hash)]
-pub struct CornerGrid {}
+pub struct VertexGrid {}
 
 pub type Pixel = GridPoint<PixelGrid>;
 
-pub type Corner = GridPoint<CornerGrid>;
+pub type Vertex = GridPoint<VertexGrid>;
 
 impl Pixel {
-    pub fn top_left_corner(self) -> Corner {
-        Corner::new(self.x, self.y)
+    pub fn top_left_corner(self) -> Vertex {
+        Vertex::new(self.x, self.y)
     }
 
-    pub fn top_right_corner(self) -> Corner {
-        Corner::new(self.x + 1, self.y)
+    pub fn top_right_corner(self) -> Vertex {
+        Vertex::new(self.x + 1, self.y)
     }
 
-    pub fn bottom_left_corner(self) -> Corner {
-        Corner::new(self.x, self.y + 1)
+    pub fn bottom_left_corner(self) -> Vertex {
+        Vertex::new(self.x, self.y + 1)
     }
 
-    pub fn bottom_right_corner(self) -> Corner {
-        Corner::new(self.x + 1, self.y + 1)
+    pub fn bottom_right_corner(self) -> Vertex {
+        Vertex::new(self.x + 1, self.y + 1)
     }
 
-    pub fn corner(self, direction: DiagonalDirection) -> Corner {
+    pub fn corner(self, direction: DiagonalDirection) -> Vertex {
         match direction {
             DiagonalDirection::UpLeft => self.top_left_corner(),
             DiagonalDirection::UpRight => self.top_right_corner(),
@@ -172,7 +176,7 @@ impl Pixel {
     }
 }
 
-impl Corner {
+impl Vertex {
     pub fn top_left_pixel(self) -> Pixel {
         Pixel::new(self.x - 1, self.y - 1)
     }
@@ -205,7 +209,7 @@ impl Display for GridPoint<PixelGrid> {
     }
 }
 
-impl Display for GridPoint<CornerGrid> {
+impl Display for GridPoint<VertexGrid> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Corner({}, {})", self.x, self.y)
     }
@@ -214,20 +218,20 @@ impl Display for GridPoint<CornerGrid> {
 /// Directed side, has start and end corners
 #[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Ord, Eq, Hash)]
 pub struct Side {
-    corner: Corner,
+    corner: Vertex,
     direction: Direction,
 }
 
 impl Side {
-    pub fn new(corner: Corner, direction: Direction) -> Self {
+    pub fn new(corner: Vertex, direction: Direction) -> Self {
         Side { corner, direction }
     }
 
-    pub fn start_corner(self) -> Corner {
+    pub fn start_vertex(self) -> Vertex {
         self.corner
     }
 
-    pub fn stop_corner(self) -> Corner {
+    pub fn stop_vertex(self) -> Vertex {
         self.corner.neighbor(self.direction)
     }
 

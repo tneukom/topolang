@@ -1,20 +1,19 @@
 use crate::{
-    connected_components::connected_components,
+    bitmap::Bitmap,
+    connected_components::{connected_components, pixelmap_from_bitmap},
     math::{
-        pixel::{Corner, Pixel, Side},
+        pixel::{Pixel, Side, Vertex},
         rgba8::Rgba8,
     },
 };
+use itertools::Itertools;
 use std::{
     collections::BTreeMap,
     fmt,
     fmt::{Display, Formatter},
     ops::Index,
+    path::Path,
 };
-use std::path::Path;
-use itertools::Itertools;
-use crate::bitmap::Bitmap;
-use crate::connected_components::pixelmap_from_bitmap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Seam {
@@ -31,12 +30,12 @@ impl Seam {
         Self::new(self.stop.reversed(), self.start.reversed())
     }
 
-    pub fn start_corner(&self) -> Corner {
-        self.start.start_corner()
+    pub fn start_corner(&self) -> Vertex {
+        self.start.start_vertex()
     }
 
-    pub fn stop_corner(&self) -> Corner {
-        self.stop.stop_corner()
+    pub fn stop_corner(&self) -> Vertex {
+        self.stop.stop_vertex()
     }
 }
 
@@ -228,15 +227,15 @@ impl Display for Topology {
 }
 
 /// Extract the side cycle that starts (and stops) at start_corner
-pub fn extract_cycle(side_graph: &mut BTreeMap<Corner, Side>, mut corner: Corner) -> Vec<Side> {
+pub fn extract_cycle(side_graph: &mut BTreeMap<Vertex, Side>, mut corner: Vertex) -> Vec<Side> {
     let mut cycle = Vec::new();
     while let Some(side) = side_graph.remove(&corner) {
         cycle.push(side);
-        corner = side.stop_corner();
+        corner = side.stop_vertex();
     }
     assert_eq!(
-        cycle.first().unwrap().start_corner(),
-        cycle.last().unwrap().stop_corner()
+        cycle.first().unwrap().start_vertex(),
+        cycle.last().unwrap().stop_vertex()
     );
     cycle
 }
@@ -245,7 +244,7 @@ pub fn extract_cycle(side_graph: &mut BTreeMap<Corner, Side>, mut corner: Corner
 /// (lexicographic order x, y). `sides` must be an iterable of Side.
 pub fn split_into_cycles<'a>(sides: impl IntoIterator<Item = &'a Side>) -> Vec<Vec<Side>> {
     // Maps corner to side that starts at the corner
-    let mut side_graph: BTreeMap<Corner, Side> = sides
+    let mut side_graph: BTreeMap<Vertex, Side> = sides
         .into_iter()
         .map(|&side| (side.start_corner(), side))
         .collect();

@@ -92,7 +92,7 @@ mod test {
     // TODO: Make sure color of pixels in components is constant
     use crate::{
         bitmap::Bitmap,
-        connected_components::{pixelmap_from_bitmap, connected_components, ConnectedComponent},
+        connected_components::{connected_components, pixelmap_from_bitmap, ConnectedComponent},
         math::{pixel::Pixel, rgba8::Rgba8},
         utils::all_equal,
     };
