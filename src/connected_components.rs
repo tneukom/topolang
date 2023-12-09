@@ -8,6 +8,11 @@ use crate::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
+pub enum Interior {
+    Bounded(BTreeSet<Pixel>),
+    Unbounded(),
+}
+
 pub struct ConnectedComponent {
     pub interior: BTreeSet<Pixel>,
     pub sides: BTreeSet<Side>,
@@ -78,10 +83,13 @@ pub fn pixelmap_from_bitmap(bitmap: &Bitmap) -> BTreeMap<Pixel, Rgba8> {
     let mut dict: BTreeMap<Pixel, Rgba8> = BTreeMap::new();
     for idx in bitmap.indices() {
         let color = bitmap[idx];
-        if color != Rgba8::TRANSPARENT {
-            let pixel: Pixel = idx.cwise_try_into::<i64>().unwrap().into();
-            dict.insert(pixel, color);
+
+        if color.a == 0 && color != Rgba8::TRANSPARENT {
+            println!("Bitmap should not contain colors with alpha = 0 but rgb != 0")
         }
+
+        let pixel: Pixel = idx.cwise_try_into::<i64>().unwrap().into();
+        dict.insert(pixel, color);
     }
     dict
 }
@@ -110,7 +118,7 @@ mod test {
         let bitmap = Bitmap::from_path(path).unwrap();
         let whole = pixelmap_from_bitmap(&bitmap);
         let components = connected_components(&whole);
-        assert_eq!(components.len(), count);
+        assert_eq!(components.len(), count, "number of components is correct");
 
         for component in &components {
             // Components cannot be empty
@@ -140,12 +148,14 @@ mod test {
         assert_eq!(union, whole_pixels);
     }
 
+    ///
     fn assert_proper_sides(component: &ConnectedComponent) {
         let all_sides: HashSet<_> = component
             .interior
             .iter()
             .flat_map(|pixel| pixel.sides_ccw())
             .collect();
+
         let boundary_sides: BTreeSet<_> = all_sides
             .into_iter()
             .filter(|side| {
@@ -154,18 +164,55 @@ mod test {
                 left_interior != right_interior
             })
             .collect();
-        assert_eq!(boundary_sides, component.sides);
+
+        assert_eq!(
+            boundary_sides, component.sides,
+            "component.sides = boundary(interior)"
+        );
     }
 
     #[test]
-    fn component_bitmaps() {
+    fn components_1a() {
         assert_proper_components("1a.png", 1);
+    }
+
+    #[test]
+    fn components_2a() {
         assert_proper_components("2a.png", 2);
-        assert_proper_components("2b.png", 2);
-        assert_proper_components("2c.png", 2);
-        assert_proper_components("2d.png", 2);
-        assert_proper_components("2e.png", 2);
+    }
+
+    #[test]
+    fn components_3a() {
         assert_proper_components("3a.png", 3);
+    }
+
+    #[test]
+    fn components_3b() {
+        assert_proper_components("3b.png", 3);
+    }
+
+    #[test]
+    fn components_3c() {
+        assert_proper_components("3c.png", 3);
+    }
+
+    #[test]
+    fn components_3d() {
+        assert_proper_components("3d.png", 3);
+    }
+
+    #[test]
+    fn components_4a() {
         assert_proper_components("4a.png", 4);
+    }
+
+    #[test]
+    fn components_5a() {
+        assert_proper_components("5a.png", 5);
+    }
+
+    #[test]
+    fn components_7a() {
+        assert_proper_components("7a.png", 7);
     }
 }

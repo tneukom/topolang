@@ -2,7 +2,7 @@ use crate::{
     math::pixel::Vertex,
     topology::{RegionKey, Seam, Topology},
 };
-use itertools::{ExactlyOneError, Itertools};
+use itertools::Itertools;
 use std::{
     collections::{btree_map::Entry, BTreeMap},
     ops::Index,
@@ -249,36 +249,35 @@ pub fn induced_corner_map(seam_phi: &BTreeMap<Seam, Seam>) -> Option<BTreeMap<Ve
 #[cfg(test)]
 mod test {
     use crate::{
-        morphism::{induced_seam_map, Morphism},
-        topology::{RegionKey, Seam, Topology},
+        morphism::Morphism,
+        topology::{Seam, Topology},
     };
+    use anyhow::anyhow;
     use itertools::Itertools;
     use std::collections::BTreeMap;
 
-    /// Region map determined by region colors, requires that the colors in dom and codom are
-    /// unique.
-    fn region_map_from_colors(
+    /// Seam map determined by left and right region colors.
+    fn seam_map_from_colors(
         dom: &Topology,
         codom: &Topology,
-    ) -> Option<BTreeMap<RegionKey, RegionKey>> {
-        if !dom.regions.iter().map(|region| region.color).all_unique() {
-            return None;
-        }
+    ) -> anyhow::Result<BTreeMap<Seam, Seam>> {
+        let mut phi: BTreeMap<Seam, Seam> = BTreeMap::new();
 
-        let mut region_phi: BTreeMap<RegionKey, RegionKey> = BTreeMap::new();
-        for region in dom.iter_regions() {
-            let Some(phi_region) = codom
-                .iter_regions()
-                .filter(|&phi_region| codom[phi_region].color == dom[region].color)
+        for seam in dom.iter_seams() {
+            let seam_colors = dom.seam_colors(seam);
+            let phi_seam = codom
+                .iter_seams()
+                .filter(|&phi_seam| {
+                    let phi_seam_colors = codom.seam_colors(phi_seam);
+                    seam_colors == phi_seam_colors
+                })
                 .exactly_one()
-                .ok()
-            else {
-                return None;
-            };
-            region_phi.insert(region, phi_region);
+                .map_err(|_| anyhow!("Seam mapping not determined from colors."))?;
+
+            phi.insert(*seam, *phi_seam);
         }
 
-        Some(region_phi)
+        Ok(phi)
     }
 
     /// Map each seam of a Topology to itself
@@ -299,16 +298,42 @@ mod test {
         }
     }
 
-    #[test]
-    fn morphism_a() {
-        let dom = Topology::from_bitmap_path("test_resources/morphism/b.png").unwrap();
-        let codom = Topology::from_bitmap_path("test_resources/morphism/phi_b.png").unwrap();
-        let region_phi = region_map_from_colors(&dom, &codom).unwrap();
-        let seam_phi = induced_seam_map(&dom, &region_phi).unwrap().unwrap();
-        println!("region_phi: {region_phi:?}");
-        println!("seam_phi: {seam_phi:?}");
+    fn assert_proper_morphism(dom_filename: &str, codom_filename: &str) {
+        let folder = "test_resources/morphism/";
+        let dom_path = format!("{folder}/{dom_filename}");
+        let codom_path = format!("{folder}/{codom_filename}");
+        let dom = Topology::from_bitmap_path(&dom_path).unwrap();
+        let codom = Topology::from_bitmap_path(&codom_path).unwrap();
+
+        let seam_phi = seam_map_from_colors(&dom, &codom).unwrap();
         let phi = Morphism::induced_from_seam_map(&dom, &codom, seam_phi).unwrap();
+
         assert!(phi.is_homomorphism(&dom, &codom));
         assert!(phi.is_total(&dom, false));
+    }
+
+    #[test]
+    fn morphism_a() {
+        assert_proper_morphism("a.png", "phi_a.png");
+    }
+
+    #[test]
+    fn morphism_b() {
+        assert_proper_morphism("b.png", "phi_b.png");
+    }
+
+    #[test]
+    fn morphism_c() {
+        assert_proper_morphism("c.png", "phi_c.png");
+    }
+
+    #[test]
+    fn morphism_d() {
+        assert_proper_morphism("d.png", "phi_d.png");
+    }
+
+    #[test]
+    fn morphism_e() {
+        assert_proper_morphism("e.png", "phi_e.png");
     }
 }

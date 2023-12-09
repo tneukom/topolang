@@ -12,7 +12,7 @@ use std::{
     ops::{Add, Sub},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GridPoint<T> {
     pub x: i64,
     pub y: i64,
@@ -203,20 +203,32 @@ impl Vertex {
     }
 }
 
-impl Display for GridPoint<PixelGrid> {
+impl Display for Pixel {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Pixel({}, {})", self.x, self.y)
     }
 }
 
-impl Display for GridPoint<VertexGrid> {
+impl Debug for Pixel {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self, f)
+    }
+}
+
+impl Display for Vertex {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Corner({}, {})", self.x, self.y)
     }
 }
 
+impl Debug for Vertex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self, f)
+    }
+}
+
 /// Directed side, has start and end corners
-#[derive(Debug, Clone, Copy, PartialOrd, PartialEq, Ord, Eq, Hash)]
+#[derive(Clone, Copy, PartialOrd, PartialEq, Ord, Eq, Hash)]
 pub struct Side {
     corner: Vertex,
     direction: Direction,
@@ -265,5 +277,11 @@ impl Display for Side {
             self.corner.y,
             self.direction.unicode_symbol()
         )
+    }
+}
+
+impl Debug for Side {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self, f)
     }
 }

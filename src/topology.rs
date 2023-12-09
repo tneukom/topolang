@@ -45,6 +45,12 @@ impl Display for Seam {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SeamColors {
+    pub left: Rgba8,
+    pub right: Rgba8,
+}
+
 pub type RegionKey = usize;
 
 #[derive(Debug, Clone)]
@@ -185,6 +191,15 @@ impl Topology {
         &border.seams[(seam_index.i_seam - 1) % border.seams.len()]
     }
 
+    pub fn seam_colors(&self, seam: &Seam) -> SeamColors {
+        SeamColors {
+            left: self[self.left_of(seam)].color,
+            right: self
+                .right_of(seam)
+                .map_or(Rgba8::TRANSPARENT, |right| self[right].color),
+        }
+    }
+
     /// Seam between left and right region
     /// Component index errors cause panic
     pub fn seams_between(&self, left: RegionKey, right: RegionKey) -> impl Iterator<Item = &Seam> {
@@ -246,7 +261,7 @@ pub fn split_into_cycles<'a>(sides: impl IntoIterator<Item = &'a Side>) -> Vec<V
     // Maps corner to side that starts at the corner
     let mut side_graph: BTreeMap<Vertex, Side> = sides
         .into_iter()
-        .map(|&side| (side.start_corner(), side))
+        .map(|&side| (side.start_vertex(), side))
         .collect();
 
     let mut cycles = Vec::new();
@@ -257,6 +272,25 @@ pub fn split_into_cycles<'a>(sides: impl IntoIterator<Item = &'a Side>) -> Vec<V
     }
 
     cycles
+}
+
+pub fn split_cycle_into_seams2<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -> Vec<Seam> {
+    let discontinuities: Vec<_> = cycle
+        .iter()
+        .circular_tuple_windows()
+        .filter(|(&lhs, &rhs)| f(lhs) != f(rhs))
+        .collect();
+
+    if discontinuities.is_empty() {
+        // TODO: Reverse cycle should give same seam
+        vec![Seam::new(*cycle.first().unwrap(), *cycle.last().unwrap())]
+    } else {
+        discontinuities
+            .iter()
+            .circular_tuple_windows()
+            .map(|((_, &lhs), (&rhs, _))| Seam::new(lhs, rhs))
+            .collect()
+    }
 }
 
 /// Split a side cycle into segments based on a function f: Side -> T
@@ -334,15 +368,19 @@ mod test {
     #[test]
     fn image_2b() {
         let rgb_edges = load_rgb_seam_graph("2b.png");
-        let expected_rgb_edges = rgb_edges_from([(Rgba8::RED, Rgba8::BLUE)]);
+        let expected_rgb_edges =
+            rgb_edges_from([(Rgba8::RED, Rgba8::BLUE), (Rgba8::RED, Rgba8::TRANSPARENT)]);
         assert_eq!(rgb_edges, expected_rgb_edges);
     }
 
     #[test]
     fn image_3a() {
         let rgb_edges = load_rgb_seam_graph("3a.png");
-        let expected_rgb_edges =
-            rgb_edges_from([(Rgba8::RED, Rgba8::GREEN), (Rgba8::RED, Rgba8::BLUE)]);
+        let expected_rgb_edges = rgb_edges_from([
+            (Rgba8::RED, Rgba8::GREEN),
+            (Rgba8::RED, Rgba8::BLUE),
+            (Rgba8::RED, Rgba8::TRANSPARENT),
+        ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
     }
 
@@ -361,6 +399,7 @@ mod test {
             (Rgba8::RED, Rgba8::YELLOW),
             (Rgba8::RED, Rgba8::BLUE),
             (Rgba8::YELLOW, Rgba8::BLUE),
+            (Rgba8::RED, Rgba8::TRANSPARENT),
         ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
     }
@@ -374,6 +413,7 @@ mod test {
             (Rgba8::GREEN, Rgba8::CYAN),
             (Rgba8::BLUE, Rgba8::CYAN),
             (Rgba8::RED, Rgba8::CYAN),
+            (Rgba8::RED, Rgba8::TRANSPARENT),
         ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
     }
