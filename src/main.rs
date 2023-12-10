@@ -14,6 +14,7 @@ mod bitmap;
 mod connected_components;
 mod math;
 mod morphism;
+mod pattern;
 mod reduce;
 mod seam_graph;
 mod serialize;

@@ -17,16 +17,16 @@ pub struct ConnectedComponent {
     pub interior: BTreeSet<Pixel>,
     pub sides: BTreeSet<Side>,
     pub color: Rgba8,
+    pub closed: bool,
 }
 
-pub fn flood_fill(
-    seed: Pixel,
-    is_boundary: impl Fn(Pixel, Side) -> bool,
-) -> (BTreeSet<Pixel>, BTreeSet<Side>) {
+pub fn flood_fill(seed: Pixel, pixels: &BTreeMap<Pixel, Rgba8>) -> ConnectedComponent {
     let mut interior: BTreeSet<Pixel> = BTreeSet::new();
     let mut sides: BTreeSet<Side> = BTreeSet::new();
 
     let mut todo: Vec<Pixel> = vec![seed];
+    let seed_color = pixels.get(&seed).unwrap();
+    let mut closed = true;
 
     while !todo.is_empty() {
         let pixel = todo.pop().unwrap();
@@ -41,15 +41,27 @@ pub fn flood_fill(
             let neighbor_pixel = pixel.neighbor(direction);
             let neighbor_side = pixel.side_ccw(direction);
 
-            if is_boundary(neighbor_pixel, neighbor_side) {
-                sides.insert(neighbor_side);
-            } else {
+            let neighbor_color = pixels.get(&neighbor_pixel);
+            if neighbor_color == None {
+                // open side
+                closed = false;
+                continue;
+            } else if neighbor_color == Some(seed_color) {
+                // interior side
                 todo.push(neighbor_pixel);
+            } else {
+                // boundary side
+                sides.insert(neighbor_side);
             }
         }
     }
 
-    (interior, sides)
+    ConnectedComponent {
+        interior,
+        sides,
+        color: *seed_color,
+        closed,
+    }
 }
 
 pub fn connected_components(pixels: &BTreeMap<Pixel, Rgba8>) -> Vec<ConnectedComponent> {
@@ -58,21 +70,13 @@ pub fn connected_components(pixels: &BTreeMap<Pixel, Rgba8>) -> Vec<ConnectedCom
 
     while !rest.is_empty() {
         let &seed = rest.iter().next().unwrap();
-        let seed_color = pixels.get(&seed).unwrap();
-
-        let is_boundary = |pixel: Pixel, _side: Side| pixels.get(&pixel) != Some(seed_color);
-        let (interior, sides) = flood_fill(seed, is_boundary);
+        let component = flood_fill(seed, &pixels);
 
         // Remove component interior from rest
-        for pixel in &interior {
+        for pixel in &component.interior {
             rest.remove(pixel);
         }
 
-        let component = ConnectedComponent {
-            interior,
-            sides,
-            color: *seed_color,
-        };
         components.push(component);
     }
 
@@ -150,6 +154,11 @@ mod test {
 
     ///
     fn assert_proper_sides(component: &ConnectedComponent) {
+        if !component.closed {
+            // The boundary has gaps so left_of(sides) is not defined.
+            return;
+        }
+
         let all_sides: HashSet<_> = component
             .interior
             .iter()

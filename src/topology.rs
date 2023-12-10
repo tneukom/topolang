@@ -8,7 +8,7 @@ use crate::{
 };
 use itertools::Itertools;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fmt,
     fmt::{Display, Formatter},
     ops::Index,
@@ -65,6 +65,12 @@ pub struct Border {
 pub struct Region {
     pub color: Rgba8,
     pub boundary: Vec<Border>,
+
+    pub interior: BTreeSet<Pixel>,
+
+    /// If the region is not closed left_of(boundary) is not defined otherwise
+    /// left_of(boundary) = interior
+    pub closed: bool,
 }
 
 impl Region {
@@ -103,7 +109,7 @@ impl Topology {
         let mut regions = Vec::new();
         let mut seam_indices: BTreeMap<Seam, SeamIndex> = BTreeMap::new();
 
-        for connected_component in &connected_components {
+        for connected_component in connected_components {
             // Each cycle in the sides is a border
             let mut boundary = Vec::new();
             let region_key = regions.len();
@@ -129,6 +135,8 @@ impl Topology {
             let region = Region {
                 boundary,
                 color: connected_component.color,
+                interior: connected_component.interior,
+                closed: connected_component.closed,
             };
             regions.push(region);
         }
@@ -250,7 +258,8 @@ pub fn extract_cycle(side_graph: &mut BTreeMap<Vertex, Side>, mut corner: Vertex
     }
     assert_eq!(
         cycle.first().unwrap().start_vertex(),
-        cycle.last().unwrap().stop_vertex()
+        cycle.last().unwrap().stop_vertex(),
+        "borders with gaps are not allowed"
     );
     cycle
 }
@@ -274,7 +283,9 @@ pub fn split_into_cycles<'a>(sides: impl IntoIterator<Item = &'a Side>) -> Vec<V
     cycles
 }
 
-pub fn split_cycle_into_seams2<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -> Vec<Seam> {
+/// Split a side cycle into segments based on a function f: Side -> T
+/// Each segment has constant f
+pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -> Vec<Seam> {
     let discontinuities: Vec<_> = cycle
         .iter()
         .circular_tuple_windows()
@@ -291,37 +302,6 @@ pub fn split_cycle_into_seams2<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) 
             .map(|((_, &lhs), (&rhs, _))| Seam::new(lhs, rhs))
             .collect()
     }
-}
-
-/// Split a side cycle into segments based on a function f: Side -> T
-/// Each segment has constant f
-pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -> Vec<Seam> {
-    let mut iter = cycle.iter();
-    let Some(&first_side) = iter.next() else {
-        return Vec::new();
-    };
-
-    // Group cycle sides into seams, (groups of constant f)
-    let mut seams: Vec<Seam> = Vec::new();
-    let mut seam = Seam::new(first_side, first_side);
-    for &side in iter {
-        if f(seam.start) == f(side) {
-            seam.stop = side;
-        } else {
-            // Start a new seam at the current side
-            seams.push(seam);
-            seam = Seam::new(side, side);
-        }
-    }
-
-    // Handle unfinished last seam, if f(seam) == f(first_seam), first_seam is merged with seam,
-    // otherwise it is appended to seams
-    match seams.first_mut() {
-        Some(first_seam) if f(first_seam.start) == f(seam.stop) => first_seam.start = seam.start,
-        _ => seams.push(seam),
-    }
-
-    seams
 }
 
 #[cfg(test)]
@@ -361,7 +341,11 @@ mod test {
     #[test]
     fn image_2a() {
         let rgb_edges = load_rgb_seam_graph("2a.png");
-        let expected_rgb_edges = rgb_edges_from([(Rgba8::RED, Rgba8::BLUE)]);
+        let expected_rgb_edges = rgb_edges_from([
+            (Rgba8::RED, Rgba8::BLUE),
+            (Rgba8::RED, Rgba8::TRANSPARENT),
+            (Rgba8::BLUE, Rgba8::TRANSPARENT),
+        ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
     }
 
