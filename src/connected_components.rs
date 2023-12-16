@@ -16,42 +16,48 @@ pub enum Interior {
 pub struct ConnectedComponent {
     pub interior: BTreeSet<Pixel>,
     pub sides: BTreeSet<Side>,
-    pub color: Rgba8,
     pub closed: bool,
 }
 
-pub fn flood_fill(seed: Pixel, pixels: &BTreeMap<Pixel, Rgba8>) -> ConnectedComponent {
+pub enum SideClass {
+    Interior,
+    Border,
+    Open,
+}
+
+pub fn flood_fill(
+    seed: Pixel,
+    classify: impl Fn(&Side, &Pixel) -> SideClass,
+) -> ConnectedComponent {
     let mut interior: BTreeSet<Pixel> = BTreeSet::new();
     let mut sides: BTreeSet<Side> = BTreeSet::new();
 
     let mut todo: Vec<Pixel> = vec![seed];
-    let seed_color = pixels.get(&seed).unwrap();
     let mut closed = true;
 
     while !todo.is_empty() {
         let pixel = todo.pop().unwrap();
 
-        if interior.contains(&pixel) {
+        if !interior.insert(pixel) {
+            // was already contained in interior
             continue;
         }
-
-        interior.insert(pixel);
 
         for direction in Direction::ALL {
             let neighbor_pixel = pixel.neighbor(direction);
             let neighbor_side = pixel.side_ccw(direction);
 
-            let neighbor_color = pixels.get(&neighbor_pixel);
-            if neighbor_color == None {
-                // open side
-                closed = false;
-                continue;
-            } else if neighbor_color == Some(seed_color) {
-                // interior side
-                todo.push(neighbor_pixel);
-            } else {
-                // boundary side
-                sides.insert(neighbor_side);
+            match classify(&neighbor_side, &neighbor_pixel) {
+                SideClass::Border => {
+                    sides.insert(neighbor_side);
+                }
+                SideClass::Interior => {
+                    todo.push(neighbor_pixel);
+                }
+                SideClass::Open => {
+                    sides.insert(neighbor_side);
+                    closed = false;
+                }
             }
         }
     }
@@ -59,28 +65,94 @@ pub fn flood_fill(seed: Pixel, pixels: &BTreeMap<Pixel, Rgba8>) -> ConnectedComp
     ConnectedComponent {
         interior,
         sides,
-        color: *seed_color,
         closed,
     }
 }
 
-pub fn connected_components(pixels: &BTreeMap<Pixel, Rgba8>) -> Vec<ConnectedComponent> {
+// pub fn flood_fill(seed: Pixel, pixels: &BTreeMap<Pixel, Rgba8>) -> ConnectedComponent {
+//     let mut interior: BTreeSet<Pixel> = BTreeSet::new();
+//     let mut sides: BTreeSet<Side> = BTreeSet::new();
+//
+//     let mut todo: Vec<Pixel> = vec![seed];
+//     let seed_color = pixels.get(&seed).unwrap();
+//     let mut closed = true;
+//
+//     while !todo.is_empty() {
+//         let pixel = todo.pop().unwrap();
+//
+//         if interior.contains(&pixel) {
+//             continue;
+//         }
+//
+//         interior.insert(pixel);
+//
+//         for direction in Direction::ALL {
+//             let neighbor_pixel = pixel.neighbor(direction);
+//             let neighbor_side = pixel.side_ccw(direction);
+//
+//             let neighbor_color = pixels.get(&neighbor_pixel);
+//             if neighbor_color == None {
+//                 // open side
+//                 closed = false;
+//                 continue;
+//             } else if neighbor_color == Some(seed_color) {
+//                 // interior side
+//                 todo.push(neighbor_pixel);
+//             } else {
+//                 // boundary side
+//                 sides.insert(neighbor_side);
+//             }
+//         }
+//     }
+//
+//     ConnectedComponent {
+//         interior,
+//         sides,
+//         color: *seed_color,
+//         closed,
+//     }
+// }
+
+pub struct ColorComponent {
+    pub component: ConnectedComponent,
+    pub color: Rgba8,
+}
+
+pub fn color_components(pixels: &BTreeMap<Pixel, Rgba8>) -> Vec<ColorComponent> {
     let mut rest: BTreeSet<_> = pixels.keys().cloned().collect();
-    let mut components: Vec<ConnectedComponent> = Vec::new();
+    let mut color_components: Vec<ColorComponent> = Vec::new();
 
     while !rest.is_empty() {
         let &seed = rest.iter().next().unwrap();
-        let component = flood_fill(seed, &pixels);
+        let &seed_color = pixels.get(&seed).unwrap();
+
+        let classify = |_: &Side, neighbor: &Pixel| {
+            if let Some(&neighbor_color) = pixels.get(neighbor) {
+                if neighbor_color == seed_color {
+                    SideClass::Interior
+                } else {
+                    SideClass::Border
+                }
+            } else {
+                SideClass::Open
+            }
+        };
+        let component = flood_fill(seed, classify);
 
         // Remove component interior from rest
         for pixel in &component.interior {
             rest.remove(pixel);
         }
 
-        components.push(component);
+        let color_component = ColorComponent {
+            component,
+            color: seed_color,
+        };
+
+        color_components.push(color_component);
     }
 
-    components
+    color_components
 }
 
 pub fn pixelmap_from_bitmap(bitmap: &Bitmap) -> BTreeMap<Pixel, Rgba8> {
@@ -98,22 +170,41 @@ pub fn pixelmap_from_bitmap(bitmap: &Bitmap) -> BTreeMap<Pixel, Rgba8> {
     dict
 }
 
+/// Works if `boundary` is the boundary of a connected set of pixels, can contain holes.
+fn flood_fill_border(seed: Pixel, boundary: &BTreeSet<Side>) -> ConnectedComponent {
+    let classify = |side: &Side, _: &Pixel| {
+        if boundary.contains(side) {
+            SideClass::Border
+        } else {
+            SideClass::Interior
+        }
+    };
+    flood_fill(seed, classify)
+}
+
+/// See flood_fill_border
+pub fn left_of(boundary: &BTreeSet<Side>) -> ConnectedComponent {
+    let seed = boundary.first().unwrap().left_pixel();
+    flood_fill_border(seed, boundary)
+}
+
+/// See flood_fill_border
+pub fn right_of(boundary: &BTreeSet<Side>) -> ConnectedComponent {
+    let seed = boundary.first().unwrap().right_pixel();
+    flood_fill_border(seed, boundary)
+}
+
 #[cfg(test)]
 mod test {
     use std::collections::{BTreeMap, BTreeSet, HashSet};
     // TODO: Make sure color of pixels in components is constant
     use crate::{
         bitmap::Bitmap,
-        connected_components::{connected_components, pixelmap_from_bitmap, ConnectedComponent},
+        connected_components::{
+            color_components, left_of, pixelmap_from_bitmap, ColorComponent, ConnectedComponent,
+        },
         math::{pixel::Pixel, rgba8::Rgba8},
-        utils::all_equal,
     };
-
-    /// Make sure the color of each pixel in the component is the same
-    fn assert_constant_color(component: &ConnectedComponent, pixelmap: &BTreeMap<Pixel, Rgba8>) {
-        let is_constant = all_equal(component.interior.iter().map(|pixel| pixelmap[pixel]));
-        assert!(is_constant);
-    }
 
     fn assert_proper_components(filename: &str, count: usize) {
         let folder = "test_resources/connected_components";
@@ -121,14 +212,18 @@ mod test {
 
         let bitmap = Bitmap::from_path(path).unwrap();
         let whole = pixelmap_from_bitmap(&bitmap);
-        let components = connected_components(&whole);
+        let components = color_components(&whole);
         assert_eq!(components.len(), count, "number of components is correct");
 
-        for component in &components {
+        for ColorComponent { component, color } in &components {
             // Components cannot be empty
             assert_ne!(component.interior.len(), 0);
 
-            assert_constant_color(component, &whole);
+            // Make sure the color of each pixel in the component is the same
+            assert!(component
+                .interior
+                .iter()
+                .all(|pixel| whole[pixel] == *color));
 
             // Make sure the boundary of each component is proper
             assert_proper_sides(component);
@@ -138,15 +233,18 @@ mod test {
 
         // Make sure the total number of pixels in all components is the same as the number of
         // pixels in the whole. Together with assert_total_union this implies non intersection.
-        let components_pixel_count: usize = components.iter().map(|comp| comp.interior.len()).sum();
+        let components_pixel_count: usize = components
+            .iter()
+            .map(|comp| comp.component.interior.len())
+            .sum();
         assert_eq!(components_pixel_count, whole.len());
     }
 
     // Assert that the union of all component interiors is equal to the whole
-    fn assert_total_union(components: &Vec<ConnectedComponent>, whole: &BTreeMap<Pixel, Rgba8>) {
+    fn assert_total_union(components: &Vec<ColorComponent>, whole: &BTreeMap<Pixel, Rgba8>) {
         let union: HashSet<_> = components
             .iter()
-            .flat_map(|comp| comp.interior.iter().cloned())
+            .flat_map(|comp| comp.component.interior.iter().cloned())
             .collect();
         let whole_pixels = whole.keys().cloned().collect();
         assert_eq!(union, whole_pixels);
@@ -223,5 +321,28 @@ mod test {
     #[test]
     fn components_7a() {
         assert_proper_components("7a.png", 7);
+    }
+
+    #[test]
+    fn left_of_component() {
+        let folder = "test_resources/connected_components";
+        let filenames = [
+            "2a.png", "3a.png", "3b.png", "3c.png", "3d.png", "4a.png", "5a.png", "7a.png",
+        ];
+
+        for filename in filenames {
+            let path = format!("{folder}/{filename}");
+            let bitmap = Bitmap::from_path(path).unwrap();
+            let whole = pixelmap_from_bitmap(&bitmap);
+            let components = color_components(&whole);
+
+            for ColorComponent { component, color } in components {
+                let connected_component = left_of(&component.sides);
+                assert_eq!(
+                    connected_component.interior, component.interior,
+                    "{filename} failed for component {color}"
+                );
+            }
+        }
     }
 }

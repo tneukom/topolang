@@ -20,15 +20,15 @@ use std::{
 struct Morphism {
     // dom: Topology,
     // codom: Topology
-    pub region_map: BTreeMap<usize, usize>,
+    pub region_map: BTreeMap<RegionKey, RegionKey>,
     pub seam_map: BTreeMap<Seam, Seam>,
     pub corner_map: BTreeMap<Vertex, Vertex>,
 }
 
-impl Index<&usize> for Morphism {
-    type Output = usize;
+impl Index<&RegionKey> for Morphism {
+    type Output = RegionKey;
 
-    fn index(&self, index: &usize) -> &Self::Output {
+    fn index(&self, index: &RegionKey) -> &Self::Output {
         &self.region_map[index]
     }
 }
@@ -106,7 +106,7 @@ impl Morphism {
             return false;
         }
 
-        let regions_total = dom.iter_regions().all(|region| {
+        let regions_total = dom.iter_region_keys().all(|region| {
             // Regions
             self.region_map.contains_key(&region)
         });

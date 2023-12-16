@@ -1,6 +1,6 @@
 use crate::{
     bitmap::Bitmap,
-    connected_components::{connected_components, pixelmap_from_bitmap},
+    connected_components::{color_components, pixelmap_from_bitmap, ColorComponent},
     math::{
         pixel::{Pixel, Side, Vertex},
         rgba8::Rgba8,
@@ -13,6 +13,7 @@ use std::{
     fmt::{Display, Formatter},
     ops::Index,
     path::Path,
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -51,7 +52,19 @@ pub struct SeamColors {
     pub right: Rgba8,
 }
 
-pub type RegionKey = usize;
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
+pub struct RegionKey {
+    key: usize,
+}
+
+impl RegionKey {
+    pub fn unused() -> Self {
+        static COUNTER: AtomicUsize = AtomicUsize::new(1);
+        Self {
+            key: COUNTER.fetch_add(1, Ordering::Relaxed),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Border {
@@ -87,34 +100,56 @@ pub struct SeamIndex {
 }
 
 impl SeamIndex {
-    pub fn new(region_key: usize, i_border: usize, i_seam: usize) -> Self {
+    pub fn new(region_key: RegionKey, i_border: usize, i_seam: usize) -> Self {
         Self {
             region_key,
             i_border,
             i_seam,
         }
     }
+
+    pub fn border_index(&self) -> BorderKey {
+        BorderKey {
+            region_key: self.region_key,
+            i_border: self.i_border,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct BorderKey {
+    pub region_key: RegionKey,
+    pub i_border: usize,
+}
+
+impl BorderKey {
+    pub fn new(region_key: RegionKey, i_border: usize) -> Self {
+        Self {
+            region_key,
+            i_border,
+        }
+    }
 }
 
 pub struct Topology {
-    pub regions: Vec<Region>,
+    pub regions: BTreeMap<RegionKey, Region>,
     /// Maps seams to (region key, border index, seam index)
     pub seam_indices: BTreeMap<Seam, SeamIndex>,
 }
 
 impl Topology {
     pub fn new(pixelmap: &BTreeMap<Pixel, Rgba8>) -> Self {
-        let connected_components = connected_components(pixelmap);
+        let connected_components = color_components(pixelmap);
 
-        let mut regions = Vec::new();
+        let mut regions: BTreeMap<RegionKey, Region> = BTreeMap::new();
         let mut seam_indices: BTreeMap<Seam, SeamIndex> = BTreeMap::new();
 
-        for connected_component in connected_components {
+        for ColorComponent { component, color } in connected_components {
+            let region_key = RegionKey::unused();
             // Each cycle in the sides is a border
             let mut boundary = Vec::new();
-            let region_key = regions.len();
 
-            for cycle in split_into_cycles(&connected_component.sides) {
+            for cycle in split_into_cycles(&component.sides) {
                 let i_border = boundary.len();
                 let seams =
                     split_cycle_into_seams(&cycle, |side| pixelmap.get(&side.right_pixel()));
@@ -134,11 +169,11 @@ impl Topology {
 
             let region = Region {
                 boundary,
-                color: connected_component.color,
-                interior: connected_component.interior,
-                closed: connected_component.closed,
+                color,
+                interior: component.interior,
+                closed: component.closed,
             };
-            regions.push(region);
+            regions.insert(region_key, region);
         }
 
         Topology {
@@ -147,12 +182,43 @@ impl Topology {
         }
     }
 
+    // pub fn remove_region(&mut self, key: RegionKey) -> Option<Region> {
+    //     if let Some(region) = self.regions.remove(&key) {
+    //         for seam in region.iter_seams() {
+    //             self.seam_indices.remove(seam)
+    //         }
+    //         Some(region)
+    //     } else {
+    //         None
+    //     }
+    // }
+    //
+    // /// Undefined behaviour if region overlaps existing regions
+    // pub fn insert_region(&mut self, key: RegionKey, region: Region) {
+    //     assert!(!self.regions.contains_key(&key));
+    //
+    //     for (i_border, border) in region.boundary.iter().enumerate() {
+    //         for (i_seam, seam) in border.seams.iter().enumerate() {
+    //             assert!(!self.seam_indices.contains_key(seam));
+    //             let seam_index = SeamIndex::new(key, i_border, i_seam);
+    //             self.seam_indices.insert(*seam, seam_index);
+    //         }
+    //     }
+    //
+    //     let previous_entry = self.regions.insert(key, region);
+    //     assert!(previous_entry.is_none());
+    // }
+
     pub fn iter_seams(&self) -> impl Iterator<Item = &Seam> + Clone {
         self.seam_indices.keys()
     }
 
-    pub fn iter_regions(&self) -> impl Iterator<Item = RegionKey> + Clone {
-        0..self.regions.len()
+    pub fn iter_region_keys<'a>(&'a self) -> impl Iterator<Item = &RegionKey> + Clone + 'a {
+        self.regions.keys()
+    }
+
+    pub fn iter_region_values<'a>(&'a self) -> impl Iterator<Item = &Region> + Clone + 'a {
+        self.regions.values()
     }
 
     pub fn from_bitmap_path(path: impl AsRef<Path>) -> anyhow::Result<Topology> {
@@ -169,7 +235,7 @@ impl Topology {
     /// Only fails if seam is not self.contains_seam(seam)
     pub fn seam_border(&self, seam: &Seam) -> &Border {
         let seam_index = self.seam_indices[seam];
-        &self.regions[seam_index.region_key].boundary[seam_index.i_border]
+        &self.regions[&seam_index.region_key].boundary[seam_index.i_border]
     }
 
     /// Return the region key on the left side of a given seam
@@ -188,14 +254,14 @@ impl Topology {
     /// Only fails if seam is not self.contains_seam(seam)
     pub fn next_seam(&self, seam: &Seam) -> &Seam {
         let seam_index = self.seam_indices[seam];
-        let border = &self.regions[seam_index.region_key].boundary[seam_index.i_border];
+        let border = &self.regions[&seam_index.region_key].boundary[seam_index.i_border];
         &border.seams[(seam_index.i_seam + 1) % border.seams.len()]
     }
 
     /// Only fails if seam is not self.contains_seam(seam)
     pub fn previous_seam(&self, seam: &Seam) -> &Seam {
         let seam_index = self.seam_indices[seam];
-        let border = &self.regions[seam_index.region_key].boundary[seam_index.i_border];
+        let border = &self.regions[&seam_index.region_key].boundary[seam_index.i_border];
         &border.seams[(seam_index.i_seam - 1) % border.seams.len()]
     }
 
@@ -211,7 +277,7 @@ impl Topology {
     /// Seam between left and right region
     /// Component index errors cause panic
     pub fn seams_between(&self, left: RegionKey, right: RegionKey) -> impl Iterator<Item = &Seam> {
-        let left_comp = &self.regions[left];
+        let left_comp = &self.regions[&left];
         left_comp
             .iter_seams()
             .filter(move |&seam| self.right_of(seam) == Some(right))
@@ -221,13 +287,64 @@ impl Topology {
     pub fn touches_void(&self, seam: &Seam) -> bool {
         self.seam_indices.contains_key(&seam.reversed())
     }
+
+    pub fn connected_borders(&self, seed: BorderKey) -> BTreeSet<BorderKey> {
+        let mut visited: BTreeSet<BorderKey> = BTreeSet::new();
+        let mut todos: Vec<BorderKey> = vec![seed];
+
+        while let Some(todo) = todos.pop() {
+            if visited.insert(todo) {
+                // newly inserted
+                for seam in &self[seed].seams {
+                    if let Some(reversed_seam_index) = self.seam_indices.get(&seam.reversed()) {
+                        todos.push(reversed_seam_index.border_index());
+                    }
+                }
+            }
+        }
+
+        visited
+    }
+
+    // /// Moves everything on the left side of `border_key` to `into` including `border_key`
+    // /// itself.
+    // pub fn extract_left_of_border(&mut self, border_key: BorderKey, into: &mut Topology) {
+    //     let region_key = border_key.region_key;
+    //     let region = self.remove_region(region_key).unwrap();
+    //
+    //     for (i_other, other_border) in region.boundary.iter().enumerate() {
+    //         if i_other != border_key.i_border {
+    //             self.extract_right_of_border(BorderKey::new(border_key.region_key, i_other), into);
+    //         }
+    //     }
+    //
+    //     into.insert_region(region_key, region);
+    // }
+    //
+    // /// Moves everything on the right side of `border_key` to `into`, NOT including
+    // /// the boundary itself.
+    // pub fn extract_right_of_border(&mut self, border_key: BorderKey, into: &mut Topology) {
+    //     for other_border_key in self.connected_borders(border_key) {
+    //         if other_border_key != border_key {
+    //             self.extract_left_of_border(other_border_key, into);
+    //         }
+    //     }
+    // }
 }
 
 impl Index<RegionKey> for Topology {
     type Output = Region;
 
-    fn index(&self, index: RegionKey) -> &Self::Output {
-        &self.regions[index]
+    fn index(&self, key: RegionKey) -> &Self::Output {
+        &self.regions[&key]
+    }
+}
+
+impl Index<BorderKey> for Topology {
+    type Output = Border;
+
+    fn index(&self, key: BorderKey) -> &Self::Output {
+        &self.regions[&key.region_key].boundary[key.i_border]
     }
 }
 
@@ -235,8 +352,8 @@ impl Display for Topology {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let indent = "    ";
 
-        for (region_key, region) in self.regions.iter().enumerate() {
-            writeln!(f, "Component {region_key}")?;
+        for (region_key, region) in self.regions.iter() {
+            writeln!(f, "Component {region_key:?}")?;
             for (i_border, border) in region.boundary.iter().enumerate() {
                 writeln!(f, "{indent}Border {i_border}")?;
                 for seam in &border.seams {

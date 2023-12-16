@@ -1,7 +1,10 @@
-use crate::{math::rgba8::Rgba8, topology::Topology};
+use crate::{
+    math::rgba8::Rgba8,
+    topology::{RegionKey, Topology},
+};
 use itertools::Itertools;
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fmt,
     fmt::{Display, Formatter},
 };
@@ -27,10 +30,10 @@ impl<T: Ord> UndirectedEdge<T> {
 #[derive(Debug, Clone)]
 pub struct SeamGraph {
     /// Seams are edges between regions, the right region can be empty space
-    pub edges: BTreeSet<UndirectedEdge<usize>>,
+    pub edges: BTreeSet<UndirectedEdge<RegionKey>>,
 
     /// Vertex labels
-    pub region_colors: Vec<Rgba8>,
+    pub region_colors: BTreeMap<RegionKey, Rgba8>,
 }
 
 impl SeamGraph {
@@ -45,7 +48,11 @@ impl SeamGraph {
             }
         }
 
-        let region_colors = topo.regions.iter().map(|comp| comp.color).collect();
+        let region_colors = topo
+            .regions
+            .iter()
+            .map(|(&key, region)| (key, region.color))
+            .collect();
 
         SeamGraph {
             edges,
@@ -61,8 +68,8 @@ impl SeamGraph {
         self.edges
             .iter()
             .map(|edge| {
-                let a_rgb = self.region_colors[edge.a];
-                let b_rgb = self.region_colors[edge.b];
+                let a_rgb = self.region_colors[&edge.a];
+                let b_rgb = self.region_colors[&edge.b];
                 UndirectedEdge::new(a_rgb, b_rgb)
             })
             .collect()
@@ -74,12 +81,12 @@ impl Display for SeamGraph {
         // print graph (seams)
         writeln!(f, "Seams")?;
         for edge in &self.edges {
-            writeln!(f, "{}, {}", edge.a, edge.b)?;
+            writeln!(f, "{:?}, {:?}", edge.a, edge.b)?;
         }
 
         writeln!(f, "Component colors")?;
-        for (i_region, color) in self.region_colors.iter().enumerate() {
-            writeln!(f, "{}: {}", i_region, color)?;
+        for (region_key, color) in self.region_colors.iter() {
+            writeln!(f, "{:?}: {}", region_key, color)?;
         }
 
         Ok(())
