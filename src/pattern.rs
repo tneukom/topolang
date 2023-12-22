@@ -1,12 +1,14 @@
+use crate::{
+    morphism::Morphism,
+    topology::{Seam, Topology},
+};
 use std::collections::BTreeMap;
-use crate::morphism::Morphism;
-use crate::topology::{Seam, Topology};
 
 pub fn generalized_seams(topo: &Topology) -> Vec<Seam> {
     let mut seams = Vec::new();
     for border in topo.iter_borders() {
         for i in 0..border.seams.len() {
-            for j in 0.. border.seams.len() {
+            for j in 0..border.seams.len() {
                 let start = border.seams[i].start;
                 let stop = border.seams[(i + j) % border.seams.len()].stop;
                 let seam = Seam::new_with_len(start, stop, j + 1);

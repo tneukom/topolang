@@ -100,3 +100,19 @@ pub fn all_equal<T: Eq>(mut iter: impl Iterator<Item = T>) -> bool {
         Some(first) => iter.all(|el| el == first),
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct UndirectedEdge<T> {
+    pub a: T,
+    pub b: T,
+}
+
+impl<T: Ord> UndirectedEdge<T> {
+    pub fn new(a: T, b: T) -> Self {
+        if a < b {
+            Self { a, b }
+        } else {
+            Self { a: b, b: a }
+        }
+    }
+}

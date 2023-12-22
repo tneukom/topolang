@@ -15,18 +15,21 @@ use std::{
     path::Path,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use num_traits::abs;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Seam {
     pub start: Side,
     pub stop: Side,
-    pub len: usize
+    pub len: usize,
 }
 
 impl Seam {
     pub fn new_atom(start: Side, stop: Side) -> Self {
-        Seam { start, stop, len: 1 }
+        Seam {
+            start,
+            stop,
+            len: 1,
+        }
     }
 
     pub fn new_with_len(start: Side, stop: Side, len: usize) -> Self {
@@ -221,7 +224,9 @@ impl Topology {
     // }
 
     pub fn iter_borders(&self) -> impl Iterator<Item = &Border> + Clone {
-        self.regions.values().flat_map(|region| region.boundary.iter())
+        self.regions
+            .values()
+            .flat_map(|region| region.boundary.iter())
     }
 
     pub fn iter_seams(&self) -> impl Iterator<Item = &Seam> + Clone {
@@ -431,7 +436,10 @@ pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -
 
     if discontinuities.is_empty() {
         // TODO: Reverse cycle should give same seam
-        vec![Seam::new_atom(*cycle.first().unwrap(), *cycle.last().unwrap())]
+        vec![Seam::new_atom(
+            *cycle.first().unwrap(),
+            *cycle.last().unwrap(),
+        )]
     } else {
         discontinuities
             .iter()
@@ -444,11 +452,8 @@ pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -
 #[cfg(test)]
 mod test {
     use crate::{
-        bitmap::Bitmap,
-        connected_components::pixelmap_from_bitmap,
-        math::rgba8::Rgba8,
-        seam_graph::{SeamGraph, UndirectedEdge},
-        topology::Topology,
+        bitmap::Bitmap, connected_components::pixelmap_from_bitmap, math::rgba8::Rgba8,
+        topology::Topology, utils::UndirectedEdge,
     };
     use std::collections::BTreeSet;
 
@@ -460,10 +465,27 @@ mod test {
         topology
     }
 
+    const VOID_COLOR: Rgba8 = Rgba8::new(54, 12, 41, 228);
+
+    fn rgb_seam_graph(topo: &Topology) -> BTreeSet<UndirectedEdge<Rgba8>> {
+        let mut edges = BTreeSet::new();
+        for seam in topo.iter_seams() {
+            let left_color = topo[topo.left_of(seam)].color;
+            let right_color = if let Some(right_region) = topo.right_of(seam) {
+                topo[right_region].color
+            } else {
+                VOID_COLOR
+            };
+            let edge = UndirectedEdge::new(left_color, right_color);
+            edges.insert(edge);
+        }
+
+        edges
+    }
+
     fn load_rgb_seam_graph(filename: &str) -> BTreeSet<UndirectedEdge<Rgba8>> {
         let topo = load_topology(filename);
-        let seam_graph = SeamGraph::from_topology(&topo);
-        seam_graph.rgb_edges()
+        rgb_seam_graph(&topo)
     }
 
     fn rgb_edges_from<const N: usize>(
@@ -479,6 +501,7 @@ mod test {
     fn image_1a() {
         let rgb_edges = load_rgb_seam_graph("1a.png");
         let expected_rgb_edges = rgb_edges_from([
+            (Rgba8::TRANSPARENT, VOID_COLOR),
             (Rgba8::RED, Rgba8::TRANSPARENT),
         ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
@@ -488,6 +511,7 @@ mod test {
     fn image_2a() {
         let rgb_edges = load_rgb_seam_graph("2a.png");
         let expected_rgb_edges = rgb_edges_from([
+            (Rgba8::TRANSPARENT, VOID_COLOR),
             (Rgba8::RED, Rgba8::BLUE),
             (Rgba8::RED, Rgba8::TRANSPARENT),
             (Rgba8::BLUE, Rgba8::TRANSPARENT),
@@ -498,8 +522,11 @@ mod test {
     #[test]
     fn image_2b() {
         let rgb_edges = load_rgb_seam_graph("2b.png");
-        let expected_rgb_edges =
-            rgb_edges_from([(Rgba8::RED, Rgba8::BLUE), (Rgba8::RED, Rgba8::TRANSPARENT)]);
+        let expected_rgb_edges = rgb_edges_from([
+            (Rgba8::TRANSPARENT, VOID_COLOR),
+            (Rgba8::RED, Rgba8::BLUE),
+            (Rgba8::RED, Rgba8::TRANSPARENT),
+        ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
     }
 
@@ -507,6 +534,7 @@ mod test {
     fn image_3a() {
         let rgb_edges = load_rgb_seam_graph("3a.png");
         let expected_rgb_edges = rgb_edges_from([
+            (Rgba8::TRANSPARENT, VOID_COLOR),
             (Rgba8::RED, Rgba8::GREEN),
             (Rgba8::RED, Rgba8::BLUE),
             (Rgba8::RED, Rgba8::TRANSPARENT),
@@ -517,8 +545,11 @@ mod test {
     #[test]
     fn image_3b() {
         let rgb_edges = load_rgb_seam_graph("3b.png");
-        let expected_rgb_edges =
-            rgb_edges_from([(Rgba8::RED, Rgba8::GREEN), (Rgba8::GREEN, Rgba8::BLUE)]);
+        let expected_rgb_edges = rgb_edges_from([
+            (Rgba8::RED, VOID_COLOR),
+            (Rgba8::RED, Rgba8::GREEN),
+            (Rgba8::GREEN, Rgba8::BLUE),
+        ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
     }
 
@@ -526,6 +557,7 @@ mod test {
     fn image_3c() {
         let rgb_edges = load_rgb_seam_graph("3c.png");
         let expected_rgb_edges = rgb_edges_from([
+            (Rgba8::TRANSPARENT, VOID_COLOR),
             (Rgba8::RED, Rgba8::YELLOW),
             (Rgba8::RED, Rgba8::BLUE),
             (Rgba8::YELLOW, Rgba8::BLUE),
@@ -538,6 +570,7 @@ mod test {
     fn image_4a() {
         let rgb_edges = load_rgb_seam_graph("4a.png");
         let expected_rgb_edges = rgb_edges_from([
+            (Rgba8::TRANSPARENT, VOID_COLOR),
             (Rgba8::RED, Rgba8::BLUE),
             (Rgba8::BLUE, Rgba8::GREEN),
             (Rgba8::GREEN, Rgba8::CYAN),

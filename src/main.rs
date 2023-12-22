@@ -4,10 +4,7 @@
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 // #![allow(unsafe_code)]
 
-use crate::{
-    bitmap::Bitmap, connected_components::pixelmap_from_bitmap, seam_graph::SeamGraph,
-    topology::Topology,
-};
+use crate::{bitmap::Bitmap, connected_components::pixelmap_from_bitmap, topology::Topology};
 
 mod array_2d;
 mod bitmap;
@@ -16,7 +13,6 @@ mod math;
 mod morphism;
 mod pattern;
 mod reduce;
-mod seam_graph;
 mod serialize;
 mod topology;
 mod utils;
@@ -32,6 +28,4 @@ pub fn main() {
     let pixelmap = pixelmap_from_bitmap(&bitmap);
     let topology = Topology::new(&pixelmap);
     println!("{topology}");
-    let seam_graph = SeamGraph::from_topology(&topology);
-    println!("{seam_graph}");
 }
