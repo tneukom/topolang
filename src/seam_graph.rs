@@ -39,11 +39,11 @@ pub struct SeamGraph {
 impl SeamGraph {
     pub fn from_topology(topo: &Topology) -> SeamGraph {
         let mut edges = BTreeSet::new();
-        for (seam, seam_indices) in &topo.seam_indices {
-            let revered_seam = seam.reversed();
-            if let Some(reversed_seam_indices) = topo.seam_indices.get(&revered_seam) {
-                let edge =
-                    UndirectedEdge::new(seam_indices.region_key, reversed_seam_indices.region_key);
+
+        for seam in topo.iter_seams() {
+            let left_region = topo.left_of(seam);
+            if let Some(right_region) = topo.right_of(seam) {
+                let edge = UndirectedEdge::new(left_region, right_region);
                 edges.insert(edge);
             }
         }

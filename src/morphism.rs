@@ -17,7 +17,7 @@ use std::{
 // 2) ∀ s, s': left(s) = left(s') => (left ∘ φ)(s) = (left ∘ φ)(s')
 //
 // 3) ∀ s, s': start(s) = start(s')
-struct Morphism {
+pub struct Morphism {
     // dom: Topology,
     // codom: Topology
     pub region_map: BTreeMap<RegionKey, RegionKey>,
@@ -309,7 +309,7 @@ mod test {
         let phi = Morphism::induced_from_seam_map(&dom, &codom, seam_phi).unwrap();
 
         assert!(phi.is_homomorphism(&dom, &codom));
-        assert!(phi.is_total(&dom, false));
+        assert!(phi.is_total(&dom, true));
     }
 
     #[test]

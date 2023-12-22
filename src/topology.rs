@@ -15,20 +15,31 @@ use std::{
     path::Path,
     sync::atomic::{AtomicUsize, Ordering},
 };
+use num_traits::abs;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Seam {
     pub start: Side,
     pub stop: Side,
+    pub len: usize
 }
 
 impl Seam {
-    pub fn new(start: Side, stop: Side) -> Self {
-        Seam { start, stop }
+    pub fn new_atom(start: Side, stop: Side) -> Self {
+        Seam { start, stop, len: 1 }
+    }
+
+    pub fn new_with_len(start: Side, stop: Side, len: usize) -> Self {
+        Seam { start, stop, len }
+    }
+
+    pub fn is_atom(&self) -> bool {
+        self.len == 1
     }
 
     pub fn reversed(&self) -> Seam {
-        Self::new(self.stop.reversed(), self.start.reversed())
+        assert!(self.is_atom());
+        Self::new_atom(self.stop.reversed(), self.start.reversed())
     }
 
     pub fn start_corner(&self) -> Vertex {
@@ -133,8 +144,8 @@ impl BorderKey {
 
 pub struct Topology {
     pub regions: BTreeMap<RegionKey, Region>,
-    /// Maps seams to (region key, border index, seam index)
-    pub seam_indices: BTreeMap<Seam, SeamIndex>,
+    /// Maps the start side of a seam to (region key, border index, seam index)
+    pub seam_indices: BTreeMap<Side, SeamIndex>,
 }
 
 impl Topology {
@@ -142,7 +153,7 @@ impl Topology {
         let connected_components = color_components(pixelmap);
 
         let mut regions: BTreeMap<RegionKey, Region> = BTreeMap::new();
-        let mut seam_indices: BTreeMap<Seam, SeamIndex> = BTreeMap::new();
+        let mut seam_indices: BTreeMap<Side, SeamIndex> = BTreeMap::new();
 
         for ColorComponent { component, color } in connected_components {
             let region_key = RegionKey::unused();
@@ -156,7 +167,7 @@ impl Topology {
 
                 for (i_seam, &seam) in seams.iter().enumerate() {
                     let seam_index = SeamIndex::new(region_key, i_border, i_seam);
-                    seam_indices.insert(seam, seam_index);
+                    seam_indices.insert(seam.start, seam_index);
                 }
 
                 let border = Border {
@@ -209,8 +220,16 @@ impl Topology {
     //     assert!(previous_entry.is_none());
     // }
 
+    pub fn iter_borders(&self) -> impl Iterator<Item = &Border> + Clone {
+        self.regions.values().flat_map(|region| region.boundary.iter())
+    }
+
     pub fn iter_seams(&self) -> impl Iterator<Item = &Seam> + Clone {
-        self.seam_indices.keys()
+        self.iter_borders().flat_map(|border| border.seams.iter())
+    }
+
+    pub fn iter_seam_indices(&self) -> impl Iterator<Item = &SeamIndex> {
+        self.seam_indices.values()
     }
 
     pub fn iter_region_keys<'a>(&'a self) -> impl Iterator<Item = &RegionKey> + Clone + 'a {
@@ -228,41 +247,42 @@ impl Topology {
     }
 
     pub fn contains_seam(&self, seam: &Seam) -> bool {
-        self.seam_indices.contains_key(seam)
+        self.seam_indices.contains_key(&seam.start)
     }
 
     /// Returns the border of a given seam
     /// Only fails if seam is not self.contains_seam(seam)
     pub fn seam_border(&self, seam: &Seam) -> &Border {
-        let seam_index = self.seam_indices[seam];
+        let seam_index = &self.seam_indices[&seam.start];
         &self.regions[&seam_index.region_key].boundary[seam_index.i_border]
     }
 
     /// Return the region key on the left side of a given seam
     /// Only fails if seam is not self.contains_seam(seam)
     pub fn left_of(&self, seam: &Seam) -> RegionKey {
-        let seam_index = &self.seam_indices[seam];
+        let seam_index = &self.seam_indices[&seam.start];
         seam_index.region_key
     }
 
     /// Not every seam has a region on the right, it can be empty space
     pub fn right_of(&self, seam: &Seam) -> Option<RegionKey> {
-        let seam_index = self.seam_indices.get(&seam.reversed())?;
+        assert!(seam.is_atom());
+        let seam_index = self.seam_indices.get(&seam.reversed().start)?;
         Some(seam_index.region_key)
     }
 
     /// Only fails if seam is not self.contains_seam(seam)
     pub fn next_seam(&self, seam: &Seam) -> &Seam {
-        let seam_index = self.seam_indices[seam];
+        let seam_index = self.seam_indices[&seam.start];
         let border = &self.regions[&seam_index.region_key].boundary[seam_index.i_border];
-        &border.seams[(seam_index.i_seam + 1) % border.seams.len()]
+        &border.seams[(seam_index.i_seam + seam.len) % border.seams.len()]
     }
 
     /// Only fails if seam is not self.contains_seam(seam)
     pub fn previous_seam(&self, seam: &Seam) -> &Seam {
-        let seam_index = self.seam_indices[seam];
+        let seam_index = self.seam_indices[&seam.start];
         let border = &self.regions[&seam_index.region_key].boundary[seam_index.i_border];
-        &border.seams[(seam_index.i_seam - 1) % border.seams.len()]
+        &border.seams[(seam_index.i_seam - 1 + border.seams.len()) % border.seams.len()]
     }
 
     pub fn seam_colors(&self, seam: &Seam) -> SeamColors {
@@ -285,26 +305,26 @@ impl Topology {
 
     /// Is the right side of the seam void? The left side is always a proper region.
     pub fn touches_void(&self, seam: &Seam) -> bool {
-        self.seam_indices.contains_key(&seam.reversed())
+        self.right_of(seam).is_none()
     }
 
-    pub fn connected_borders(&self, seed: BorderKey) -> BTreeSet<BorderKey> {
-        let mut visited: BTreeSet<BorderKey> = BTreeSet::new();
-        let mut todos: Vec<BorderKey> = vec![seed];
-
-        while let Some(todo) = todos.pop() {
-            if visited.insert(todo) {
-                // newly inserted
-                for seam in &self[seed].seams {
-                    if let Some(reversed_seam_index) = self.seam_indices.get(&seam.reversed()) {
-                        todos.push(reversed_seam_index.border_index());
-                    }
-                }
-            }
-        }
-
-        visited
-    }
+    // pub fn connected_borders(&self, seed: BorderKey) -> BTreeSet<BorderKey> {
+    //     let mut visited: BTreeSet<BorderKey> = BTreeSet::new();
+    //     let mut todos: Vec<BorderKey> = vec![seed];
+    //
+    //     while let Some(todo) = todos.pop() {
+    //         if visited.insert(todo) {
+    //             // newly inserted
+    //             for seam in &self[seed].seams {
+    //                 if let Some(reversed_seam_index) = self.seam_indices.get(&seam.reversed().start) {
+    //                     todos.push(reversed_seam_index.border_index());
+    //                 }
+    //             }
+    //         }
+    //     }
+    //
+    //     visited
+    // }
 
     // /// Moves everything on the left side of `border_key` to `into` including `border_key`
     // /// itself.
@@ -411,12 +431,12 @@ pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -
 
     if discontinuities.is_empty() {
         // TODO: Reverse cycle should give same seam
-        vec![Seam::new(*cycle.first().unwrap(), *cycle.last().unwrap())]
+        vec![Seam::new_atom(*cycle.first().unwrap(), *cycle.last().unwrap())]
     } else {
         discontinuities
             .iter()
             .circular_tuple_windows()
-            .map(|((_, &lhs), (&rhs, _))| Seam::new(lhs, rhs))
+            .map(|((_, &lhs), (&rhs, _))| Seam::new_atom(lhs, rhs))
             .collect()
     }
 }
@@ -453,6 +473,15 @@ mod test {
             .into_iter()
             .map(|(a, b)| UndirectedEdge::new(a, b))
             .collect()
+    }
+
+    #[test]
+    fn image_1a() {
+        let rgb_edges = load_rgb_seam_graph("1a.png");
+        let expected_rgb_edges = rgb_edges_from([
+            (Rgba8::RED, Rgba8::TRANSPARENT),
+        ]);
+        assert_eq!(rgb_edges, expected_rgb_edges);
     }
 
     #[test]
