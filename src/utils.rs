@@ -32,6 +32,10 @@ pub trait IteratorExt: Iterator + Sized {
             Err(_) => Err(UniqueError::NotUnique),
         }
     }
+
+    // fn indices(self) -> impl Iterator<Item = Self::Item> {
+    //     self.enumerate().map(|(i, _)| i)
+    // }
 }
 
 impl<T: Sized> IteratorExt for T where T: Iterator {}

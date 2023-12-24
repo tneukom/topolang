@@ -4,7 +4,7 @@
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 // #![allow(unsafe_code)]
 
-use crate::{bitmap::Bitmap, connected_components::pixelmap_from_bitmap, topology::Topology};
+use crate::{bitmap::Bitmap, connected_components::pixmap_from_bitmap, topology::Topology};
 
 mod array_2d;
 mod bitmap;
@@ -25,7 +25,7 @@ pub fn main() {
 
     let path = "test_resources/topology/3b.png";
     let bitmap = Bitmap::from_path(path).unwrap();
-    let pixelmap = pixelmap_from_bitmap(&bitmap);
+    let pixelmap = pixmap_from_bitmap(&bitmap);
     let topology = Topology::new(&pixelmap);
     println!("{topology}");
 }
