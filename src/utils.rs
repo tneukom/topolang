@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use std::{array, fmt::Debug, hash::Hash, rc::Rc};
+use std::{array, collections::BTreeSet, fmt::Debug, hash::Hash, rc::Rc};
 
 pub struct ById<T>(pub T);
 
@@ -116,3 +116,5 @@ impl<T: Ord> UndirectedEdge<T> {
         }
     }
 }
+
+pub type UndirectedGraph<T> = BTreeSet<UndirectedEdge<T>>;

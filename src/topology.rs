@@ -5,6 +5,7 @@ use crate::{
         pixel::{Pixel, Side, Vertex},
         rgba8::Rgba8,
     },
+    utils::{UndirectedEdge, UndirectedGraph},
 };
 use itertools::Itertools;
 use std::{
@@ -63,7 +64,7 @@ impl Display for Seam {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SeamColors {
     pub left: Rgba8,
-    pub right: Rgba8,
+    pub right: Option<Rgba8>,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
@@ -293,9 +294,7 @@ impl Topology {
     pub fn seam_colors(&self, seam: &Seam) -> SeamColors {
         SeamColors {
             left: self[self.left_of(seam)].color,
-            right: self
-                .right_of(seam)
-                .map_or(Rgba8::TRANSPARENT, |right| self[right].color),
+            right: self.right_of(seam).map(|right| self[right].color),
         }
     }
 
@@ -355,6 +354,17 @@ impl Topology {
     //         }
     //     }
     // }
+
+    pub fn rgb_seam_graph(&self) -> UndirectedGraph<Option<Rgba8>> {
+        let mut edges = BTreeSet::new();
+        for seam in self.iter_seams() {
+            let seam_colors = self.seam_colors(seam);
+            let edge = UndirectedEdge::new(Some(seam_colors.left), seam_colors.right);
+            edges.insert(edge);
+        }
+
+        edges
+    }
 }
 
 impl Index<RegionKey> for Topology {
@@ -450,10 +460,13 @@ pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
     use crate::{
-        bitmap::Bitmap, connected_components::pixelmap_from_bitmap, math::rgba8::Rgba8,
-        topology::Topology, utils::UndirectedEdge,
+        bitmap::Bitmap,
+        connected_components::pixelmap_from_bitmap,
+        math::rgba8::Rgba8,
+        topology::Topology,
+        utils::{UndirectedEdge, UndirectedGraph},
     };
     use std::collections::BTreeSet;
 
@@ -465,35 +478,21 @@ mod test {
         topology
     }
 
-    const VOID_COLOR: Rgba8 = Rgba8::new(54, 12, 41, 228);
-
-    fn rgb_seam_graph(topo: &Topology) -> BTreeSet<UndirectedEdge<Rgba8>> {
-        let mut edges = BTreeSet::new();
-        for seam in topo.iter_seams() {
-            let left_color = topo[topo.left_of(seam)].color;
-            let right_color = if let Some(right_region) = topo.right_of(seam) {
-                topo[right_region].color
-            } else {
-                VOID_COLOR
-            };
-            let edge = UndirectedEdge::new(left_color, right_color);
-            edges.insert(edge);
-        }
-
-        edges
-    }
-
-    fn load_rgb_seam_graph(filename: &str) -> BTreeSet<UndirectedEdge<Rgba8>> {
+    fn load_rgb_seam_graph(filename: &str) -> UndirectedGraph<Option<Rgba8>> {
         let topo = load_topology(filename);
-        rgb_seam_graph(&topo)
+        topo.rgb_seam_graph()
     }
+
+    const VOID_COLOR: Rgba8 = Rgba8::new(54, 12, 41, 228);
 
     fn rgb_edges_from<const N: usize>(
         rgb_edges: [(Rgba8, Rgba8); N],
-    ) -> BTreeSet<UndirectedEdge<Rgba8>> {
+    ) -> UndirectedGraph<Option<Rgba8>> {
+        let colorf = |rgba| if rgba == VOID_COLOR { None } else { Some(rgba) };
+
         rgb_edges
             .into_iter()
-            .map(|(a, b)| UndirectedEdge::new(a, b))
+            .map(|(a, b)| UndirectedEdge::new(colorf(a), colorf(b)))
             .collect()
     }
 
