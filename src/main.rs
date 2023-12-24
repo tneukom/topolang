@@ -4,7 +4,7 @@
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 // #![allow(unsafe_code)]
 
-use crate::{bitmap::Bitmap, connected_components::pixmap_from_bitmap, topology::Topology};
+use crate::{bitmap::Bitmap, pixmap::pixmap_from_bitmap, topology::Topology};
 
 mod array_2d;
 mod bitmap;
@@ -12,6 +12,7 @@ mod connected_components;
 mod math;
 mod morphism;
 mod pattern;
+mod pixmap;
 mod reduce;
 mod serialize;
 mod topology;

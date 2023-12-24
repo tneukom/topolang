@@ -1,15 +1,9 @@
-use crate::{
-    bitmap::Bitmap,
-    math::{
-        direction::Direction,
-        pixel::{Pixel, Side},
-        rgba8::Rgba8,
-    },
+use crate::math::{
+    direction::Direction,
+    pixel::{Pixel, Side},
+    rgba8::Rgba8,
 };
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::Path,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 pub enum Interior {
     Bounded(BTreeSet<Pixel>),
@@ -114,26 +108,6 @@ pub fn color_components(pixels: &BTreeMap<Pixel, Rgba8>) -> Vec<ColorComponent> 
     color_components
 }
 
-pub fn pixmap_from_bitmap(bitmap: &Bitmap) -> BTreeMap<Pixel, Rgba8> {
-    let mut dict: BTreeMap<Pixel, Rgba8> = BTreeMap::new();
-    for idx in bitmap.indices() {
-        let color = bitmap[idx];
-
-        if color.a == 0 && color != Rgba8::TRANSPARENT {
-            println!("Bitmap should not contain colors with alpha = 0 but rgb != 0")
-        }
-
-        let pixel: Pixel = idx.cwise_try_into::<i64>().unwrap().into();
-        dict.insert(pixel, color);
-    }
-    dict
-}
-
-pub fn pixmap_from_path(path: impl AsRef<Path>) -> anyhow::Result<BTreeMap<Pixel, Rgba8>> {
-    let bitmap = Bitmap::from_path(path)?;
-    Ok(pixmap_from_bitmap(&bitmap))
-}
-
 /// Works if `boundary` is the boundary of a connected set of pixels, can contain holes.
 fn flood_fill_border(seed: Pixel, boundary: &BTreeSet<Side>) -> ConnectedComponent {
     let classify = |side: &Side, _: &Pixel| {
@@ -164,10 +138,9 @@ mod test {
     // TODO: Make sure color of pixels in components is constant
     use crate::{
         bitmap::Bitmap,
-        connected_components::{
-            color_components, left_of, pixmap_from_bitmap, ColorComponent, ConnectedComponent,
-        },
+        connected_components::{color_components, left_of, ColorComponent, ConnectedComponent},
         math::{pixel::Pixel, rgba8::Rgba8},
+        pixmap::pixmap_from_bitmap,
     };
 
     fn assert_proper_components(filename: &str, count: usize) {

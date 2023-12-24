@@ -98,9 +98,9 @@ pub fn extract_pattern(pixmap: &mut BTreeMap<Pixel, Rgba8>) -> BTreeMap<Pixel, R
 #[cfg(test)]
 mod test {
     use crate::{
-        connected_components::pixmap_from_path,
         math::{pixel::Pixel, rgba8::Rgba8},
         pattern::extract_pattern,
+        pixmap::{pixmap_from_path, pixmap_remove_color},
         topology::Topology,
     };
     use std::collections::BTreeMap;
@@ -112,7 +112,7 @@ mod test {
 
     fn pixmap_with_void_from_path(path: &str) -> BTreeMap<Pixel, Rgba8> {
         let mut pixmap = pixmap_from_path(path).unwrap();
-        pixmap.retain(|_, &mut color| color != Topology::VOID_COLOR);
+        pixmap_remove_color(&mut pixmap, Topology::VOID_COLOR);
         pixmap
     }
 

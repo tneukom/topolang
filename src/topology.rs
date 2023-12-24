@@ -1,12 +1,11 @@
 use crate::{
     bitmap::Bitmap,
-    connected_components::{
-        color_components, left_of, pixmap_from_bitmap, right_of, ColorComponent,
-    },
+    connected_components::{color_components, left_of, right_of, ColorComponent},
     math::{
         pixel::{Pixel, Side, Vertex},
         rgba8::Rgba8,
     },
+    pixmap::{pixmap_from_bitmap, pixmap_remove_color},
     utils::{UndirectedEdge, UndirectedGraph},
 };
 use itertools::Itertools;
@@ -232,8 +231,7 @@ impl Topology {
 
     pub fn from_bitmap_with_void(bitmap: &Bitmap) -> Topology {
         let mut pixmap = pixmap_from_bitmap(&bitmap);
-        // Remove pixel with VOID_COLOR
-        pixmap.retain(|_, &mut color| color != Self::VOID_COLOR);
+        pixmap_remove_color(&mut pixmap, Self::VOID_COLOR);
         Self::new(&pixmap)
     }
 
