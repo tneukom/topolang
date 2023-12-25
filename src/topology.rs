@@ -5,7 +5,7 @@ use crate::{
         pixel::{Pixel, Side, Vertex},
         rgba8::Rgba8,
     },
-    pixmap::{pixmap_from_bitmap, pixmap_remove_color},
+    pixmap::Pixmap,
     utils::{UndirectedEdge, UndirectedGraph},
 };
 use itertools::Itertools;
@@ -171,11 +171,8 @@ pub struct Topology {
 }
 
 impl Topology {
-    /// Hex 360c29
-    pub const VOID_COLOR: Rgba8 = Rgba8::new(0x36, 0x0C, 0x29, 0xFF);
-
-    pub fn new(pixelmap: &BTreeMap<Pixel, Rgba8>) -> Self {
-        let connected_components = color_components(pixelmap);
+    pub fn new(pixmap: &Pixmap) -> Self {
+        let connected_components = color_components(pixmap);
 
         let mut regions: BTreeMap<RegionKey, Region> = BTreeMap::new();
         let mut seam_indices: BTreeMap<Side, SeamIndex> = BTreeMap::new();
@@ -187,8 +184,7 @@ impl Topology {
 
             for cycle in split_into_cycles(&component.sides) {
                 let i_border = boundary.len();
-                let seams =
-                    split_cycle_into_seams(&cycle, |side| pixelmap.get(&side.right_pixel()));
+                let seams = split_cycle_into_seams(&cycle, |side| pixmap.get(&side.right_pixel()));
 
                 for (i_seam, &seam) in seams.iter().enumerate() {
                     let seam_index = SeamIndex::new(region_key, i_border, i_seam);
@@ -225,15 +221,15 @@ impl Topology {
     }
 
     pub fn from_bitmap(bitmap: &Bitmap) -> Topology {
-        let pixelmap = pixmap_from_bitmap(&bitmap);
-        Topology::new(&pixelmap)
+        let pixmap = Pixmap::from_bitmap(bitmap);
+        Topology::new(&pixmap)
     }
 
-    pub fn from_bitmap_with_void(bitmap: &Bitmap) -> Topology {
-        let mut pixmap = pixmap_from_bitmap(&bitmap);
-        pixmap_remove_color(&mut pixmap, Self::VOID_COLOR);
-        Self::new(&pixmap)
-    }
+    // pub fn from_bitmap_with_void(bitmap: &Bitmap) -> Topology {
+    //     let mut pixmap = pixmap_from_bitmap(&bitmap);
+    //     pixmap_remove_color(&mut pixmap, Self::VOID_COLOR);
+    //     Self::new(&pixmap)
+    // }
 
     pub fn from_bitmap_path(path: impl AsRef<Path>) -> anyhow::Result<Topology> {
         let bitmap = Bitmap::from_path(path)?;
@@ -518,7 +514,7 @@ pub mod test {
         rgb_edges: [(Rgba8, Rgba8); N],
     ) -> UndirectedGraph<Option<Rgba8>> {
         let colorf = |rgba| {
-            if rgba == Topology::VOID_COLOR {
+            if rgba == Rgba8::VOID {
                 None
             } else {
                 Some(rgba)
@@ -535,7 +531,7 @@ pub mod test {
     fn image_1a() {
         let rgb_edges = load_rgb_seam_graph("1a.png");
         let expected_rgb_edges = rgb_edges_from([
-            (Rgba8::TRANSPARENT, Topology::VOID_COLOR),
+            (Rgba8::TRANSPARENT, Rgba8::VOID),
             (Rgba8::RED, Rgba8::TRANSPARENT),
         ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
@@ -545,7 +541,7 @@ pub mod test {
     fn image_2a() {
         let rgb_edges = load_rgb_seam_graph("2a.png");
         let expected_rgb_edges = rgb_edges_from([
-            (Rgba8::TRANSPARENT, Topology::VOID_COLOR),
+            (Rgba8::TRANSPARENT, Rgba8::VOID),
             (Rgba8::RED, Rgba8::BLUE),
             (Rgba8::RED, Rgba8::TRANSPARENT),
             (Rgba8::BLUE, Rgba8::TRANSPARENT),
@@ -557,7 +553,7 @@ pub mod test {
     fn image_2b() {
         let rgb_edges = load_rgb_seam_graph("2b.png");
         let expected_rgb_edges = rgb_edges_from([
-            (Rgba8::TRANSPARENT, Topology::VOID_COLOR),
+            (Rgba8::TRANSPARENT, Rgba8::VOID),
             (Rgba8::RED, Rgba8::BLUE),
             (Rgba8::RED, Rgba8::TRANSPARENT),
         ]);
@@ -568,7 +564,7 @@ pub mod test {
     fn image_3a() {
         let rgb_edges = load_rgb_seam_graph("3a.png");
         let expected_rgb_edges = rgb_edges_from([
-            (Rgba8::TRANSPARENT, Topology::VOID_COLOR),
+            (Rgba8::TRANSPARENT, Rgba8::VOID),
             (Rgba8::RED, Rgba8::GREEN),
             (Rgba8::RED, Rgba8::BLUE),
             (Rgba8::RED, Rgba8::TRANSPARENT),
@@ -580,7 +576,7 @@ pub mod test {
     fn image_3b() {
         let rgb_edges = load_rgb_seam_graph("3b.png");
         let expected_rgb_edges = rgb_edges_from([
-            (Rgba8::RED, Topology::VOID_COLOR),
+            (Rgba8::RED, Rgba8::VOID),
             (Rgba8::RED, Rgba8::GREEN),
             (Rgba8::GREEN, Rgba8::BLUE),
         ]);
@@ -591,7 +587,7 @@ pub mod test {
     fn image_3c() {
         let rgb_edges = load_rgb_seam_graph("3c.png");
         let expected_rgb_edges = rgb_edges_from([
-            (Rgba8::TRANSPARENT, Topology::VOID_COLOR),
+            (Rgba8::TRANSPARENT, Rgba8::VOID),
             (Rgba8::RED, Rgba8::YELLOW),
             (Rgba8::RED, Rgba8::BLUE),
             (Rgba8::YELLOW, Rgba8::BLUE),
@@ -604,7 +600,7 @@ pub mod test {
     fn image_4a() {
         let rgb_edges = load_rgb_seam_graph("4a.png");
         let expected_rgb_edges = rgb_edges_from([
-            (Rgba8::TRANSPARENT, Topology::VOID_COLOR),
+            (Rgba8::TRANSPARENT, Rgba8::VOID),
             (Rgba8::RED, Rgba8::BLUE),
             (Rgba8::BLUE, Rgba8::GREEN),
             (Rgba8::GREEN, Rgba8::CYAN),

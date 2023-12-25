@@ -71,6 +71,9 @@ impl Rgba8 {
     pub const TEAL: Self = rgba8(0x00, 0x80, 0x80, 0xFF);
     pub const TRANSPARENT: Self = rgba8(0x00, 0x00, 0x00, 0x00);
     pub const ZERO: Self = Self::TRANSPARENT;
+
+    /// Hex 360c29
+    pub const VOID: Rgba8 = Rgba8::new(0x36, 0x0C, 0x29, 0xFF);
 }
 
 pub const fn rgba8(r: u8, g: u8, b: u8, a: u8) -> Rgba8 {

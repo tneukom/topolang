@@ -266,6 +266,10 @@ impl Side {
     pub fn right_pixel(self) -> Pixel {
         self.reversed().left_pixel()
     }
+
+    pub fn undirected_equals(&self, other: &Side) -> bool {
+        self == other || self.reversed() == *other
+    }
 }
 
 impl Display for Side {

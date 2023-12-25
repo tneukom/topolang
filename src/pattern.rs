@@ -1,6 +1,7 @@
 use crate::{
-    math::{pixel::Pixel, rgba8::Rgba8},
+    math::rgba8::Rgba8,
     morphism::Morphism,
+    pixmap::Pixmap,
     topology::{Seam, Topology},
 };
 use std::collections::BTreeMap;
@@ -69,7 +70,7 @@ pub fn find_matches(world: &Topology, pattern: &Topology) -> Vec<Morphism> {
 
 const PATTERN_FRAME_COLOR: Rgba8 = Rgba8::MAGENTA;
 
-pub fn extract_pattern(pixmap: &mut BTreeMap<Pixel, Rgba8>) -> BTreeMap<Pixel, Rgba8> {
+pub fn extract_pattern(pixmap: &mut Pixmap) -> Pixmap {
     let topo = Topology::new(&pixmap);
 
     let frame = topo
@@ -85,40 +86,27 @@ pub fn extract_pattern(pixmap: &mut BTreeMap<Pixel, Rgba8>) -> BTreeMap<Pixel, R
         .unwrap();
     let inner_border = &frame.boundary[i_inner_border];
 
-    // Extract pixels left of inner_border
-    let mut inner = BTreeMap::new();
-    for pixel in inner_border.right_pixels() {
-        let color = pixmap.remove(&pixel).unwrap();
-        inner.insert(pixel, color);
-    }
-
-    inner
+    pixmap.extract_right(inner_border)
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        math::{pixel::Pixel, rgba8::Rgba8},
-        pattern::extract_pattern,
-        pixmap::{pixmap_from_path, pixmap_remove_color},
-        topology::Topology,
-    };
-    use std::collections::BTreeMap;
+    use crate::{math::rgba8::Rgba8, pattern::extract_pattern, pixmap::Pixmap, topology::Topology};
 
     fn load_topology(filename: &str) -> Topology {
         let path = format!("test_resources/patterns/{filename}");
         Topology::from_bitmap_path(path).unwrap()
     }
 
-    fn pixmap_with_void_from_path(path: &str) -> BTreeMap<Pixel, Rgba8> {
-        let mut pixmap = pixmap_from_path(path).unwrap();
-        pixmap_remove_color(&mut pixmap, Topology::VOID_COLOR);
-        pixmap
+    fn pixmap_with_void_from_path(path: &str) -> Pixmap {
+        Pixmap::from_bitmap_path(path)
+            .unwrap()
+            .without_color(Rgba8::VOID)
     }
 
     fn assert_extract_inner_outer(name: &str) {
         let folder = "test_resources/extract_pattern";
-        let mut pixmap = pixmap_from_path(format!("{folder}/{name}.png")).unwrap();
+        let mut pixmap = Pixmap::from_bitmap_path(format!("{folder}/{name}.png")).unwrap();
         let inner = extract_pattern(&mut pixmap);
 
         // Load expected inner and outer pixmaps
@@ -130,17 +118,24 @@ mod test {
     }
 
     #[test]
-    fn extract_pattern_extract_a() {
+    fn extract_pattern_a() {
         assert_extract_inner_outer("a");
     }
 
     #[test]
-    fn extract_pattern_pattern_b() {
+    fn extract_pattern_b() {
         assert_extract_inner_outer("b");
     }
 
     #[test]
-    fn extract_pattern_pattern_c() {
+    fn extract_pattern_c() {
         assert_extract_inner_outer("c");
     }
+
+    // #[test]
+    // fn match_pattern_a() {
+    //     let folder = "test_resources/extract_pattern";
+    //     let mut pixmap = pixmap_from_path(format!("{folder}/{name}.png")).unwrap();
+    //     let inner = extract_pattern(&mut pixmap);
+    // }
 }

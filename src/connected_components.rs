@@ -1,9 +1,12 @@
-use crate::math::{
-    direction::Direction,
-    pixel::{Pixel, Side},
-    rgba8::Rgba8,
+use crate::{
+    math::{
+        direction::Direction,
+        pixel::{Pixel, Side},
+        rgba8::Rgba8,
+    },
+    pixmap::Pixmap,
 };
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 pub enum Interior {
     Bounded(BTreeSet<Pixel>),
@@ -71,7 +74,7 @@ pub struct ColorComponent {
     pub color: Rgba8,
 }
 
-pub fn color_components(pixels: &BTreeMap<Pixel, Rgba8>) -> Vec<ColorComponent> {
+pub fn color_components(pixels: &Pixmap) -> Vec<ColorComponent> {
     let mut rest: BTreeSet<_> = pixels.keys().cloned().collect();
     let mut color_components: Vec<ColorComponent> = Vec::new();
 
@@ -134,13 +137,12 @@ pub fn right_of(boundary: &BTreeSet<Side>) -> ConnectedComponent {
 
 #[cfg(test)]
 mod test {
-    use std::collections::{BTreeMap, BTreeSet, HashSet};
+    use std::collections::{BTreeSet, HashSet};
     // TODO: Make sure color of pixels in components is constant
     use crate::{
         bitmap::Bitmap,
         connected_components::{color_components, left_of, ColorComponent, ConnectedComponent},
-        math::{pixel::Pixel, rgba8::Rgba8},
-        pixmap::pixmap_from_bitmap,
+        pixmap::Pixmap,
     };
 
     fn assert_proper_components(filename: &str, count: usize) {
@@ -148,7 +150,7 @@ mod test {
         let path = format!("{folder}/{filename}");
 
         let bitmap = Bitmap::from_path(path).unwrap();
-        let whole = pixmap_from_bitmap(&bitmap);
+        let whole = Pixmap::from_bitmap(&bitmap);
         let components = color_components(&whole);
         assert_eq!(components.len(), count, "number of components is correct");
 
@@ -178,7 +180,7 @@ mod test {
     }
 
     // Assert that the union of all component interiors is equal to the whole
-    fn assert_total_union(components: &Vec<ColorComponent>, whole: &BTreeMap<Pixel, Rgba8>) {
+    fn assert_total_union(components: &Vec<ColorComponent>, whole: &Pixmap) {
         let union: HashSet<_> = components
             .iter()
             .flat_map(|comp| comp.component.interior.iter().cloned())
@@ -270,7 +272,7 @@ mod test {
         for filename in filenames {
             let path = format!("{folder}/{filename}");
             let bitmap = Bitmap::from_path(path).unwrap();
-            let whole = pixmap_from_bitmap(&bitmap);
+            let whole = Pixmap::from_bitmap(&bitmap);
             let components = color_components(&whole);
 
             for ColorComponent { component, color } in components {
