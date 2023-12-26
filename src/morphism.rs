@@ -120,6 +120,13 @@ impl Morphism {
         true
     }
 
+    /// Map inner borders to inner borders and outer borders to outer borders.
+    pub fn preserves_inner_outer(&self, dom: &Topology, codom: &Topology) -> bool {
+        self.border_map
+            .iter()
+            .all(|(&border, &phi_border)| dom[border].is_outer == codom[phi_border].is_outer)
+    }
+
     pub fn non_overlapping(&self, dom: &Topology, codom: &Topology) -> bool {
         self.border_map.iter().all(|(&border, &phi_border)| {
             let len_phi_seams: usize = dom[border]
@@ -140,6 +147,7 @@ impl Morphism {
         self.preserves_structure(dom, codom)
             && self.preserves_colors(dom, codom)
             && self.non_overlapping(dom, codom)
+            && self.preserves_inner_outer(dom, codom)
     }
 
     /// Maps all regions, seams, seam corners of dom
