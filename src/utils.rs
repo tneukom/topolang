@@ -105,6 +105,19 @@ pub fn all_equal<T: Eq>(mut iter: impl Iterator<Item = T>) -> bool {
     }
 }
 
+/// O(n^2) use for small lists only
+pub fn find_duplicate_by<T>(ls: &Vec<T>, eq: impl Fn(&T, &T) -> bool) -> Option<(usize, usize)> {
+    for i in 0..ls.len() {
+        for j in 0..i {
+            if eq(&ls[i], &ls[j]) {
+                return Some((i, j));
+            }
+        }
+    }
+
+    None
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct UndirectedEdge<T> {
     pub a: T,

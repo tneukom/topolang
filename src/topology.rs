@@ -54,6 +54,10 @@ impl Seam {
     pub fn stop_corner(&self) -> Vertex {
         self.stop.stop_vertex()
     }
+
+    pub fn is_loop(&self) -> bool {
+        self.start_corner() == self.stop_corner()
+    }
 }
 
 impl Display for Seam {
@@ -291,9 +295,9 @@ impl Topology {
 
     /// Returns the border of a given seam
     /// Only fails if seam is not self.contains_seam(seam)
-    pub fn seam_border(&self, seam: &Seam) -> &Border {
+    pub fn seam_border(&self, seam: &Seam) -> BorderKey {
         let seam_index = &self.seam_indices[&seam.start];
-        &self.regions[&seam_index.region_key].boundary[seam_index.i_border]
+        seam_index.border_index()
     }
 
     /// Return the region key on the left side of a given seam
@@ -343,6 +347,10 @@ impl Topology {
     /// Is the right side of the seam void? The left side is always a proper region.
     pub fn touches_void(&self, seam: &Seam) -> bool {
         self.right_of(seam).is_none()
+    }
+
+    pub fn seams_equivalent(&self, lhs: &Seam, rhs: &Seam) -> bool {
+        lhs.is_loop() && rhs.is_loop() && self.seam_border(lhs) == self.seam_border(rhs)
     }
 
     // pub fn connected_borders(&self, seed: BorderKey) -> BTreeSet<BorderKey> {

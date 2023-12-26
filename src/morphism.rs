@@ -1,6 +1,6 @@
 use crate::{
     math::pixel::Vertex,
-    topology::{RegionKey, Seam, Topology},
+    topology::{BorderKey, RegionKey, Seam, Topology},
 };
 use itertools::Itertools;
 use std::{
@@ -23,6 +23,7 @@ pub struct Morphism {
     pub region_map: BTreeMap<RegionKey, RegionKey>,
     pub seam_map: BTreeMap<Seam, Seam>,
     pub corner_map: BTreeMap<Vertex, Vertex>,
+    pub border_map: BTreeMap<BorderKey, BorderKey>,
 }
 
 impl Index<&RegionKey> for Morphism {
@@ -57,10 +58,12 @@ impl Morphism {
     ) -> Option<Self> {
         let region_map = induced_region_map(dom, codom, &seam_map)?;
         let corner_map = induced_corner_map(&seam_map)?;
+        let border_map = induced_border_map(dom, codom, &seam_map)?;
         Some(Self {
             region_map,
             corner_map,
             seam_map,
+            border_map,
         })
     }
 
@@ -85,9 +88,26 @@ impl Morphism {
         })
     }
 
+    pub fn non_overlapping(&self, dom: &Topology, codom: &Topology) -> bool {
+        self.border_map.iter().all(|(&border, &phi_border)| {
+            let len_phi_seams: usize = dom[border]
+                .seams
+                .iter()
+                .filter_map(|seam| {
+                    let phi_seam = self.seam_map.get(seam)?;
+                    Some(phi_seam.len)
+                })
+                .sum();
+
+            len_phi_seams <= codom[phi_border].seams.len()
+        })
+    }
+
     /// Preserves structure and colors
     pub fn is_homomorphism(&self, dom: &Topology, codom: &Topology) -> bool {
-        self.preserves_structure(dom, codom) && self.preserves_colors(dom, codom)
+        self.preserves_structure(dom, codom)
+            && self.preserves_colors(dom, codom)
+            && self.non_overlapping(dom, codom)
     }
 
     /// Maps all regions, seams, seam corners of dom
@@ -174,16 +194,27 @@ pub fn induced_region_map(
         if !extend_map(&mut region_phi, region, phi_region) {
             return None;
         }
-
-        // check right side, is this necessary?
-        if let (Some(region), Some(phi_region)) = (dom.right_of(seam), codom.right_of(phi_seam)) {
-            if !extend_map(&mut region_phi, region, phi_region) {
-                return None;
-            }
-        }
     }
 
     Some(region_phi)
+}
+
+pub fn induced_border_map(
+    dom: &Topology,
+    codom: &Topology,
+    seam_phi: &BTreeMap<Seam, Seam>,
+) -> Option<BTreeMap<BorderKey, BorderKey>> {
+    let mut border_phi: BTreeMap<BorderKey, BorderKey> = BTreeMap::new();
+
+    for (seam, phi_seam) in seam_phi {
+        let border = dom.seam_border(seam);
+        let phi_border = codom.seam_border(phi_seam);
+        if !extend_map(&mut border_phi, border, phi_border) {
+            return None;
+        }
+    }
+
+    Some(border_phi)
 }
 
 /// The resulting map satisfies
@@ -210,41 +241,6 @@ pub fn induced_corner_map(seam_phi: &BTreeMap<Seam, Seam>) -> Option<BTreeMap<Ve
 
     Some(corner_map)
 }
-
-// /// Induced Morphism from a map of the components.
-// pub fn induced_seam_map(
-//     dom: &Topology,
-//     codom: &Topology,
-//     comp_phi: &BTreeMap<usize, usize>,
-// ) -> Option<BTreeMap<Seam, Seam>> {
-//     let mut seam_phi: BTreeMap<Seam, Seam> = BTreeMap::new();
-//
-//     for (i_comp, comp) in dom.components.iter().enumerate() {
-//         for border in &comp.boundary {
-//
-//         }
-//     }
-// }
-
-// function induced_seamφ(dom::Topology, codom::Topology, compmap::Dict{Component,Component})::Dict{Seam,Seam}
-//     boundarymap = Dict{Seam,Seam}()
-//
-//     for comp ∈ dom.components, boundary ∈ comp.boundaries
-//         φneighbors = [compmap[rightof(dom, seg)] for seg ∈ boundary.segments]
-//         # try out all boundaries of φ
-//         φcomp = compmap[comp]
-//
-//         φsegments = find_boundary(codom, φcomp, φneighbors)
-//         if φsegments === nothing
-//             return nothing
-//         end
-//         for (seg, φseg) ∈ zip(boundary.segments, φsegments)
-//             boundarymap[seg] = φseg
-//         end
-//     end
-//
-//     return boundarymap
-// end
 
 #[cfg(test)]
 mod test {

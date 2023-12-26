@@ -36,6 +36,10 @@ impl Pixmap {
         self
     }
 
+    pub fn without_void_color(self) -> Self {
+        self.without_color(Rgba8::VOID)
+    }
+
     pub fn get(&self, pixel: &Pixel) -> Option<&Rgba8> {
         self.map.get(pixel)
     }

@@ -3,6 +3,7 @@ use crate::{
     morphism::Morphism,
     pixmap::Pixmap,
     topology::{Seam, Topology},
+    utils::find_duplicate_by,
 };
 use std::collections::BTreeMap;
 
@@ -10,7 +11,16 @@ pub fn generalized_seams(topo: &Topology) -> Vec<Seam> {
     let mut seams = Vec::new();
     for border in topo.iter_borders() {
         for i in 0..border.seams.len() {
-            for j in 0..border.seams.len() {
+            // All seams that go around exactly once are equivalent, so we only include one.
+            let len = if i == 0 {
+                // Include seam that goes around the border.
+                border.seams.len()
+            } else {
+                // Skip seam that goes around.
+                border.seams.len() - 1
+            };
+
+            for j in 0..len {
                 let start = border.seams[i].start;
                 let stop = border.seams[(i + j) % border.seams.len()].stop;
                 let seam = Seam::new_with_len(start, stop, j + 1);
@@ -19,6 +29,8 @@ pub fn generalized_seams(topo: &Topology) -> Vec<Seam> {
         }
     }
 
+    let duplicate_seam = find_duplicate_by(&seams, |lhs, rhs| topo.seams_equivalent(lhs, rhs));
+    assert!(duplicate_seam.is_none());
     seams
 }
 
@@ -27,9 +39,47 @@ pub fn generalized_seams(topo: &Topology) -> Vec<Seam> {
 pub fn seam_candidates(world: &Topology, pattern: &Topology, seam: &Seam) -> Vec<Seam> {
     generalized_seams(world)
         .iter()
-        .filter(|&phi_seam| pattern.left_of(seam) == world.left_of(phi_seam))
+        .filter(|&phi_seam| {
+            pattern[pattern.left_of(seam)].color == world[world.left_of(phi_seam)].color
+        })
         .copied()
         .collect()
+}
+
+#[derive(Clone, Copy)]
+pub struct Trace {
+    level: usize,
+}
+
+impl Trace {
+    pub fn new() -> Self {
+        Self { level: 0 }
+    }
+
+    pub fn assign(&self, seam: &Seam, phi_seam: &Seam) {
+        let indent = self.indent();
+        println!("{indent}{seam} -> {phi_seam}")
+    }
+
+    pub fn failed(&self) {
+        let indent = self.indent();
+        println!("{indent}Failed")
+    }
+
+    pub fn success(&self) {
+        let indent = self.indent();
+        println!("{indent}Succeeded")
+    }
+
+    pub fn indent(&self) -> String {
+        "  ".repeat(self.level)
+    }
+
+    pub fn recurse(&self) -> Self {
+        Self {
+            level: self.level + 1,
+        }
+    }
 }
 
 pub fn search_step(
@@ -37,9 +87,11 @@ pub fn search_step(
     pattern: &Topology,
     partial: BTreeMap<Seam, Seam>,
     solutions: &mut Vec<Morphism>,
+    trace: Trace,
 ) {
     // Check if partial assignment is consistent
     let Some(phi) = Morphism::induced_from_seam_map(pattern, world, partial.clone()) else {
+        trace.failed();
         return;
     };
 
@@ -49,6 +101,7 @@ pub fn search_step(
         .find(|&seam| !partial.contains_key(seam));
     let Some(unassigned) = unassigned else {
         // If seams are assigned, check morphism is proper
+        trace.success();
         solutions.push(phi);
         return;
     };
@@ -57,14 +110,16 @@ pub fn search_step(
     for phi_unassigned in seam_candidates(world, pattern, unassigned) {
         let mut ext_partial = partial.clone();
         ext_partial.insert(*unassigned, phi_unassigned);
-        search_step(world, pattern, ext_partial, solutions)
+        trace.assign(unassigned, &phi_unassigned);
+        search_step(world, pattern, ext_partial, solutions, trace.recurse())
     }
 }
 
 pub fn find_matches(world: &Topology, pattern: &Topology) -> Vec<Morphism> {
     let mut solutions = Vec::new();
     let partial = BTreeMap::new();
-    search_step(world, pattern, partial, &mut solutions);
+    let trace = Trace::new();
+    search_step(world, pattern, partial, &mut solutions, trace);
     solutions
 }
 
@@ -91,7 +146,12 @@ pub fn extract_pattern(pixmap: &mut Pixmap) -> Pixmap {
 
 #[cfg(test)]
 mod test {
-    use crate::{math::rgba8::Rgba8, pattern::extract_pattern, pixmap::Pixmap, topology::Topology};
+    use crate::{
+        math::rgba8::Rgba8,
+        pattern::{extract_pattern, find_matches},
+        pixmap::Pixmap,
+        topology::Topology,
+    };
 
     fn load_topology(filename: &str) -> Topology {
         let path = format!("test_resources/patterns/{filename}");
@@ -132,10 +192,16 @@ mod test {
         assert_extract_inner_outer("c");
     }
 
-    // #[test]
-    // fn match_pattern_a() {
-    //     let folder = "test_resources/extract_pattern";
-    //     let mut pixmap = pixmap_from_path(format!("{folder}/{name}.png")).unwrap();
-    //     let inner = extract_pattern(&mut pixmap);
-    // }
+    #[test]
+    fn match_pattern_a() {
+        let folder = "test_resources/patterns";
+        let pixmap = Pixmap::from_bitmap_path(format!("{folder}/pattern_a.png"))
+            .unwrap()
+            .without_void_color();
+        let pattern = Topology::new(&pixmap);
+        let world = Topology::from_bitmap_path(format!("{folder}/match_a2.png")).unwrap();
+
+        let matches = find_matches(&world, &pattern);
+        assert_eq!(matches.len(), 1);
+    }
 }
