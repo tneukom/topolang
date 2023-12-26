@@ -46,12 +46,12 @@ pub fn seam_candidates(world: &Topology, pattern: &Topology, seam: &Seam) -> Vec
         .collect()
 }
 
-#[derive(Clone, Copy)]
-pub struct Trace {
+#[derive(Debug, Clone, Copy)]
+pub struct CoutTrace {
     level: usize,
 }
 
-impl Trace {
+impl CoutTrace {
     pub fn new() -> Self {
         Self { level: 0 }
     }
@@ -82,12 +82,66 @@ impl Trace {
     }
 }
 
+pub trait Trace {
+    fn assign(&self, seam: &Seam, phi_seam: &Seam);
+
+    fn failed(&self);
+
+    fn success(&self);
+
+    fn recurse(&self) -> Self;
+}
+
+impl Trace for CoutTrace {
+    fn assign(&self, seam: &Seam, phi_seam: &Seam) {
+        let indent = self.indent();
+        println!("{indent}{seam} -> {phi_seam}")
+    }
+
+    fn failed(&self) {
+        let indent = self.indent();
+        println!("{indent}Failed")
+    }
+
+    fn success(&self) {
+        let indent = self.indent();
+        println!("{indent}Succeeded")
+    }
+
+    fn recurse(&self) -> Self {
+        Self {
+            level: self.level + 1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NullTrace {}
+
+impl NullTrace {
+    pub fn new() -> Self {
+        NullTrace {}
+    }
+}
+
+impl Trace for NullTrace {
+    fn assign(&self, _seam: &Seam, _phi_seam: &Seam) {}
+
+    fn failed(&self) {}
+
+    fn success(&self) {}
+
+    fn recurse(&self) -> Self {
+        *self
+    }
+}
+
 pub fn search_step(
     world: &Topology,
     pattern: &Topology,
     partial: BTreeMap<Seam, Seam>,
     solutions: &mut Vec<Morphism>,
-    trace: Trace,
+    trace: impl Trace,
 ) {
     // Check if partial assignment is consistent
     let Some(phi) = Morphism::induced_from_seam_map(pattern, world, partial.clone()) else {
@@ -120,10 +174,9 @@ pub fn search_step(
     }
 }
 
-pub fn find_matches(world: &Topology, pattern: &Topology) -> Vec<Morphism> {
+pub fn find_matches(world: &Topology, pattern: &Topology, trace: impl Trace) -> Vec<Morphism> {
     let mut solutions = Vec::new();
     let partial = BTreeMap::new();
-    let trace = Trace::new();
     search_step(world, pattern, partial, &mut solutions, trace);
     solutions
 }
@@ -152,7 +205,7 @@ pub fn extract_pattern(pixmap: &mut Pixmap) -> Pixmap {
 mod test {
     use crate::{
         math::rgba8::Rgba8,
-        pattern::{extract_pattern, find_matches},
+        pattern::{extract_pattern, find_matches, NullTrace},
         pixmap::Pixmap,
         topology::Topology,
     };
@@ -196,34 +249,59 @@ mod test {
         assert_extract_inner_outer("c");
     }
 
-    #[test]
-    fn match_pattern_a() {
+    fn assert_pattern_match(pattern_path: &str, world_path: &str, n_solutions: usize) {
         let folder = "test_resources/patterns";
-        let pixmap = Pixmap::from_bitmap_path(format!("{folder}/c/pattern.png"))
+        let pixmap = Pixmap::from_bitmap_path(format!("{folder}/{pattern_path}"))
             .unwrap()
             .without_void_color();
         let pattern = Topology::new(&pixmap);
-        let world = Topology::from_bitmap_path(format!("{folder}/c/match_2.png")).unwrap();
+        let world = Topology::from_bitmap_path(format!("{folder}/{world_path}")).unwrap();
 
-        let matches = find_matches(&world, &pattern);
+        let trace = NullTrace::new();
+        let matches = find_matches(&world, &pattern, trace);
 
-        for a_match in &matches {
-            println!("Match:");
+        // for a_match in &matches {
+        //     println!("Match:");
+        //
+        //     let indent = "  ";
+        //
+        //     for (seam, phi_seam) in &a_match.seam_map {
+        //         println!("{indent}{seam} -> {phi_seam}");
+        //     }
+        //
+        //     for (&region, &phi_region) in &a_match.region_map {
+        //         println!(
+        //             "{indent}{} -> {}",
+        //             pattern[region].color, world[phi_region].color
+        //         );
+        //     }
+        // }
 
-            let indent = "  ";
+        assert_eq!(matches.len(), n_solutions);
+    }
 
-            for (seam, phi_seam) in &a_match.seam_map {
-                println!("{indent}{seam} -> {phi_seam}");
-            }
+    #[test]
+    fn pattern_matches_a() {
+        assert_pattern_match("a/pattern.png", "a/match_1.png", 1);
+        assert_pattern_match("a/pattern.png", "a/match_2.png", 1);
+        assert_pattern_match("a/pattern.png", "a/match_3.png", 1);
+        assert_pattern_match("a/pattern.png", "a/match_4.png", 3);
+        assert_pattern_match("a/pattern.png", "a/miss_1.png", 0);
+    }
 
-            for (&region, &phi_region) in &a_match.region_map {
-                println!(
-                    "{indent}{} -> {}",
-                    pattern[region].color, world[phi_region].color
-                );
-            }
-        }
+    #[test]
+    fn pattern_matches_b() {
+        assert_pattern_match("b/pattern.png", "b/match_1.png", 1);
+        assert_pattern_match("b/pattern.png", "b/match_2.png", 1);
+        assert_pattern_match("b/pattern.png", "b/match_3.png", 2);
+        assert_pattern_match("b/pattern.png", "b/match_4.png", 4);
+        assert_pattern_match("b/pattern.png", "b/miss_1.png", 0);
+    }
 
-        assert_eq!(matches.len(), 1);
+    #[test]
+    fn pattern_matches_c() {
+        assert_pattern_match("c/pattern.png", "c/match_1.png", 1);
+        assert_pattern_match("c/pattern.png", "c/match_2.png", 2);
+        assert_pattern_match("c/pattern.png", "c/miss_1.png", 0);
     }
 }

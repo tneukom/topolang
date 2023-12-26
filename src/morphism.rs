@@ -111,6 +111,11 @@ impl Morphism {
             }
 
             if let Some(&phi_reversed) = self.seam_map.get(&seam.reversed()) {
+                if !phi_seam.is_atom() {
+                    // phi(seam^-1) = phi(seam)^-1 means phi(seam) must be an atom, otherwise it is not reversible.
+                    return false;
+                }
+
                 if phi_reversed != phi_seam.reversed() {
                     return false;
                 }

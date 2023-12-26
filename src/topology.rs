@@ -203,11 +203,6 @@ impl Topology {
                 boundary.push(border);
             }
 
-            let outer_border = boundary
-                .iter()
-                .position_min_by_key(|border| border.cycle.first().unwrap())
-                .unwrap();
-
             let region = Region {
                 boundary,
                 color,
