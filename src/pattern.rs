@@ -95,6 +95,11 @@ pub fn search_step(
         return;
     };
 
+    if !phi.is_homomorphism(pattern, world) || !phi.is_injective() {
+        trace.failed();
+        return;
+    }
+
     // Find a seam that is not yet assigned
     let unassigned = pattern
         .iter_seams()
@@ -135,12 +140,11 @@ pub fn extract_pattern(pixmap: &mut Pixmap) -> Pixmap {
         .unwrap();
     assert_eq!(frame.boundary.len(), 2);
 
-    // TODO: Use frame.boundary.indices() when -> impl Trait is stable
-    let i_inner_border = (0..frame.boundary.len())
-        .find(|&i| i != frame.outer_border)
+    let inner_border = frame
+        .boundary
+        .iter()
+        .find(|border| !border.is_outer)
         .unwrap();
-    let inner_border = &frame.boundary[i_inner_border];
-
     pixmap.extract_right(inner_border)
 }
 
@@ -195,13 +199,31 @@ mod test {
     #[test]
     fn match_pattern_a() {
         let folder = "test_resources/patterns";
-        let pixmap = Pixmap::from_bitmap_path(format!("{folder}/pattern_a.png"))
+        let pixmap = Pixmap::from_bitmap_path(format!("{folder}/c/pattern.png"))
             .unwrap()
             .without_void_color();
         let pattern = Topology::new(&pixmap);
-        let world = Topology::from_bitmap_path(format!("{folder}/match_a2.png")).unwrap();
+        let world = Topology::from_bitmap_path(format!("{folder}/c/match_2.png")).unwrap();
 
         let matches = find_matches(&world, &pattern);
+
+        for a_match in &matches {
+            println!("Match:");
+
+            let indent = "  ";
+
+            for (seam, phi_seam) in &a_match.seam_map {
+                println!("{indent}{seam} -> {phi_seam}");
+            }
+
+            for (&region, &phi_region) in &a_match.region_map {
+                println!(
+                    "{indent}{} -> {}",
+                    pattern[region].color, world[phi_region].color
+                );
+            }
+        }
+
         assert_eq!(matches.len(), 1);
     }
 }

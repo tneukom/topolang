@@ -4,7 +4,7 @@ use crate::{
 };
 use itertools::Itertools;
 use std::{
-    collections::{btree_map::Entry, BTreeMap},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
     ops::Index,
 };
 
@@ -50,6 +50,17 @@ impl Index<&Vertex> for Morphism {
     }
 }
 
+pub fn is_injective<T: Ord>(phi: &BTreeMap<T, T>) -> bool {
+    let mut image = BTreeSet::new();
+    for value in phi.values() {
+        if !image.insert(value) {
+            return false;
+        }
+    }
+
+    true
+}
+
 impl Morphism {
     pub fn induced_from_seam_map(
         dom: &Topology,
@@ -67,6 +78,10 @@ impl Morphism {
         })
     }
 
+    pub fn is_injective(&self) -> bool {
+        is_injective(&self.region_map) && is_injective(&self.border_map)
+    }
+
     /// Maps regions to regions of the same color
     pub fn preserves_colors(&self, dom: &Topology, codom: &Topology) -> bool {
         self.region_map
@@ -74,18 +89,35 @@ impl Morphism {
             .all(|(&region, &phi_region)| dom[region].color == codom[phi_region].color)
     }
 
-    /// Check if φ : A → B preserves structure, (neighbor and next_neighbor), i.e.
-    ///     start ∘ φ = φ ∘ start
-    ///     stop ∘ φ = φ ∘ stop
+    /// Check if phi : A → B preserves structure, (neighbor and next_neighbor), i.e.
+    ///     start * phi = phi * start
+    ///     stop * phi = phi * stop
     ///
-    ///     left ∘ φ = φ ∘ left
-    ///     right ∘ φ = φ ∘ right
+    ///     left * phi = phi * left
+    ///
+    ///     phi * reversed = reversed * phi
     pub fn preserves_structure(&self, dom: &Topology, codom: &Topology) -> bool {
-        self.seam_map.iter().all(|(seam, phi_seam)| {
-            self[&dom.left_of(seam)] == codom.left_of(phi_seam)
-                && self[&seam.start_corner()] == phi_seam.start_corner()
-                && self[&seam.stop_corner()] == phi_seam.stop_corner()
-        })
+        for (seam, phi_seam) in &self.seam_map {
+            if self[&seam.start_corner()] != phi_seam.start_corner() {
+                return false;
+            }
+
+            if self[&seam.stop_corner()] != phi_seam.stop_corner() {
+                return false;
+            }
+
+            if self[&dom.left_of(seam)] != codom.left_of(phi_seam) {
+                return false;
+            }
+
+            if let Some(&phi_reversed) = self.seam_map.get(&seam.reversed()) {
+                if phi_reversed != phi_seam.reversed() {
+                    return false;
+                }
+            }
+        }
+
+        true
     }
 
     pub fn non_overlapping(&self, dom: &Topology, codom: &Topology) -> bool {

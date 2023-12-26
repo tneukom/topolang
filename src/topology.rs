@@ -92,6 +92,8 @@ pub struct Border {
     pub cycle: Vec<Side>,
     pub seams: Vec<Seam>,
     pub left: RegionKey,
+
+    pub is_outer: bool,
 }
 
 impl Border {
@@ -112,10 +114,8 @@ impl Border {
 #[derive(Debug, Clone)]
 pub struct Region {
     pub color: Rgba8,
+    /// First item is outer Border
     pub boundary: Vec<Border>,
-
-    pub outer_border: usize,
-
     pub interior: BTreeSet<Pixel>,
 
     /// If the region is not closed left_of(boundary) is not defined otherwise
@@ -186,8 +186,7 @@ impl Topology {
             // Each cycle in the sides is a border
             let mut boundary = Vec::new();
 
-            for cycle in split_into_cycles(&component.sides) {
-                let i_border = boundary.len();
+            for (i_border, cycle) in split_into_cycles(&component.sides).into_iter().enumerate() {
                 let seams = split_cycle_into_seams(&cycle, |side| pixmap.get(&side.right_pixel()));
 
                 for (i_seam, &seam) in seams.iter().enumerate() {
@@ -199,6 +198,7 @@ impl Topology {
                     cycle,
                     seams,
                     left: region_key,
+                    is_outer: i_border == 0,
                 };
                 boundary.push(border);
             }
@@ -211,7 +211,6 @@ impl Topology {
             let region = Region {
                 boundary,
                 color,
-                outer_border,
                 interior: component.interior,
                 closed: component.closed,
             };
@@ -459,6 +458,8 @@ pub fn extract_cycle(side_graph: &mut BTreeMap<Vertex, Side>, mut corner: Vertex
 
 /// Split a set of sides into cycles. The start point of every cycle is its minimum
 /// (lexicographic order x, y). `sides` must be an iterable of Side.
+/// `[cycle.first() | cycle in cycles]` is ordered from small to large. This means the
+/// first cycle is the outer cycle.
 pub fn split_into_cycles<'a>(sides: impl IntoIterator<Item = &'a Side>) -> Vec<Vec<Side>> {
     // Maps corner to side that starts at the corner
     let mut side_graph: BTreeMap<Vertex, Side> = sides
