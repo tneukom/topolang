@@ -304,4 +304,34 @@ mod test {
         assert_pattern_match("c/pattern.png", "c/match_2.png", 2);
         assert_pattern_match("c/pattern.png", "c/miss_1.png", 0);
     }
+
+    #[test]
+    fn pattern_matches_single_hole() {
+        assert_pattern_match("single_hole/pattern.png", "single_hole/miss_1.png", 0);
+        assert_pattern_match("single_hole/pattern.png", "single_hole/match_2.png", 1);
+        assert_pattern_match("single_hole/pattern.png", "single_hole/match_3.png", 1);
+    }
+
+    #[test]
+    fn pattern_matches_two_holes_a() {
+        assert_pattern_match("two_holes_a/pattern.png", "two_holes_a/match_1.png", 2);
+    }
+
+    #[test]
+    fn pattern_matches_two_holes_b() {
+        assert_pattern_match("two_holes_b/pattern.png", "two_holes_b/match_1.png", 1);
+    }
+
+    #[test]
+    fn pattern_matches_two_holes_c() {
+        assert_pattern_match("two_holes_c/pattern.png", "two_holes_c/match_1.png", 1);
+        assert_pattern_match("two_holes_c/pattern.png", "two_holes_c/miss_1.png", 0);
+    }
+
+    #[test]
+    fn pattern_matches_gate_a() {
+        assert_pattern_match("gate_a/pattern.png", "gate_a/match_1.png", 1);
+        assert_pattern_match("gate_a/pattern.png", "gate_a/match_2.png", 1);
+        assert_pattern_match("gate_a/pattern.png", "gate_a/match_3.png", 1);
+    }
 }
