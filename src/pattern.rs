@@ -1,11 +1,11 @@
 use crate::{
-    math::rgba8::Rgba8,
+    math::{pixel::Vertex, rgba8::Rgba8},
     morphism::Morphism,
     pixmap::Pixmap,
-    topology::{Seam, Topology},
+    topology::{RegionKey, Seam, Topology},
     utils::find_duplicate_by,
 };
-use std::collections::BTreeMap;
+use std::{cmp::Ordering, collections::BTreeMap};
 
 pub fn generalized_seams(topo: &Topology) -> Vec<Seam> {
     let mut seams = Vec::new();
@@ -32,18 +32,6 @@ pub fn generalized_seams(topo: &Topology) -> Vec<Seam> {
     let duplicate_seam = find_duplicate_by(&seams, |lhs, rhs| topo.seams_equivalent(lhs, rhs));
     assert!(duplicate_seam.is_none());
     seams
-}
-
-/// Returns possible candidate seams in `world` that a `seam` in `pattern` could be mapped to.
-/// Returned seam don't have to be atomic.
-pub fn seam_candidates(world: &Topology, pattern: &Topology, seam: &Seam) -> Vec<Seam> {
-    generalized_seams(world)
-        .iter()
-        .filter(|&phi_seam| {
-            pattern[pattern.left_of(seam)].color == world[world.left_of(phi_seam)].color
-        })
-        .copied()
-        .collect()
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -136,6 +124,93 @@ impl Trace for NullTrace {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Unassigned {
+    seam: Seam,
+    phi_left: Option<RegionKey>,
+    phi_start_corner: Option<Vertex>,
+    phi_stop_corner: Option<Vertex>,
+}
+
+impl Unassigned {
+    /// List of unassigned seams given a pattern and a partial Morphism `phi`
+    /// If returned list is empty phi is fully defined
+    pub fn candidates(pattern: &Topology, phi: &Morphism) -> Vec<Self> {
+        pattern
+            .iter_seams()
+            .filter(|&seam| !phi.seam_map.contains_key(seam))
+            .map(|seam| Self {
+                seam: *seam,
+                phi_left: phi.region_map.get(&pattern.left_of(seam)).copied(),
+                phi_start_corner: phi.corner_map.get(&seam.start_corner()).copied(),
+                phi_stop_corner: phi.corner_map.get(&seam.stop_corner()).copied(),
+            })
+            .collect()
+    }
+
+    /// lhs > rhs means lhs should be assigned before rhs because it is more restricted
+    /// by the already assigned seams and/or restricts other items more than rhs.
+    /// Not a total order (not antisymmetric)
+    fn compare_heuristic(&self, other: &Self) -> Ordering {
+        let lhs = (
+            self.phi_left.is_some(),
+            self.phi_start_corner.is_some(),
+            self.phi_stop_corner.is_some(),
+        );
+        let rhs = (
+            other.phi_left.is_some(),
+            other.phi_start_corner.is_some(),
+            other.phi_stop_corner.is_some(),
+        );
+        lhs.cmp(&rhs)
+    }
+
+    /// Choose the best unassigned seam to continue the search
+    pub fn choose(pattern: &Topology, phi: &Morphism) -> Option<Self> {
+        Self::candidates(pattern, phi)
+            .into_iter()
+            .max_by(Self::compare_heuristic)
+    }
+
+    pub fn possible_assignment(
+        &self,
+        world: &Topology,
+        pattern: &Topology,
+        phi_seam: &Seam,
+    ) -> bool {
+        let consistent_left_color =
+            pattern[pattern.left_of(&self.seam)].color == world[world.left_of(phi_seam)].color;
+
+        let consistent_left_region =
+            self.phi_left.is_none() || self.phi_left == Some(world.left_of(phi_seam));
+
+        let consistent_start_corner = self.phi_start_corner.is_none()
+            || self.phi_start_corner == Some(phi_seam.start_corner());
+
+        let consistent_stop_corner =
+            self.phi_stop_corner.is_none() || self.phi_stop_corner == Some(phi_seam.stop_corner());
+
+        consistent_left_color
+            && consistent_left_region
+            && consistent_start_corner
+            && consistent_stop_corner
+    }
+
+    /// Returns possible candidate seams in `world` that `self.seam` could be mapped to.
+    /// Returned seam don't have to be atomic.
+    pub fn assignment_candidates(
+        &self,
+        world: &Topology,
+        pattern: &Topology,
+    ) -> Vec<Seam> {
+        generalized_seams(world)
+            .iter()
+            .filter(|&phi_seam| self.possible_assignment(world, pattern, phi_seam))
+            .copied()
+            .collect()
+    }
+}
+
 pub fn search_step(
     world: &Topology,
     pattern: &Topology,
@@ -155,9 +230,7 @@ pub fn search_step(
     }
 
     // Find a seam that is not yet assigned
-    let unassigned = pattern
-        .iter_seams()
-        .find(|&seam| !partial.contains_key(seam));
+    let unassigned = Unassigned::choose(pattern, &phi);
     let Some(unassigned) = unassigned else {
         // If seams are assigned, check morphism is proper
         trace.success();
@@ -166,10 +239,10 @@ pub fn search_step(
     };
 
     // Assign the found seam to all possible candidates and recurse
-    for phi_unassigned in seam_candidates(world, pattern, unassigned) {
+    for phi_unassigned in unassigned.assignment_candidates(world, pattern) {
         let mut ext_partial = partial.clone();
-        ext_partial.insert(*unassigned, phi_unassigned);
-        trace.assign(unassigned, &phi_unassigned);
+        ext_partial.insert(unassigned.seam, phi_unassigned);
+        trace.assign(&unassigned.seam, &phi_unassigned);
         search_step(world, pattern, ext_partial, solutions, trace.recurse())
     }
 }
