@@ -130,6 +130,7 @@ pub struct Unassigned {
     phi_left: Option<RegionKey>,
     phi_start_corner: Option<Vertex>,
     phi_stop_corner: Option<Vertex>,
+    reverse_in_pattern: bool,
 }
 
 impl Unassigned {
@@ -144,6 +145,7 @@ impl Unassigned {
                 phi_left: phi.region_map.get(&pattern.left_of(seam)).copied(),
                 phi_start_corner: phi.corner_map.get(&seam.start_corner()).copied(),
                 phi_stop_corner: phi.corner_map.get(&seam.stop_corner()).copied(),
+                reverse_in_pattern: pattern.contains_seam(&seam.reversed()),
             })
             .collect()
     }
@@ -152,17 +154,16 @@ impl Unassigned {
     /// by the already assigned seams and/or restricts other items more than rhs.
     /// Not a total order (not antisymmetric)
     fn compare_heuristic(&self, other: &Self) -> Ordering {
-        let lhs = (
-            self.phi_left.is_some(),
-            self.phi_start_corner.is_some(),
-            self.phi_stop_corner.is_some(),
-        );
-        let rhs = (
-            other.phi_left.is_some(),
-            other.phi_start_corner.is_some(),
-            other.phi_stop_corner.is_some(),
-        );
-        lhs.cmp(&rhs)
+        let cmp_tuple = |unassigned: &Unassigned| {
+            (
+                unassigned.phi_left.is_some(),
+                unassigned.phi_start_corner.is_some(),
+                unassigned.phi_stop_corner.is_some(),
+                unassigned.reverse_in_pattern,
+            )
+        };
+
+        cmp_tuple(self).cmp(&cmp_tuple(other))
     }
 
     /// Choose the best unassigned seam to continue the search
@@ -178,31 +179,56 @@ impl Unassigned {
         pattern: &Topology,
         phi_seam: &Seam,
     ) -> bool {
-        let consistent_left_color =
-            pattern[pattern.left_of(&self.seam)].color == world[world.left_of(phi_seam)].color;
+        if pattern[pattern.left_of(&self.seam)].color != world[world.left_of(phi_seam)].color {
+            // Inconsistent left side color
+            return false;
+        }
 
-        let consistent_left_region =
-            self.phi_left.is_none() || self.phi_left == Some(world.left_of(phi_seam));
+        if self.reverse_in_pattern {
+            if !phi_seam.is_atom() {
+                return false;
+            }
 
-        let consistent_start_corner = self.phi_start_corner.is_none()
-            || self.phi_start_corner == Some(phi_seam.start_corner());
+            let Some(right_of_phi_seam) = world.right_of(phi_seam) else {
+                // phi_seam is not reversible in world
+                return false;
+            };
 
-        let consistent_stop_corner =
-            self.phi_stop_corner.is_none() || self.phi_stop_corner == Some(phi_seam.stop_corner());
+            if world[right_of_phi_seam].color
+                != pattern[pattern.right_of(&self.seam).unwrap()].color
+            {
+                // Inconsistent right color
+                return false;
+            }
+        }
 
-        consistent_left_color
-            && consistent_left_region
-            && consistent_start_corner
-            && consistent_stop_corner
+        if let Some(phi_left) = self.phi_left {
+            if phi_left != world.left_of(phi_seam) {
+                // inconsistent left side region
+                return false;
+            }
+        }
+
+        if let Some(phi_start_corner) = self.phi_start_corner {
+            if phi_start_corner != phi_seam.start_corner() {
+                // inconsistent start corner
+                return false;
+            }
+        }
+
+        if let Some(phi_stop_corner) = self.phi_stop_corner {
+            if phi_stop_corner != phi_seam.stop_corner() {
+                // inconsistent stop corner
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Returns possible candidate seams in `world` that `self.seam` could be mapped to.
     /// Returned seam don't have to be atomic.
-    pub fn assignment_candidates(
-        &self,
-        world: &Topology,
-        pattern: &Topology,
-    ) -> Vec<Seam> {
+    pub fn assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
         generalized_seams(world)
             .iter()
             .filter(|&phi_seam| self.possible_assignment(world, pattern, phi_seam))
@@ -278,7 +304,7 @@ pub fn extract_pattern(pixmap: &mut Pixmap) -> Pixmap {
 mod test {
     use crate::{
         math::rgba8::Rgba8,
-        pattern::{extract_pattern, find_matches, NullTrace},
+        pattern::{extract_pattern, find_matches, CoutTrace, NullTrace},
         pixmap::Pixmap,
         topology::Topology,
     };
@@ -331,6 +357,7 @@ mod test {
         let world = Topology::from_bitmap_path(format!("{folder}/{world_path}")).unwrap();
 
         let trace = NullTrace::new();
+        // let trace = CoutTrace::new();
         let matches = find_matches(&world, &pattern, trace);
 
         // for a_match in &matches {
