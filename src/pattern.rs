@@ -73,7 +73,7 @@ impl CoutTrace {
 pub trait Trace {
     fn assign(&self, seam: &Seam, phi_seam: &Seam);
 
-    fn failed(&self);
+    fn failed(&self, cause: &str);
 
     fn success(&self);
 
@@ -86,9 +86,9 @@ impl Trace for CoutTrace {
         println!("{indent}{seam} -> {phi_seam}")
     }
 
-    fn failed(&self) {
+    fn failed(&self, cause: &str) {
         let indent = self.indent();
-        println!("{indent}Failed")
+        println!("{indent}Failed {cause}")
     }
 
     fn success(&self) {
@@ -115,7 +115,7 @@ impl NullTrace {
 impl Trace for NullTrace {
     fn assign(&self, _seam: &Seam, _phi_seam: &Seam) {}
 
-    fn failed(&self) {}
+    fn failed(&self, _cause: &str) {}
 
     fn success(&self) {}
 
@@ -246,12 +246,12 @@ pub fn search_step(
 ) {
     // Check if partial assignment is consistent
     let Some(phi) = Morphism::induced_from_seam_map(pattern, world, partial.clone()) else {
-        trace.failed();
+        trace.failed("Partial assignment inconsistent");
         return;
     };
 
     if !phi.is_homomorphism(pattern, world) || !phi.is_injective() {
-        trace.failed();
+        trace.failed("Morphism inconsistent");
         return;
     }
 
@@ -264,8 +264,14 @@ pub fn search_step(
         return;
     };
 
+    let assignment_candidates = unassigned.assignment_candidates(world, pattern);
+    if assignment_candidates.is_empty() {
+        trace.failed("No assignment candidates");
+        return;
+    }
+
     // Assign the found seam to all possible candidates and recurse
-    for phi_unassigned in unassigned.assignment_candidates(world, pattern) {
+    for phi_unassigned in assignment_candidates {
         let mut ext_partial = partial.clone();
         ext_partial.insert(unassigned.seam, phi_unassigned);
         trace.assign(&unassigned.seam, &phi_unassigned);
@@ -358,7 +364,9 @@ mod test {
 
         let trace = NullTrace::new();
         // let trace = CoutTrace::new();
+
         let matches = find_matches(&world, &pattern, trace);
+        assert_eq!(matches.len(), n_solutions);
 
         // for a_match in &matches {
         //     println!("Match:");
@@ -376,8 +384,6 @@ mod test {
         //         );
         //     }
         // }
-
-        assert_eq!(matches.len(), n_solutions);
     }
 
     #[test]
