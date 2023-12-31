@@ -1,6 +1,6 @@
 use crate::{
     bitmap::Bitmap,
-    math::{pixel::Pixel, rgba8::Rgba8},
+    math::{pixel::Pixel, point::Point, rgba8::Rgba8},
     topology::Border,
 };
 use std::{collections::BTreeMap, ops::Index, path::Path};
@@ -11,6 +11,12 @@ pub struct Pixmap {
 }
 
 impl Pixmap {
+    pub fn new() -> Self {
+        Self {
+            map: BTreeMap::new(),
+        }
+    }
+
     pub fn from_bitmap(bitmap: &Bitmap) -> Self {
         let mut map: BTreeMap<Pixel, Rgba8> = BTreeMap::new();
         for idx in bitmap.indices() {
@@ -31,6 +37,24 @@ impl Pixmap {
         Ok(Self::from_bitmap(&bitmap))
     }
 
+    /// Pixels outside of the bitmap are ignored.
+    pub fn paint_to_bitmap(&self, bitmap: &mut Bitmap) {
+        for (&pixel, &color) in &self.map {
+            if let Ok(index) = pixel.point().cwise_try_into::<usize>() {
+                if bitmap.contains_index(index) {
+                    bitmap[index] = color;
+                }
+            }
+        }
+    }
+
+    /// Default color is transparent.
+    pub fn to_bitmap_with_size(&self, bounds: Point<usize>) -> Bitmap {
+        let mut bitmap = Bitmap::plain(bounds.x, bounds.y, Rgba8::TRANSPARENT);
+        self.paint_to_bitmap(&mut bitmap);
+        bitmap
+    }
+
     pub fn without_color(mut self, color: Rgba8) -> Self {
         self.map.retain(|_, &mut pixel_color| pixel_color != color);
         self
@@ -42,6 +66,10 @@ impl Pixmap {
 
     pub fn get(&self, pixel: &Pixel) -> Option<&Rgba8> {
         self.map.get(pixel)
+    }
+
+    pub fn set(&mut self, pixel: Pixel, color: Rgba8) {
+        self.map.insert(pixel, color);
     }
 
     pub fn remove(&mut self, pixel: &Pixel) -> Option<Rgba8> {

@@ -77,6 +77,12 @@ pub struct RegionKey {
     key: usize,
 }
 
+impl Display for RegionKey {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "RegionKey({})", self.key)
+    }
+}
+
 impl RegionKey {
     pub fn unused() -> Self {
         static COUNTER: AtomicUsize = AtomicUsize::new(1);
@@ -116,6 +122,8 @@ pub struct Region {
     pub color: Rgba8,
     /// First item is outer Border
     pub boundary: Vec<Border>,
+
+    /// Contains at least one pixel
     pub interior: BTreeSet<Pixel>,
 
     /// If the region is not closed left_of(boundary) is not defined otherwise
@@ -150,6 +158,16 @@ impl SeamIndex {
             region_key: self.region_key,
             i_border: self.i_border,
         }
+    }
+}
+
+impl Display for SeamIndex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "SeamIndex({}, {}, {})",
+            self.region_key, self.i_border, self.i_seam
+        )
     }
 }
 
@@ -345,6 +363,27 @@ impl Topology {
 
     pub fn seams_equivalent(&self, lhs: &Seam, rhs: &Seam) -> bool {
         lhs.is_loop() && rhs.is_loop() && self.seam_border(lhs) == self.seam_border(rhs)
+    }
+
+    pub fn to_pixmap(&self) -> Pixmap {
+        let mut pixmap = Pixmap::new();
+        for region in self.regions.values() {
+            for &pixel in &region.interior {
+                pixmap.set(pixel, region.color);
+            }
+        }
+
+        pixmap
+    }
+
+    pub fn fill_region(&mut self, region_key: &RegionKey, color: Rgba8) {
+        let mut pixmap = self.to_pixmap();
+
+        for &pixel in &self.regions[region_key].interior {
+            pixmap.set(pixel, color);
+        }
+
+        *self = Self::new(&pixmap)
     }
 
     // pub fn connected_borders(&self, seed: BorderKey) -> BTreeSet<BorderKey> {

@@ -286,6 +286,15 @@ pub fn find_matches(world: &Topology, pattern: &Topology, trace: impl Trace) -> 
     solutions
 }
 
+pub fn find_first_match(
+    world: &Topology,
+    pattern: &Topology,
+    trace: impl Trace,
+) -> Option<Morphism> {
+    let phis = find_matches(world, pattern, trace);
+    phis.into_iter().next()
+}
+
 const PATTERN_FRAME_COLOR: Rgba8 = Rgba8::MAGENTA;
 
 pub fn extract_pattern(pixmap: &mut Pixmap) -> Pixmap {

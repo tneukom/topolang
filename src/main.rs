@@ -14,6 +14,7 @@ mod morphism;
 mod pattern;
 mod pixmap;
 mod reduce;
+mod rule;
 mod serialize;
 mod topology;
 mod utils;
