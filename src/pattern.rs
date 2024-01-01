@@ -449,4 +449,20 @@ mod test {
         assert_pattern_match("gate_a/pattern.png", "gate_a/match_2.png", 1);
         assert_pattern_match("gate_a/pattern.png", "gate_a/match_3.png", 1);
     }
+
+    #[test]
+    fn pattern_matches_rule_frame_a() {
+        assert_pattern_match("rule_frame_a/pattern.png", "rule_frame_a/match_1.png", 1);
+        assert_pattern_match("rule_frame_a/pattern.png", "rule_frame_a/match_2.png", 1);
+        assert_pattern_match("rule_frame_a/pattern.png", "rule_frame_a/match_3.png", 1);
+        assert_pattern_match("rule_frame_a/pattern.png", "rule_frame_a/match_4.png", 1);
+    }
+
+    #[test]
+    fn pattern_matches_rule_frame_b() {
+        assert_pattern_match("rule_frame_b/pattern.png", "rule_frame_b/match_1.png", 1);
+        assert_pattern_match("rule_frame_b/pattern.png", "rule_frame_b/match_2.png", 1);
+        assert_pattern_match("rule_frame_b/pattern.png", "rule_frame_b/match_3.png", 1);
+        assert_pattern_match("rule_frame_b/pattern.png", "rule_frame_b/match_4.png", 1);
+    }
 }
