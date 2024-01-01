@@ -186,6 +186,12 @@ impl BorderKey {
     }
 }
 
+pub struct FillRegion {
+    /// Region key in the pattern, the matched region is filled with `color`
+    pub region_key: RegionKey,
+    pub color: Rgba8,
+}
+
 pub struct Topology {
     pub regions: BTreeMap<RegionKey, Region>,
     /// Maps the start side of a seam to (region key, border index, seam index)
@@ -376,11 +382,18 @@ impl Topology {
         pixmap
     }
 
-    pub fn fill_region(&mut self, region_key: &RegionKey, color: Rgba8) {
+    /// Invalidates all regions keys
+    pub fn fill_regions(&mut self, fill_regions: &Vec<FillRegion>) {
+        if fill_regions.is_empty() {
+            return;
+        }
+
         let mut pixmap = self.to_pixmap();
 
-        for &pixel in &self.regions[region_key].interior {
-            pixmap.set(pixel, color);
+        for fill_region in fill_regions.into_iter() {
+            for &pixel in &self.regions[&fill_region.region_key].interior {
+                pixmap.set(pixel, fill_region.color);
+            }
         }
 
         *self = Self::new(&pixmap)

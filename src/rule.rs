@@ -3,38 +3,21 @@ use crate::{
     math::{pixel::Pixel, rgba8::Rgba8},
     morphism::Morphism,
     pixmap::Pixmap,
-    topology::{RegionKey, Topology},
+    topology::{FillRegion, Topology},
 };
 use itertools::Itertools;
 use std::{collections::BTreeSet, path::Path};
 
-pub struct FillRegion {
-    /// Region key in the pattern, the matched region is filled with `color`
-    pub region_key: RegionKey,
-    pub color: Rgba8,
-}
-
-impl FillRegion {
-    pub fn apply(&self, phi: &Morphism, world: &mut Topology) {
-        let phi_region_key = phi[&self.region_key];
-        world.fill_region(&phi_region_key, self.color);
-    }
-}
-
-pub enum Op {
-    FillRegion(FillRegion),
-}
-
 pub struct Rule {
     pattern: Topology,
-    ops: Vec<Op>,
+    fill_regions: Vec<FillRegion>,
 }
 
 impl Rule {
     pub fn new(before: Pixmap, after: Pixmap) -> anyhow::Result<Self> {
         let pattern = Topology::new(&before.without_void_color());
 
-        let mut ops: Vec<Op> = Vec::new();
+        let mut fill_regions: Vec<FillRegion> = Vec::new();
 
         for (&region_key, region) in &pattern.regions {
             let Some(fill_color) = Self::fill_color(&after, &region.interior) else {
@@ -42,15 +25,18 @@ impl Rule {
             };
 
             if fill_color != region.color {
-                let op = FillRegion {
+                let fill_region = FillRegion {
                     region_key,
                     color: fill_color,
                 };
-                ops.push(Op::FillRegion(op));
+                fill_regions.push(fill_region);
             }
         }
 
-        Ok(Rule { pattern, ops })
+        Ok(Rule {
+            pattern,
+            fill_regions,
+        })
     }
 
     pub fn from_bitmaps(before: &Bitmap, after: &Bitmap) -> anyhow::Result<Self> {
@@ -79,11 +65,16 @@ impl Rule {
     }
 
     pub fn apply_ops(&self, phi: &Morphism, world: &mut Topology) {
-        for op in &self.ops {
-            if let Op::FillRegion(fill_region) = op {
-                fill_region.apply(phi, world)
-            }
-        }
+        let phi_fill_regions = self
+            .fill_regions
+            .iter()
+            .map(|fill_region| FillRegion {
+                region_key: phi[&fill_region.region_key],
+                color: fill_region.color,
+            })
+            .collect();
+
+        world.fill_regions(&phi_fill_regions);
     }
 }
 
@@ -92,31 +83,61 @@ mod test {
     use crate::{
         bitmap::Bitmap,
         pattern::{find_first_match, NullTrace},
+        pixmap::Pixmap,
         rule::Rule,
         topology::Topology,
     };
 
-    #[test]
-    fn rule_a() {
-        let folder = "test_resources/rules";
+    fn assert_rule_application(folder: &str, expected_application_count: usize) {
+        let folder = format!("test_resources/rules/{folder}");
         let rule = Rule::from_bitmap_paths(
-            format!("{folder}/a/before.png"),
-            format!("{folder}/a/after.png"),
+            format!("{folder}/before.png"),
+            format!("{folder}/after.png"),
         )
         .unwrap();
 
-        let world_bitmap = Bitmap::from_path(format!("{folder}/a/world.png")).unwrap();
+        let world_bitmap = Bitmap::from_path(format!("{folder}/world.png")).unwrap();
         let mut world = Topology::from_bitmap(&world_bitmap);
 
+        let mut application_count: usize = 0;
         while let Some(phi) = find_first_match(&world, &rule.pattern, NullTrace::new()) {
-            println!("Applying rule");
             rule.apply_ops(&phi, &mut world);
+            application_count += 1;
         }
 
-        let result_bitmap = world.to_pixmap().to_bitmap_with_size(world_bitmap.size());
-        result_bitmap.save(format!("{folder}/a/world_result.png"));
-        // Load before, after bitmaps
-        // Load world
-        // Find first match and apply op
+        assert_eq!(application_count, expected_application_count);
+
+        let result_pixmap = world.to_pixmap();
+        let expected_result_pixmap =
+            Pixmap::from_bitmap_path(format!("{folder}/expected_result.png")).unwrap();
+
+        assert_eq!(result_pixmap, expected_result_pixmap);
+
+        // result_bitmap.save(format!("{folder}/world_result.png"));
+    }
+
+    #[test]
+    fn rule_a() {
+        assert_rule_application("a", 4)
+    }
+
+    #[test]
+    fn rule_b() {
+        assert_rule_application("b", 3)
+    }
+
+    #[test]
+    fn rule_c() {
+        assert_rule_application("c", 3)
+    }
+
+    #[test]
+    fn rule_d() {
+        assert_rule_application("d", 3)
+    }
+
+    #[test]
+    fn rule_gate_a() {
+        assert_rule_application("gate_a", 2)
     }
 }
