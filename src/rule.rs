@@ -9,18 +9,18 @@ use itertools::Itertools;
 use std::{collections::BTreeSet, path::Path};
 
 pub struct Rule {
-    pattern: Topology,
-    fill_regions: Vec<FillRegion>,
+    pub pattern: Topology,
+    pub fill_regions: Vec<FillRegion>,
 }
 
 impl Rule {
-    pub fn new(before: Pixmap, after: Pixmap) -> anyhow::Result<Self> {
-        let pattern = Topology::new(&before.without_void_color());
+    pub fn new(before: &Pixmap, after: &Pixmap) -> anyhow::Result<Self> {
+        let pattern = Topology::new(before);
 
         let mut fill_regions: Vec<FillRegion> = Vec::new();
 
         for (&region_key, region) in &pattern.regions {
-            let Some(fill_color) = Self::fill_color(&after, &region.interior) else {
+            let Some(fill_color) = Self::fill_color(after, &region.interior) else {
                 anyhow::bail!("Region {region_key} color not constant.")
             };
 
@@ -40,18 +40,18 @@ impl Rule {
     }
 
     pub fn from_bitmaps(before: &Bitmap, after: &Bitmap) -> anyhow::Result<Self> {
-        let before_pixmap = Pixmap::from_bitmap(before);
-        let after_pixmap = Pixmap::from_bitmap(after);
-        Self::new(before_pixmap, after_pixmap)
+        let before_pixmap = Pixmap::from_bitmap(before).without_void_color();
+        let after_pixmap = Pixmap::from_bitmap(after).without_void_color();
+        Self::new(&before_pixmap, &after_pixmap)
     }
 
     pub fn from_bitmap_paths(
         before_path: impl AsRef<Path>,
         after_path: impl AsRef<Path>,
     ) -> anyhow::Result<Self> {
-        let before = Pixmap::from_bitmap_path(before_path)?;
-        let after = Pixmap::from_bitmap_path(after_path)?;
-        Self::new(before, after)
+        let before = Bitmap::from_path(before_path)?;
+        let after = Bitmap::from_path(after_path)?;
+        Self::from_bitmaps(&before, &after)
     }
 
     /// The fill color of a given region or None if the color is not constant on the region
@@ -69,7 +69,7 @@ impl Rule {
             .fill_regions
             .iter()
             .map(|fill_region| FillRegion {
-                region_key: phi[&fill_region.region_key],
+                region_key: phi[fill_region.region_key],
                 color: fill_region.color,
             })
             .collect();

@@ -1,6 +1,11 @@
 use crate::{
     bitmap::Bitmap,
-    math::{pixel::Pixel, point::Point, rgba8::Rgba8},
+    math::{
+        pixel::Pixel,
+        point::Point,
+        rect::{Rect, RectBounds},
+        rgba8::Rgba8,
+    },
     topology::Border,
 };
 use std::{collections::BTreeMap, ops::Index, path::Path};
@@ -97,6 +102,26 @@ impl Pixmap {
         }
 
         Self { map: right }
+    }
+
+    /// Upper bounds is exclusive, lower bound is inclusive
+    pub fn bounds(&self) -> Rect<i64> {
+        RectBounds::iter_bounds(self.keys().map(|pixel| pixel.point())).inc_high()
+    }
+
+    pub fn translated(&self, offset: Point<i64>) -> Self {
+        let map = self
+            .map
+            .iter()
+            .map(|(&pixel, &color)| (pixel + offset, color))
+            .collect();
+        Self { map }
+    }
+
+    pub fn fill<'a>(&mut self, color: Rgba8, pixels: impl IntoIterator<Item = &'a Pixel>) {
+        for &pixel in pixels {
+            self.set(pixel, color);
+        }
     }
 }
 

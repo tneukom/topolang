@@ -96,7 +96,10 @@ impl RegionKey {
 pub struct Border {
     /// First side is minimum side of cycle
     pub cycle: Vec<Side>,
+
+    /// Start side of first seam is first side in cycle
     pub seams: Vec<Seam>,
+
     pub left: RegionKey,
 
     pub is_outer: bool,
@@ -194,6 +197,7 @@ pub struct FillRegion {
 
 pub struct Topology {
     pub regions: BTreeMap<RegionKey, Region>,
+
     /// Maps the start side of a seam to (region key, border index, seam index)
     pub seam_indices: BTreeMap<Side, SeamIndex>,
 }
@@ -289,6 +293,16 @@ impl Topology {
         self.regions
             .values()
             .flat_map(|region| region.boundary.iter())
+    }
+
+    pub fn iter_borders_with_key(&self) -> impl Iterator<Item = (BorderKey, &Border)> + Clone {
+        self.regions.iter().flat_map(|(&region_key, region)| {
+            region
+                .boundary
+                .iter()
+                .enumerate()
+                .map(move |(i_border, border)| (BorderKey::new(region_key, i_border), border))
+        })
     }
 
     pub fn iter_seams(&self) -> impl Iterator<Item = &Seam> + Clone {
@@ -397,6 +411,11 @@ impl Topology {
         }
 
         *self = Self::new(&pixmap)
+    }
+
+    pub fn border_containing_side(&self, side: &Side) -> Option<(BorderKey, &Border)> {
+        self.iter_borders_with_key()
+            .find(|(_, border)| border.cycle.contains(side))
     }
 
     // pub fn connected_borders(&self, seed: BorderKey) -> BTreeSet<BorderKey> {
@@ -527,6 +546,8 @@ pub fn split_into_cycles<'a>(sides: impl IntoIterator<Item = &'a Side>) -> Vec<V
 /// Split a side cycle into segments based on a function f: Side -> T
 /// Each segment has constant f
 pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -> Vec<Seam> {
+    assert!(!cycle.is_empty());
+
     let discontinuities: Vec<_> = cycle
         .iter()
         .circular_tuple_windows()

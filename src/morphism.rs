@@ -26,27 +26,35 @@ pub struct Morphism {
     pub border_map: BTreeMap<BorderKey, BorderKey>,
 }
 
-impl Index<&RegionKey> for Morphism {
+impl Index<RegionKey> for Morphism {
     type Output = RegionKey;
 
-    fn index(&self, index: &RegionKey) -> &Self::Output {
-        &self.region_map[index]
+    fn index(&self, index: RegionKey) -> &Self::Output {
+        &self.region_map[&index]
     }
 }
 
-impl Index<&Seam> for Morphism {
+impl Index<Seam> for Morphism {
     type Output = Seam;
 
-    fn index(&self, index: &Seam) -> &Self::Output {
-        &self.seam_map[index]
+    fn index(&self, index: Seam) -> &Self::Output {
+        &self.seam_map[&index]
     }
 }
 
-impl Index<&Vertex> for Morphism {
+impl Index<Vertex> for Morphism {
     type Output = Vertex;
 
-    fn index(&self, index: &Vertex) -> &Self::Output {
-        &self.corner_map[index]
+    fn index(&self, index: Vertex) -> &Self::Output {
+        &self.corner_map[&index]
+    }
+}
+
+impl Index<BorderKey> for Morphism {
+    type Output = BorderKey;
+
+    fn index(&self, index: BorderKey) -> &Self::Output {
+        &self.border_map[&index]
     }
 }
 
@@ -98,15 +106,15 @@ impl Morphism {
     ///     phi * reversed = reversed * phi
     pub fn preserves_structure(&self, dom: &Topology, codom: &Topology) -> bool {
         for (seam, phi_seam) in &self.seam_map {
-            if self[&seam.start_corner()] != phi_seam.start_corner() {
+            if self[seam.start_corner()] != phi_seam.start_corner() {
                 return false;
             }
 
-            if self[&seam.stop_corner()] != phi_seam.stop_corner() {
+            if self[seam.stop_corner()] != phi_seam.stop_corner() {
                 return false;
             }
 
-            if self[&dom.left_of(seam)] != codom.left_of(phi_seam) {
+            if self[dom.left_of(seam)] != codom.left_of(phi_seam) {
                 return false;
             }
 

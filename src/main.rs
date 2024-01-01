@@ -8,6 +8,7 @@ use crate::{bitmap::Bitmap, pixmap::Pixmap, topology::Topology};
 
 mod array_2d;
 mod bitmap;
+mod compiler;
 mod connected_components;
 mod math;
 mod morphism;
