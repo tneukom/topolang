@@ -70,6 +70,7 @@ pub fn is_injective<T: Ord>(phi: &BTreeMap<T, T>) -> bool {
 }
 
 impl Morphism {
+    #[inline(never)]
     pub fn induced_from_seam_map(
         dom: &Topology,
         codom: &Topology,
@@ -91,6 +92,7 @@ impl Morphism {
     }
 
     /// Maps regions to regions of the same color
+    #[inline(never)]
     pub fn preserves_colors(&self, dom: &Topology, codom: &Topology) -> bool {
         self.region_map
             .iter()
@@ -104,6 +106,7 @@ impl Morphism {
     ///     left * phi = phi * left
     ///
     ///     phi * reversed = reversed * phi
+    #[inline(never)]
     pub fn preserves_structure(&self, dom: &Topology, codom: &Topology) -> bool {
         for (seam, phi_seam) in &self.seam_map {
             if self[seam.start_corner()] != phi_seam.start_corner() {
@@ -134,12 +137,14 @@ impl Morphism {
     }
 
     /// Map inner borders to inner borders and outer borders to outer borders.
+    #[inline(never)]
     pub fn preserves_inner_outer(&self, dom: &Topology, codom: &Topology) -> bool {
         self.border_map
             .iter()
             .all(|(&border, &phi_border)| dom[border].is_outer == codom[phi_border].is_outer)
     }
 
+    #[inline(never)]
     pub fn non_overlapping(&self, dom: &Topology, codom: &Topology) -> bool {
         self.border_map.iter().all(|(&border, &phi_border)| {
             let len_phi_seams: usize = dom[border]
@@ -156,6 +161,7 @@ impl Morphism {
     }
 
     /// Preserves structure and colors
+    #[inline(never)]
     pub fn is_homomorphism(&self, dom: &Topology, codom: &Topology) -> bool {
         self.preserves_structure(dom, codom)
             && self.preserves_colors(dom, codom)
@@ -164,6 +170,7 @@ impl Morphism {
     }
 
     /// Maps all regions, seams, seam corners of dom
+    #[inline(never)]
     pub fn is_total(&self, dom: &Topology, include_void_seams: bool) -> bool {
         let seam_total = dom
             .iter_seams()
@@ -233,6 +240,7 @@ pub fn induced_seam_map(
 /// The resulting map satisfies
 ///     left ∘ φ = φ ∘ left
 ///     right ∘ φ = φ ∘ right
+#[inline(never)]
 pub fn induced_region_map(
     dom: &Topology,
     codom: &Topology,
@@ -252,6 +260,7 @@ pub fn induced_region_map(
     Some(region_phi)
 }
 
+#[inline(never)]
 pub fn induced_border_map(
     dom: &Topology,
     codom: &Topology,
@@ -273,6 +282,7 @@ pub fn induced_border_map(
 /// The resulting map satisfies
 ///     start ∘ φ = φ ∘ start
 ///     stop ∘ φ = φ ∘ stop
+#[inline(never)]
 pub fn induced_corner_map(seam_phi: &BTreeMap<Seam, Seam>) -> Option<BTreeMap<Vertex, Vertex>> {
     let mut corner_map: BTreeMap<Vertex, Vertex> = BTreeMap::new();
 

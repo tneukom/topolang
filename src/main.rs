@@ -4,7 +4,7 @@
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 // #![allow(unsafe_code)]
 
-use crate::{bitmap::Bitmap, pixmap::Pixmap, topology::Topology};
+use crate::{compiler::Compiler, rule::stabilize, topology::Topology};
 
 mod array_2d;
 mod bitmap;
@@ -21,14 +21,25 @@ mod topology;
 mod utils;
 
 pub fn main() {
-    // TODO:
-    // - [ ] Load bitmap
-    // - [ ] Connected components
-    // - [ ] Topology
+    let folder = "test_resources/compiler/gate/";
+    let world = Topology::from_bitmap_path(format!("{folder}/world.png")).unwrap();
 
-    let path = "test_resources/topology/3b.png";
-    let bitmap = Bitmap::from_path(path).unwrap();
-    let pixmap = Pixmap::from_bitmap(&bitmap);
-    let topology = Topology::new(&pixmap);
-    println!("{topology}");
+    let compiler = Compiler::new().unwrap();
+
+    for _ in 0..100 {
+        use std::time::Instant;
+
+        let mut world = world.clone();
+
+        let now = Instant::now();
+        let rules = compiler.compile(&mut world).unwrap();
+        println!("Compiled elapsed = {:.3?}", now.elapsed());
+
+        let now = Instant::now();
+        let application_count = stabilize(&mut world, &rules);
+        println!(
+            "Run, application_count = {application_count}, elapsed = {:.3?}",
+            now.elapsed()
+        );
+    }
 }

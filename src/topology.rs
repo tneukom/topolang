@@ -195,6 +195,7 @@ pub struct FillRegion {
     pub color: Rgba8,
 }
 
+#[derive(Debug, Clone)]
 pub struct Topology {
     pub regions: BTreeMap<RegionKey, Region>,
 

@@ -7,6 +7,7 @@ use crate::{
 };
 use std::{cmp::Ordering, collections::BTreeMap};
 
+#[inline(never)]
 pub fn generalized_seams(topo: &Topology) -> Vec<Seam> {
     let mut seams = Vec::new();
     for border in topo.iter_borders() {
@@ -29,8 +30,9 @@ pub fn generalized_seams(topo: &Topology) -> Vec<Seam> {
         }
     }
 
-    let duplicate_seam = find_duplicate_by(&seams, |lhs, rhs| topo.seams_equivalent(lhs, rhs));
-    assert!(duplicate_seam.is_none());
+    // Very slow, only for debugging
+    // let duplicate_seam = find_duplicate_by(&seams, |lhs, rhs| topo.seams_equivalent(lhs, rhs));
+    // assert!(duplicate_seam.is_none());
     seams
 }
 
@@ -136,6 +138,7 @@ pub struct Unassigned {
 impl Unassigned {
     /// List of unassigned seams given a pattern and a partial Morphism `phi`
     /// If returned list is empty phi is fully defined
+    #[inline(never)]
     pub fn candidates(pattern: &Topology, phi: &Morphism) -> Vec<Self> {
         pattern
             .iter_seams()
@@ -167,12 +170,14 @@ impl Unassigned {
     }
 
     /// Choose the best unassigned seam to continue the search
+    #[inline(never)]
     pub fn choose(pattern: &Topology, phi: &Morphism) -> Option<Self> {
         Self::candidates(pattern, phi)
             .into_iter()
             .max_by(Self::compare_heuristic)
     }
 
+    #[inline(never)]
     pub fn possible_assignment(
         &self,
         world: &Topology,
@@ -228,6 +233,7 @@ impl Unassigned {
 
     /// Returns possible candidate seams in `world` that `self.seam` could be mapped to.
     /// Returned seam don't have to be atomic.
+    #[inline(never)]
     pub fn assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
         generalized_seams(world)
             .iter()
@@ -237,6 +243,7 @@ impl Unassigned {
     }
 }
 
+#[inline(never)]
 pub fn search_step(
     world: &Topology,
     pattern: &Topology,
@@ -279,6 +286,7 @@ pub fn search_step(
     }
 }
 
+#[inline(never)]
 pub fn find_matches(world: &Topology, pattern: &Topology, trace: impl Trace) -> Vec<Morphism> {
     let mut solutions = Vec::new();
     let partial = BTreeMap::new();
@@ -286,6 +294,7 @@ pub fn find_matches(world: &Topology, pattern: &Topology, trace: impl Trace) -> 
     solutions
 }
 
+#[inline(never)]
 pub fn find_first_match(
     world: &Topology,
     pattern: &Topology,
@@ -297,6 +306,7 @@ pub fn find_first_match(
 
 const PATTERN_FRAME_COLOR: Rgba8 = Rgba8::MAGENTA;
 
+#[inline(never)]
 pub fn extract_pattern(pixmap: &mut Pixmap) -> Pixmap {
     let topo = Topology::new(&pixmap);
 

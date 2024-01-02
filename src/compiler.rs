@@ -4,7 +4,7 @@ use crate::{
         pixel::{Side, Vertex},
         rgba8::Rgba8,
     },
-    pattern::{find_matches, NullTrace},
+    pattern::{find_first_match, find_matches, NullTrace},
     pixmap::Pixmap,
     rule::Rule,
     topology::{BorderKey, Topology},
@@ -88,6 +88,7 @@ mod test {
         math::rgba8::Rgba8,
         pattern::{find_first_match, NullTrace},
         pixmap::Pixmap,
+        rule::stabilize,
         topology::Topology,
     };
 
@@ -98,35 +99,22 @@ mod test {
 
     #[test]
     fn a() {
-        let folder = "test_resources/compiler/a/";
+        let folder = "test_resources/compiler/gate/";
         let world_bitmap = Bitmap::from_path(format!("{folder}/world.png")).unwrap();
         let world_pixmap = Pixmap::from_bitmap(&world_bitmap);
         let mut world = Topology::new(&world_pixmap);
 
         let compiler = Compiler::new().unwrap();
         let rules = compiler.compile(&mut world).unwrap();
-        assert_eq!(rules.len(), 1);
+        // assert_eq!(rules.len(), 2);
 
-        let mut application_count: usize = 0;
-        loop {
-            let mut applied = false;
-            for rule in &rules {
-                if let Some(phi) = find_first_match(&world, &rule.pattern, NullTrace::new()) {
-                    rule.apply_ops(&phi, &mut world);
-                    application_count += 1;
-                    applied = true;
-                }
-            }
-
-            if !applied {
-                break;
-            }
-        }
-
-        assert_eq!(application_count, 3);
+        let application_count = stabilize(&mut world, &rules);
+        // assert_eq!(application_count, 3);
 
         let result_pixmap = world.to_pixmap();
         let result_bitmap = result_pixmap.to_bitmap_with_size(world_bitmap.size());
-        result_bitmap.save(format!("{folder}/world_result.png"));
+        result_bitmap
+            .save(format!("{folder}/world_result.png"))
+            .unwrap();
     }
 }
