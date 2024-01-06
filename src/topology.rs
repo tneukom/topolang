@@ -13,7 +13,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
     fmt::{Display, Formatter},
-    ops::Index,
+    ops::{Index, IndexMut},
     path::Path,
     sync::atomic::{AtomicUsize, Ordering},
 };
@@ -189,6 +189,7 @@ impl BorderKey {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct FillRegion {
     /// Region key in the pattern, the matched region is filled with `color`
     pub region_key: RegionKey,
@@ -340,11 +341,21 @@ impl Topology {
         seam_index.region_key
     }
 
+    pub fn color_left_of(&self, seam: &Seam) -> Rgba8 {
+        let left_key = self.left_of(seam);
+        self[left_key].color
+    }
+
     /// Not every seam has a region on the right, it can be empty space
     pub fn right_of(&self, seam: &Seam) -> Option<RegionKey> {
         assert!(seam.is_atom());
         let seam_index = self.seam_indices.get(&seam.reversed().start)?;
         Some(seam_index.region_key)
+    }
+
+    pub fn color_right_of(&self, seam: &Seam) -> Option<Rgba8> {
+        let right_key = self.right_of(seam)?;
+        Some(self[right_key].color)
     }
 
     /// Only fails if seam is not self.contains_seam(seam)
@@ -363,8 +374,8 @@ impl Topology {
 
     pub fn seam_colors(&self, seam: &Seam) -> SeamColors {
         SeamColors {
-            left: self[self.left_of(seam)].color,
-            right: self.right_of(seam).map(|right| self[right].color),
+            left: self.color_left_of(seam),
+            right: self.color_right_of(seam),
         }
     }
 
@@ -397,12 +408,8 @@ impl Topology {
         pixmap
     }
 
-    /// Invalidates all regions keys
-    pub fn fill_regions(&mut self, fill_regions: &Vec<FillRegion>) {
-        if fill_regions.is_empty() {
-            return;
-        }
-
+    #[inline(never)]
+    fn fill_regions_fallback(&mut self, fill_regions: &Vec<FillRegion>) {
         let mut pixmap = self.to_pixmap();
 
         for fill_region in fill_regions.into_iter() {
@@ -412,6 +419,30 @@ impl Topology {
         }
 
         *self = Self::new(&pixmap)
+    }
+
+    /// Invalidates all regions keys
+    #[inline(never)]
+    pub fn fill_regions(&mut self, fill_regions: &Vec<FillRegion>) {
+        let mut remaining = Vec::new();
+        for &fill_region in fill_regions {
+            // If all neighboring regions have a different color than fill_region.color we can
+            // simply replace Region.color
+            let region = &self[fill_region.region_key];
+            if region
+                .iter_seams()
+                .all(|seam| self.color_right_of(seam) != Some(fill_region.color))
+            {
+                let region = &mut self[fill_region.region_key];
+                region.color = fill_region.color;
+            } else {
+                remaining.push(fill_region)
+            }
+        }
+
+        if !remaining.is_empty() {
+            self.fill_regions_fallback(&remaining);
+        }
     }
 
     pub fn border_containing_side(&self, side: &Side) -> Option<(BorderKey, &Border)> {
@@ -479,6 +510,12 @@ impl Index<RegionKey> for Topology {
 
     fn index(&self, key: RegionKey) -> &Self::Output {
         &self.regions[&key]
+    }
+}
+
+impl IndexMut<RegionKey> for Topology {
+    fn index_mut(&mut self, key: RegionKey) -> &mut Self::Output {
+        self.regions.get_mut(&key).unwrap()
     }
 }
 

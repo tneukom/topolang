@@ -4,7 +4,7 @@ use crate::{
         pixel::{Side, Vertex},
         rgba8::Rgba8,
     },
-    pattern::{find_first_match, find_matches, NullTrace},
+    pattern::{find_matches, NullTrace},
     pixmap::Pixmap,
     rule::Rule,
     topology::{BorderKey, Topology},
