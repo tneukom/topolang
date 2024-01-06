@@ -36,6 +36,7 @@ num-traits = "0.2.17"
 anyhow = { version = "1.0.75", features = ["backtrace"] }
 hex = "0.4.3"
 arrayvec = "0.7.4"
+pretty_assertions = "1.4.0"
 #slotmap = "1.0.7"
 # dlv-list = "0.5.1"
 # fastrand = "2.0.1"

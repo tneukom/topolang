@@ -55,7 +55,7 @@ impl Pixmap {
 
     /// Default color is transparent.
     pub fn to_bitmap_with_size(&self, bounds: Point<usize>) -> Bitmap {
-        let mut bitmap = Bitmap::plain(bounds.x, bounds.y, Rgba8::TRANSPARENT);
+        let mut bitmap = Bitmap::plain(bounds.x, bounds.y, Rgba8::BLACK);
         self.paint_to_bitmap(&mut bitmap);
         bitmap
     }
@@ -93,11 +93,16 @@ impl Pixmap {
         self.map.len()
     }
 
-    pub fn extract_right(&mut self, boundary: &Border) -> Pixmap {
+    /// If fill is None the entries right of boundary are removed otherwise they are set to the fill color.
+    pub fn extract_right(&mut self, boundary: &Border, fill: Option<Rgba8>) -> Pixmap {
         // Extract pixels left of inner_border
         let mut right = BTreeMap::new();
         for pixel in boundary.right_pixels() {
-            let color = self.remove(&pixel).unwrap();
+            let color = if let Some(fill) = fill {
+                self.map.insert(pixel, fill).unwrap()
+            } else {
+                self.map.remove(&pixel).unwrap()
+            };
             right.insert(pixel, color);
         }
 

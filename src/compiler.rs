@@ -53,9 +53,11 @@ impl Compiler {
         for phi in matches {
             // Extract before and after from rule
             let phi_before_border = phi[self.before_border];
-            let before_pixmap = world_pixmap.extract_right(&world[phi_before_border]);
+            let before_pixmap =
+                world_pixmap.extract_right(&world[phi_before_border], Some(Rgba8::TRANSPARENT));
             let phi_after_border = phi[self.after_border];
-            let after_pixmap = world_pixmap.extract_right(&world[phi_after_border]);
+            let after_pixmap =
+                world_pixmap.extract_right(&world[phi_after_border], Some(Rgba8::TRANSPARENT));
 
             // Find translation from after to before
             let before_bounds = before_pixmap.bounds();
@@ -83,38 +85,56 @@ impl Compiler {
 #[cfg(test)]
 mod test {
     use crate::{
-        bitmap::Bitmap,
-        compiler::Compiler,
-        math::rgba8::Rgba8,
-        pattern::{find_first_match, NullTrace},
-        pixmap::Pixmap,
-        rule::stabilize,
-        topology::Topology,
+        bitmap::Bitmap, compiler::Compiler, pixmap::Pixmap, rule::stabilize, topology::Topology,
     };
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn init() {
         let _compiler = Compiler::new().unwrap();
     }
 
-    #[test]
-    fn a() {
-        let folder = "test_resources/compiler/gate/";
+    fn assert_execute_world(name: &str, expected_steps: usize) {
+        let folder = format!("test_resources/compiler/{name}/");
         let world_bitmap = Bitmap::from_path(format!("{folder}/world.png")).unwrap();
         let world_pixmap = Pixmap::from_bitmap(&world_bitmap);
         let mut world = Topology::new(&world_pixmap);
 
         let compiler = Compiler::new().unwrap();
         let rules = compiler.compile(&mut world).unwrap();
-        // assert_eq!(rules.len(), 2);
 
-        let application_count = stabilize(&mut world, &rules);
-        // assert_eq!(application_count, 3);
+        let steps = stabilize(&mut world, &rules);
+        assert_eq!(steps, expected_steps);
 
         let result_pixmap = world.to_pixmap();
-        let result_bitmap = result_pixmap.to_bitmap_with_size(world_bitmap.size());
-        result_bitmap
-            .save(format!("{folder}/world_result.png"))
-            .unwrap();
+
+        let expected_pixmap =
+            Pixmap::from_bitmap_path(format!("{folder}/world_expected.png")).unwrap();
+        assert_eq!(result_pixmap, expected_pixmap);
+
+        // let result_bitmap = result_pixmap.to_bitmap_with_size(world_bitmap.size());
+        // result_bitmap
+        //     .save(format!("{folder}/world_result.png"))
+        //     .unwrap();
+    }
+
+    #[test]
+    fn a() {
+        assert_execute_world("a", 4);
+    }
+
+    #[test]
+    fn b() {
+        assert_execute_world("b", 7);
+    }
+
+    #[test]
+    fn c() {
+        assert_execute_world("c", 2);
+    }
+
+    #[test]
+    fn gate() {
+        assert_execute_world("gate", 3);
     }
 }

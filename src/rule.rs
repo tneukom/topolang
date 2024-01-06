@@ -80,19 +80,19 @@ impl Rule {
 }
 
 pub fn stabilize(world: &mut Topology, rules: &Vec<Rule>) -> usize {
-    let mut application_count: usize = 0;
+    let mut steps: usize = 0;
     loop {
         let mut applied = false;
         for rule in rules {
             if let Some(phi) = find_first_match(world, &rule.pattern, NullTrace::new()) {
                 rule.apply_ops(&phi, world);
-                application_count += 1;
+                steps += 1;
                 applied = true;
             }
         }
 
         if !applied {
-            return application_count;
+            return steps;
         }
     }
 }

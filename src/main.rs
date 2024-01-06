@@ -21,7 +21,7 @@ mod topology;
 mod utils;
 
 pub fn main() {
-    let folder = "test_resources/compiler/gate/";
+    let folder = "test_resources/compiler/b/";
     let world = Topology::from_bitmap_path(format!("{folder}/world.png")).unwrap();
 
     let compiler = Compiler::new().unwrap();
