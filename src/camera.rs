@@ -1,0 +1,76 @@
+use crate::math::{affine_map::AffineMap, point::Point, rect::Rect};
+
+#[derive(Clone, Debug)]
+// An affine map that maps points from the view to the world coordinate system.
+pub struct Camera {
+    pub offset: Point<f64>,
+    pub scale: f64,
+}
+
+impl Camera {
+    fn new(offset: Point<f64>, scale: f64) -> Self {
+        Camera { offset, scale }
+    }
+
+    /// Round the offset to the nearest multiple of scale
+    pub fn round(&self) -> Self {
+        let offset = (self.offset / self.scale).round() * self.scale;
+        Self::new(offset, self.scale)
+    }
+
+    pub fn view_to_world(&self) -> AffineMap<f64> {
+        AffineMap::similarity(self.scale, self.offset)
+    }
+
+    pub fn world_to_view(&self) -> AffineMap<f64> {
+        self.view_to_world().inv()
+    }
+
+    pub fn default() -> Camera {
+        Camera::new(Point::ZERO, 1.0 / 16.0)
+    }
+
+    // The resulting camera maps view_point to world_point with the given scale
+    pub fn map_view_to_world(
+        view_point: Point<f64>,
+        world_point: Point<f64>,
+        scale: f64,
+    ) -> Camera {
+        // world_point = scale * view_point + offset
+        let offset = world_point - view_point * scale;
+        Camera::new(offset, scale)
+    }
+
+    // Zoom in or out at the given point in the view reference frame.
+    // The result maps viewPoint to this.WorldView() * viewPoint
+    pub fn zoom_at_view_point(&self, view_point: Point<f64>, scale: f64) -> Camera {
+        let world_point = self.view_to_world() * view_point;
+        Self::map_view_to_world(view_point, world_point, self.scale * scale)
+    }
+
+    /// A camera that maps the center of world_rect to the center of view_rect and
+    /// camera.world_to_view * world_rect fits into view_rect
+    /// scale is power of 2
+    pub fn fit_world_into_view(world_rect: Rect<f64>, view_rect: Rect<f64>) -> Camera {
+        // scale * view_rect.width() >= world_rect.width() and scale * view_rect.height() >= world_rect.height()
+        let scale =
+            (world_rect.width() / view_rect.width()).max(world_rect.height() / view_rect.height());
+
+        // round scale down to power of 2 because we currently don't have Rational rounding
+        // TODO: Use .round()
+        let mut rounded_scale = 0.5_f64.powi(32);
+        while rounded_scale < scale {
+            rounded_scale = rounded_scale * 2.0;
+        }
+
+        // world_center = scale * view_center + offset
+        let offset = world_rect.center() - view_rect.center() * rounded_scale;
+
+        //Camera::new(offset, rounded_scale)
+        let result = Camera {
+            offset,
+            scale: rounded_scale,
+        };
+        result
+    }
+}

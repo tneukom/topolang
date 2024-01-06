@@ -3,6 +3,7 @@ use crate::{
     connected_components::{color_components, left_of, right_of, ColorComponent},
     math::{
         pixel::{Pixel, Side, Vertex},
+        rect::{Rect, RectBounds},
         rgba8::Rgba8,
     },
     pixmap::Pixmap,
@@ -132,6 +133,8 @@ pub struct Region {
     /// If the region is not closed left_of(boundary) is not defined otherwise
     /// left_of(boundary) = interior
     pub closed: bool,
+
+    pub bounds: Rect<i64>,
 }
 
 impl Region {
@@ -233,9 +236,14 @@ impl Topology {
                 boundary.push(border);
             }
 
+            // Upper bound is exclusive
+            let bounds =
+                RectBounds::iter_bounds(component.interior.iter().map(Pixel::point)).inc_high();
+
             let region = Region {
                 boundary,
                 color,
+                bounds,
                 interior: component.interior,
                 closed: component.closed,
             };
@@ -245,6 +253,13 @@ impl Topology {
         Topology {
             regions,
             seam_indices,
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            regions: BTreeMap::new(),
+            seam_indices: BTreeMap::new(),
         }
     }
 
@@ -290,6 +305,11 @@ impl Topology {
     //     let previous_entry = self.regions.insert(key, region);
     //     assert!(previous_entry.is_none());
     // }
+
+    /// Upper bound is exclusive, lower bound inclusive
+    pub fn bounds(&self) -> Rect<i64> {
+        RectBounds::iter_bounds(self.regions.values().map(|region| region.bounds))
+    }
 
     pub fn iter_borders(&self) -> impl Iterator<Item = &Border> + Clone {
         self.regions

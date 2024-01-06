@@ -28,7 +28,7 @@ impl<T> GridPoint<T> {
         }
     }
 
-    pub fn point(self) -> Point<i64> {
+    pub fn point(&self) -> Point<i64> {
         Point::new(self.x, self.y)
     }
 

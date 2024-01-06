@@ -8,7 +8,11 @@ use crate::{
     },
     topology::Border,
 };
-use std::{collections::BTreeMap, ops::Index, path::Path};
+use std::{
+    collections::{btree_map, BTreeMap},
+    ops::Index,
+    path::Path,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Pixmap {
@@ -135,5 +139,14 @@ impl Index<&Pixel> for Pixmap {
 
     fn index(&self, pixel: &Pixel) -> &Self::Output {
         &self.map[pixel]
+    }
+}
+
+impl<'a> IntoIterator for &'a Pixmap {
+    type Item = (&'a Pixel, &'a Rgba8);
+    type IntoIter = btree_map::Iter<'a, Pixel, Rgba8>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.map.iter()
     }
 }

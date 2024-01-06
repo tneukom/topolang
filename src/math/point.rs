@@ -333,18 +333,49 @@ where
     }
 }
 
-impl<Lhs, Rhs> CwiseEuclidDivRem<Point<Rhs>> for Point<Lhs>
-where
-    Lhs: EuclidDivRem<Rhs>,
-{
-    type Output = Point<<Lhs as EuclidDivRem<Rhs>>::Output>;
+// TODO: Remove
+// impl<Lhs, Rhs> CwiseEuclidDivRem<Point<Rhs>> for Point<Lhs>
+// where
+//     Lhs: EuclidDivRem<Rhs>,
+// {
+//     type Output = Point<<Lhs as EuclidDivRem<Rhs>>::Output>;
+//
+//     fn cwise_euclid_div(self, rhs: Point<Rhs>) -> Self::Output {
+//         Self::Output::new(self.x.euclid_div(rhs.x), self.y.euclid_div(rhs.y))
+//     }
+//
+//     fn cwise_euclid_rem(self, rhs: Point<Rhs>) -> Self::Output {
+//         Self::Output::new(self.x.euclid_rem(rhs.x), self.y.euclid_rem(rhs.y))
+//     }
+// }
 
-    fn cwise_euclid_div(self, rhs: Point<Rhs>) -> Self::Output {
+impl<T> EuclidDivRem for Point<T>
+where
+    T: EuclidDivRem<Output = T>,
+{
+    type Output = Point<T>;
+
+    fn euclid_div(self, rhs: Point<T>) -> Self::Output {
         Self::Output::new(self.x.euclid_div(rhs.x), self.y.euclid_div(rhs.y))
     }
 
-    fn cwise_euclid_rem(self, rhs: Point<Rhs>) -> Self::Output {
+    fn euclid_rem(self, rhs: Point<T>) -> Self::Output {
         Self::Output::new(self.x.euclid_rem(rhs.x), self.y.euclid_rem(rhs.y))
+    }
+}
+
+impl<T> EuclidDivRem<T> for Point<T>
+where
+    T: EuclidDivRem<Output = T> + Copy,
+{
+    type Output = Point<T>;
+
+    fn euclid_div(self, rhs: T) -> Self::Output {
+        Self::Output::new(self.x.euclid_div(rhs), self.y.euclid_div(rhs))
+    }
+
+    fn euclid_rem(self, rhs: T) -> Self::Output {
+        Self::Output::new(self.x.euclid_rem(rhs), self.y.euclid_rem(rhs))
     }
 }
 

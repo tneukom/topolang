@@ -10,6 +10,10 @@ impl Bitmap {
         Self::filled(width, height, &color)
     }
 
+    pub fn transparent(width: usize, height: usize) -> Self {
+        Self::plain(width, height, Rgba8::TRANSPARENT)
+    }
+
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, image::ImageError> {
         let imageio_bitmap = image::open(path)?.into_rgba8();
         let mut bitmap = Self::plain(

@@ -4,14 +4,19 @@
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 // #![allow(unsafe_code)]
 
-use crate::{compiler::Compiler, rule::stabilize, topology::Topology};
+use crate::{app::EguiApp, compiler::Compiler, rule::stabilize, topology::Topology};
 
+mod app;
 mod array_2d;
 mod bitmap;
+mod brush;
+mod camera;
 mod compiler;
 mod connected_components;
+mod coordinate_frame;
 mod math;
 mod morphism;
+mod painting;
 mod pattern;
 mod pixmap;
 mod reduce;
@@ -19,8 +24,10 @@ mod rule;
 mod serialize;
 mod topology;
 mod utils;
+mod view;
+mod widgets;
 
-pub fn main() {
+pub fn main_benchmark() {
     let folder = "test_resources/compiler/b/";
     let world = Topology::from_bitmap_path(format!("{folder}/world.png")).unwrap();
 
@@ -42,4 +49,25 @@ pub fn main() {
             now.elapsed()
         );
     }
+}
+
+pub fn main_editor() {
+    unsafe {
+        let native_options = eframe::NativeOptions::default();
+        let result = eframe::run_native(
+            "SeamLang",
+            native_options,
+            Box::new(|cc| Box::new(EguiApp::new(cc))),
+        );
+
+        if result.is_err() {
+            println!("Run failed");
+        }
+    }
+}
+
+pub fn main() {
+    main_editor()
+
+    // main_benchmark();
 }

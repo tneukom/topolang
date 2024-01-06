@@ -1,22 +1,5 @@
 use itertools::Itertools;
-use std::{array, collections::BTreeSet, fmt::Debug, hash::Hash, rc::Rc};
-
-pub struct ById<T>(pub T);
-
-impl<T> Hash for ById<Rc<T>> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // hash by raw pointer
-        Rc::as_ptr(&self.0).hash(state);
-    }
-}
-
-impl<T> PartialEq for ById<Rc<T>> {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.0, &other.0)
-    }
-}
-
-impl<T> Eq for ById<Rc<T>> {}
+use std::{array, collections::BTreeSet, fmt::Debug, rc::Rc};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum UniqueError {

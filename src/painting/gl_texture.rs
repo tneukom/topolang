@@ -1,0 +1,104 @@
+use crate::{
+    bitmap::Bitmap,
+    math::{affine_map::AffineMap, point::pt},
+};
+use glow::HasContext;
+use std::sync::Arc;
+
+pub struct GlTexture {
+    pub context: Arc<glow::Context>,
+    pub id: glow::Texture,
+    pub width: usize,
+    pub height: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+#[repr(u32)]
+pub enum Filter {
+    Linear = glow::LINEAR,
+    Nearest = glow::NEAREST,
+}
+
+impl GlTexture {
+    pub unsafe fn from_size(
+        context: Arc<glow::Context>,
+        width: usize,
+        height: usize,
+        filter: Filter,
+    ) -> Self {
+        let id = context.create_texture().expect("Failed to create texture");
+
+        context.active_texture(glow::TEXTURE0);
+        context.bind_texture(glow::TEXTURE_2D, Some(id));
+
+        context.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, filter as i32);
+        context.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, filter as i32);
+        context.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_WRAP_S,
+            glow::CLAMP_TO_EDGE as i32,
+        );
+        context.tex_parameter_i32(
+            glow::TEXTURE_2D,
+            glow::TEXTURE_WRAP_T,
+            glow::CLAMP_TO_EDGE as i32,
+        );
+
+        GlTexture {
+            context,
+            id,
+            width,
+            height,
+        }
+    }
+
+    /// Bitmap colorspace is assumed to be SRGB
+    pub unsafe fn from_bitmap(
+        context: Arc<glow::Context>,
+        bitmap: &Bitmap,
+        filter: Filter,
+    ) -> Self {
+        let mut texture = Self::from_size(context.clone(), bitmap.width(), bitmap.height(), filter);
+        texture.texture_image(bitmap);
+        texture
+    }
+
+    pub unsafe fn texture_image(&mut self, bitmap: &Bitmap) {
+        assert_eq!(bitmap.width(), self.width);
+        assert_eq!(bitmap.height(), self.height);
+
+        let bitmap_bytes = bitmap.linear_slice().align_to::<u8>().1;
+
+        self.context.tex_image_2d(
+            glow::TEXTURE_2D,
+            0,
+            glow::SRGB8_ALPHA8 as i32,
+            bitmap.width() as i32,
+            bitmap.height() as i32,
+            0,
+            glow::RGBA,
+            glow::UNSIGNED_BYTE,
+            Some(bitmap_bytes),
+        );
+    }
+
+    /// Affine map from bitmap coordinates (0,0 at top left) to Gltexture coordinates.
+    pub fn bitmap_to_gltexture(&self) -> AffineMap<f64> {
+        AffineMap::map_points(
+            pt(0.0, 0.0),
+            pt(0.0, 0.0),
+            pt(self.width as f64, 0.0),
+            pt(1.0, 0.0),
+            pt(0.0, self.height as f64),
+            pt(0.0, 1.0),
+        )
+    }
+}
+
+impl Drop for GlTexture {
+    fn drop(&mut self) {
+        unsafe {
+            self.context.delete_texture(self.id);
+        }
+    }
+}
