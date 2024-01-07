@@ -204,11 +204,12 @@ impl View {
 
         match settings.edit_mode {
             EditMode::Brush => {
-                // Immediately start brushing op even if left mouse not down, for the preview.
-                let op = Brushing {
-                    hover_tile: mouse_tile,
-                };
-                return self.handle_brushing(op, input, settings);
+                if input.left_mouse.is_down {
+                    let op = Brushing {
+                        hover_tile: mouse_tile,
+                    };
+                    return self.handle_brushing(op, input, settings);
+                }
             }
         }
 
