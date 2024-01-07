@@ -1,5 +1,5 @@
 use egui::{epaint, load::SizedTexture, Sense, TextureOptions};
-use std::{collections::HashMap, hash::Hash, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, hash::Hash, path::PathBuf, rc::Rc};
 
 use crate::{
     brush::Brush,
@@ -65,7 +65,7 @@ pub struct EguiApp {
 
     view_rect: Rect<i64>,
 
-    gl: Arc<glow::Context>,
+    gl: Rc<glow::Context>,
     view: View,
     mouse_button_states: HashMap<MouseButton, MouseButtonState>,
 

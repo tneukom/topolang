@@ -1,12 +1,6 @@
 use crate::{
     bitmap::Bitmap,
-    math::{
-        affine_map::AffineMap,
-        generic::{CwiseEuclidDivRem, EuclidDivRem},
-        point::Point,
-        rect::Rect,
-        rgba8::Rgba8,
-    },
+    math::{affine_map::AffineMap, generic::EuclidDivRem, point::Point, rect::Rect, rgba8::Rgba8},
     painting::{
         gl_buffer::{GlBuffer, GlBufferTarget, GlVertexArray},
         gl_texture::{Filter, GlTexture},
@@ -16,7 +10,7 @@ use crate::{
 };
 use glow::HasContext;
 use memoffset::offset_of;
-use std::{collections::HashMap, fs::read_to_string, mem::size_of, sync::Arc};
+use std::{collections::HashMap, fs::read_to_string, mem::size_of, rc::Rc};
 
 #[derive(Debug, Clone, Copy)]
 pub struct TileVertex {
@@ -75,7 +69,7 @@ pub struct TilePainter {
     array_buffer: GlBuffer<TileVertex>,
     element_buffer: GlBuffer<u32>,
     vertex_array: GlVertexArray,
-    gl: Arc<glow::Context>,
+    gl: Rc<glow::Context>,
 }
 
 impl TilePainter {
@@ -83,7 +77,7 @@ impl TilePainter {
     const ATLAS_SIZE: usize = 32; // Number of rows and columns in in the atlas
     const ATLAS_RESOLUTION: usize = Self::TILE_SIZE * Self::ATLAS_SIZE;
 
-    pub unsafe fn new(gl: Arc<glow::Context>) -> Self {
+    pub unsafe fn new(gl: Rc<glow::Context>) -> Self {
         let vs_source = read_to_string("resources/shaders/tile.vert").unwrap();
         let fs_source = read_to_string("resources/shaders/tile.frag").unwrap();
         let shader = Shader::from_source(gl.clone(), &vs_source, &fs_source);

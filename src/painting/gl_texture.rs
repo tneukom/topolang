@@ -3,10 +3,10 @@ use crate::{
     math::{affine_map::AffineMap, point::pt},
 };
 use glow::HasContext;
-use std::sync::Arc;
+use std::rc::Rc;
 
 pub struct GlTexture {
-    pub context: Arc<glow::Context>,
+    pub context: Rc<glow::Context>,
     pub id: glow::Texture,
     pub width: usize,
     pub height: usize,
@@ -21,7 +21,7 @@ pub enum Filter {
 
 impl GlTexture {
     pub unsafe fn from_size(
-        context: Arc<glow::Context>,
+        context: Rc<glow::Context>,
         width: usize,
         height: usize,
         filter: Filter,
@@ -53,11 +53,7 @@ impl GlTexture {
     }
 
     /// Bitmap colorspace is assumed to be SRGB
-    pub unsafe fn from_bitmap(
-        context: Arc<glow::Context>,
-        bitmap: &Bitmap,
-        filter: Filter,
-    ) -> Self {
+    pub unsafe fn from_bitmap(context: Rc<glow::Context>, bitmap: &Bitmap, filter: Filter) -> Self {
         let mut texture = Self::from_size(context.clone(), bitmap.width(), bitmap.height(), filter);
         texture.texture_image(bitmap);
         texture

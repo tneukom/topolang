@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, rc::Rc};
 
 use glow::HasContext;
 
@@ -21,13 +21,13 @@ pub struct GlBuffer<T> {
     pub id: glow::Buffer,
     pub target: GlBufferTarget,
 
-    context: Arc<glow::Context>,
+    context: Rc<glow::Context>,
 
     phantom: PhantomData<T>,
 }
 
 impl<T> GlBuffer<T> {
-    pub unsafe fn new(context: Arc<glow::Context>, target: GlBufferTarget) -> GlBuffer<T> {
+    pub unsafe fn new(context: Rc<glow::Context>, target: GlBufferTarget) -> GlBuffer<T> {
         let id = context.create_buffer().expect("Cannot create buffer");
         // context.bind_buffer(target, Some(&id));
         // context.buffer_data_u8(target, &[], glow::STATIC_DRAW);
@@ -69,11 +69,11 @@ impl<T> Drop for GlBuffer<T> {
 
 pub struct GlVertexArray {
     pub id: glow::VertexArray,
-    context: Arc<glow::Context>,
+    context: Rc<glow::Context>,
 }
 
 impl GlVertexArray {
-    pub unsafe fn new(context: Arc<glow::Context>) -> GlVertexArray {
+    pub unsafe fn new(context: Rc<glow::Context>) -> GlVertexArray {
         let id = context
             .create_vertex_array()
             .expect("Cannot create vertex array");

@@ -1,15 +1,11 @@
-use std::sync::Arc;
-
 use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
     math::point::Point,
-    painting::{
-        selection_painter::SelectionPainter,
-        tile_painter::{DrawTile, TilePainter},
-    },
+    painting::{selection_painter::SelectionPainter, tile_painter::TilePainter},
     pixmap::Pixmap,
 };
+use std::rc::Rc;
 
 use super::grid_painter::GridPainter;
 
@@ -22,7 +18,7 @@ pub struct ScenePainter {
 }
 
 impl ScenePainter {
-    pub unsafe fn new(gl: Arc<glow::Context>) -> ScenePainter {
+    pub unsafe fn new(gl: Rc<glow::Context>) -> ScenePainter {
         ScenePainter {
             grid_painter: GridPainter::new(gl.clone()),
             tile_painter: TilePainter::new(gl.clone()),

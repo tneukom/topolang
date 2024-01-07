@@ -1,6 +1,5 @@
 use crate::math::generic::{
-    CwiseAdd, CwiseDiv, CwiseEuclidDivRem, CwiseInv, CwiseMul, CwiseSub, Dot, EuclidDivRem,
-    IntoLossy, Num, SignedNum,
+    CwiseAdd, CwiseDiv, CwiseInv, CwiseMul, CwiseSub, Dot, EuclidDivRem, IntoLossy, Num, SignedNum,
 };
 use num_traits::{real::Real, Inv};
 use std::{
