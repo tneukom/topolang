@@ -16,8 +16,6 @@ pub struct AffineMap<T> {
     pub constant: Point<T>,
 }
 
-pub type AffineMapF = AffineMap<f64>;
-
 impl<T> AffineMap<T> {
     pub const fn new(linear: Matrix2<T>, constant: Point<T>) -> Self {
         Self { linear, constant }

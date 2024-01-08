@@ -1,5 +1,5 @@
 use crate::math::generic::{
-    CwiseAdd, CwiseDiv, CwiseInv, CwiseMul, CwiseSub, Dot, EuclidDivRem, IntoLossy, Num, SignedNum,
+    CwiseDiv, CwiseInv, CwiseMul, Dot, EuclidDivRem, IntoLossy, Num, SignedNum,
 };
 use num_traits::{real::Real, Inv};
 use std::{
@@ -188,44 +188,47 @@ impl<T> From<[T; 2]> for Point<T> {
     }
 }
 
-// impl<T, S> From<[S; 2]> for Point<T>
-// where
-//     T: From<S>,
-// {
-//     fn from(value: [S; 2]) -> Self {
-//         let [x, y] = value;
-//         Self::new(x.into(), y.into())
-//     }
-// }
-
-impl<Lhs, Rhs> Add<Point<Rhs>> for Point<Lhs>
+impl<T> Add for Point<T>
 where
-    Lhs: Add<Rhs>,
+    T: Add<Output = T>,
 {
-    type Output = Point<<Lhs as Add<Rhs>>::Output>;
+    type Output = Point<T>;
 
-    fn add(self, rhs: Point<Rhs>) -> Self::Output {
+    fn add(self, rhs: Point<T>) -> Self::Output {
         Self::Output::new(self.x + rhs.x, self.y + rhs.y)
     }
 }
 
-// impl<Lhs, Rhs> AddAssign<Point<Rhs>> for Point<Lhs>
-// where
-//     Lhs: Add<Rhs, Output = Lhs> + Copy,
-// {
-//     fn add_assign(&mut self, rhs: Point<Rhs>) {
-//         *self = *self + rhs;
-//     }
-// }
-
-impl<Lhs, Rhs> Sub<Point<Rhs>> for Point<Lhs>
+impl<T> Add<T> for Point<T>
 where
-    Lhs: Sub<Rhs>,
+    T: Add<Output = T> + Copy,
 {
-    type Output = Point<<Lhs as Sub<Rhs>>::Output>;
+    type Output = Point<T>;
 
-    fn sub(self, rhs: Point<Rhs>) -> Self::Output {
+    fn add(self, rhs: T) -> Self::Output {
+        Self::Output::new(self.x + rhs, self.y + rhs)
+    }
+}
+
+impl<T> Sub for Point<T>
+where
+    T: Sub<Output = T>,
+{
+    type Output = Point<T>;
+
+    fn sub(self, rhs: Point<T>) -> Self::Output {
         Self::Output::new(self.x - rhs.x, self.y - rhs.y)
+    }
+}
+
+impl<T> Sub<T> for Point<T>
+where
+    T: Sub<Output = T> + Copy,
+{
+    type Output = Point<T>;
+
+    fn sub(self, rhs: T) -> Self::Output {
+        Self::Output::new(self.x - rhs, self.y - rhs)
     }
 }
 
@@ -262,91 +265,73 @@ where
     }
 }
 
-impl<Lhs, Rhs> CwiseAdd<Rhs> for Point<Lhs>
+// impl<T> Mul<T> for Point<T>
+// where
+//     T: Mul<Output = T>,
+// {
+//     type Output = Point<T>
+//
+//     fn mul(self, rhs: Rhs) -> Self::Output {
+//         Self::Output::new(self.x * rhs, self.y * rhs)
+//     }
+// }
+
+/// Right multiplication because Rust cannot handle generic left multiplication
+impl<T> Mul<T> for Point<T>
 where
-    Lhs: Add<Rhs>,
-    Rhs: Copy,
+    T: Mul<Output = T> + Copy,
 {
-    type Output = Point<<Lhs as Add<Rhs>>::Output>;
+    type Output = Point<T>;
 
-    fn cwise_add(self, rhs: Rhs) -> Self::Output {
-        Self::Output::new(self.x + rhs, self.y + rhs)
-    }
-}
-
-impl<Lhs, Rhs> CwiseSub<Rhs> for Point<Lhs>
-where
-    Lhs: Sub<Rhs>,
-    Rhs: Copy,
-{
-    type Output = Point<<Lhs as Sub<Rhs>>::Output>;
-
-    fn cwise_sub(self, rhs: Rhs) -> Self::Output {
-        Self::Output::new(self.x - rhs, self.y - rhs)
-    }
-}
-
-impl<Lhs, Rhs> Mul<Rhs> for Point<Lhs>
-where
-    Lhs: Mul<Rhs>,
-    Rhs: Copy,
-{
-    type Output = Point<<Lhs as Mul<Rhs>>::Output>;
-
-    fn mul(self, rhs: Rhs) -> Self::Output {
+    fn mul(self, rhs: T) -> Self::Output {
         Self::Output::new(self.x * rhs, self.y * rhs)
     }
 }
 
-impl<Lhs, Rhs> Div<Rhs> for Point<Lhs>
-where
-    Lhs: Div<Rhs>,
-    Rhs: Copy,
-{
-    type Output = Point<<Lhs as Div<Rhs>>::Output>;
+// impl<Lhs, Rhs> Div<Rhs> for Point<Lhs>
+// where
+//     Lhs: Div<Rhs>,
+//     Rhs: Copy,
+// {
+//     type Output = Point<<Lhs as Div<Rhs>>::Output>;
+//
+//     fn div(self, rhs: Rhs) -> Self::Output {
+//         Self::Output::new(self.x / rhs, self.y / rhs)
+//     }
+// }
 
-    fn div(self, rhs: Rhs) -> Self::Output {
+impl<T> Div<T> for Point<T>
+where
+    T: Div<Output = T> + Copy,
+{
+    type Output = Point<T>;
+
+    fn div(self, rhs: T) -> Self::Output {
         Self::Output::new(self.x / rhs, self.y / rhs)
     }
 }
 
-impl<Lhs, Rhs> CwiseMul<Point<Rhs>> for Point<Lhs>
+impl<T> CwiseMul<Point<T>> for Point<T>
 where
-    Lhs: Mul<Rhs>,
+    T: Mul<Output = T>,
 {
-    type Output = Point<<Lhs as Mul<Rhs>>::Output>;
+    type Output = Point<T>;
 
-    fn cwise_mul(self, rhs: Point<Rhs>) -> Self::Output {
+    fn cwise_mul(self, rhs: Point<T>) -> Self::Output {
         Self::Output::new(self.x * rhs.x, self.y * rhs.y)
     }
 }
 
-impl<Lhs, Rhs> CwiseDiv<Point<Rhs>> for Point<Lhs>
+impl<T> CwiseDiv<Point<T>> for Point<T>
 where
-    Lhs: Div<Rhs>,
+    T: Div<Output = T>,
 {
-    type Output = Point<<Lhs as Div<Rhs>>::Output>;
+    type Output = Point<T>;
 
-    fn cwise_div(self, rhs: Point<Rhs>) -> Self::Output {
+    fn cwise_div(self, rhs: Point<T>) -> Self::Output {
         Self::Output::new(self.x / rhs.x, self.y / rhs.y)
     }
 }
-
-// TODO: Remove
-// impl<Lhs, Rhs> CwiseEuclidDivRem<Point<Rhs>> for Point<Lhs>
-// where
-//     Lhs: EuclidDivRem<Rhs>,
-// {
-//     type Output = Point<<Lhs as EuclidDivRem<Rhs>>::Output>;
-//
-//     fn cwise_euclid_div(self, rhs: Point<Rhs>) -> Self::Output {
-//         Self::Output::new(self.x.euclid_div(rhs.x), self.y.euclid_div(rhs.y))
-//     }
-//
-//     fn cwise_euclid_rem(self, rhs: Point<Rhs>) -> Self::Output {
-//         Self::Output::new(self.x.euclid_rem(rhs.x), self.y.euclid_rem(rhs.y))
-//     }
-// }
 
 impl<T> EuclidDivRem for Point<T>
 where

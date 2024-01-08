@@ -454,54 +454,50 @@ impl<T: Num> Rect<T> {
 }
 
 /// Right hand Point add
-impl<Lhs, Rhs> Add<Point<Rhs>> for Rect<Lhs>
+impl<T> Add<Point<T>> for Rect<T>
 where
-    Lhs: Add<Rhs>,
-    Rhs: Copy,
+    T: Add<Output = T> + Copy,
 {
-    type Output = Rect<<Lhs as Add<Rhs>>::Output>;
+    type Output = Rect<T>;
 
-    fn add(self, rhs: Point<Rhs>) -> Self::Output {
+    fn add(self, rhs: Point<T>) -> Self::Output {
         Self::Output::new(self.x + rhs.x, self.y + rhs.y)
     }
 }
 
 /// Right hand Point sub
-impl<Lhs, Rhs> Sub<Point<Rhs>> for Rect<Lhs>
+impl<T> Sub<Point<T>> for Rect<T>
 where
-    Lhs: Sub<Rhs>,
-    Rhs: Copy,
+    T: Sub<Output = T> + Copy,
 {
-    type Output = Rect<<Lhs as Sub<Rhs>>::Output>;
+    type Output = Rect<T>;
 
-    fn sub(self, rhs: Point<Rhs>) -> Self::Output {
+    fn sub(self, rhs: Point<T>) -> Self::Output {
         Self::Output::new(self.x - rhs.x, self.y - rhs.y)
     }
 }
 
 /// Right hand scalar mul, panics if rhs <= 0
-impl<Lhs, Rhs> Mul<Rhs> for Rect<Lhs>
+impl<T> Mul<T> for Rect<T>
 where
-    Lhs: Mul<Rhs>,
-    Rhs: Copy + PartialOrd + ConstZero,
+    T: Mul<Output = T> + Copy + PartialOrd + ConstZero,
 {
-    type Output = Rect<<Lhs as Mul<Rhs>>::Output>;
+    type Output = Rect<T>;
 
-    fn mul(self, rhs: Rhs) -> Self::Output {
-        assert!(rhs > Rhs::ZERO);
+    fn mul(self, rhs: T) -> Self::Output {
+        assert!(rhs > T::ZERO);
         Self::Output::new(self.x * rhs, self.y * rhs)
     }
 }
 
 /// Right hand component wise mul with Point, panics if rhs.x <= or rhs.y <= 0
-impl<Lhs, Rhs> CwiseMul<Point<Rhs>> for Rect<Lhs>
+impl<T> CwiseMul<Point<T>> for Rect<T>
 where
-    Lhs: Mul<Rhs>,
-    Rhs: Copy + PartialOrd + ConstZero,
+    T: Mul<Output = T> + Copy + PartialOrd + ConstZero,
 {
-    type Output = Rect<<Lhs as Mul<Rhs>>::Output>;
+    type Output = Rect<T>;
 
-    fn cwise_mul(self, rhs: Point<Rhs>) -> Self::Output {
+    fn cwise_mul(self, rhs: Point<T>) -> Self::Output {
         Self::Output::new(self.x * rhs.x, self.y * rhs.y)
     }
 }

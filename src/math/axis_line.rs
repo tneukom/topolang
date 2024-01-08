@@ -67,14 +67,14 @@ impl<S, T: From<S>> From<[S; 2]> for Span<T> {
     }
 }
 
-impl<Lhs, Rhs> Mul<Rhs> for Span<Lhs>
+/// Right multiplication because Rust cannot handle generic left multiplication
+impl<T> Mul<T> for Span<T>
 where
-    Lhs: Mul<Rhs>,
-    Rhs: Copy,
+    T: Mul<Output = T> + Copy,
 {
-    type Output = Span<<Lhs as Mul<Rhs>>::Output>;
+    type Output = Span<T>;
 
-    fn mul(self, rhs: Rhs) -> Self::Output {
+    fn mul(self, rhs: T) -> Self::Output {
         Span {
             start: self.start * rhs,
             stop: self.stop * rhs,
@@ -82,14 +82,13 @@ where
     }
 }
 
-impl<Lhs, Rhs> Add<Rhs> for Span<Lhs>
+impl<T> Add<T> for Span<T>
 where
-    Lhs: Add<Rhs>,
-    Rhs: Copy,
+    T: Add<Output = T> + Copy,
 {
-    type Output = Span<<Lhs as Add<Rhs>>::Output>;
+    type Output = Span<T>;
 
-    fn add(self, rhs: Rhs) -> Self::Output {
+    fn add(self, rhs: T) -> Self::Output {
         Span {
             start: self.start + rhs,
             stop: self.stop + rhs,
@@ -97,14 +96,13 @@ where
     }
 }
 
-impl<Lhs, Rhs> Sub<Rhs> for Span<Lhs>
+impl<T> Sub<T> for Span<T>
 where
-    Lhs: Sub<Rhs>,
-    Rhs: Copy,
+    T: Sub<Output = T> + Copy,
 {
-    type Output = Span<<Lhs as Sub<Rhs>>::Output>;
+    type Output = Span<T>;
 
-    fn sub(self, rhs: Rhs) -> Self::Output {
+    fn sub(self, rhs: T) -> Self::Output {
         Span {
             start: self.start - rhs,
             stop: self.stop - rhs,
@@ -225,14 +223,13 @@ impl<T: Num> AxisArrow<T> {
     }
 }
 
-impl<Lhs, Rhs> CwiseMul<Point<Rhs>> for AxisArrow<Lhs>
+impl<T> CwiseMul<Point<T>> for AxisArrow<T>
 where
-    Lhs: Mul<Rhs>,
-    Rhs: Copy,
+    T: Mul<Output = T> + Copy,
 {
-    type Output = AxisArrow<<Lhs as Mul<Rhs>>::Output>;
+    type Output = AxisArrow<T>;
 
-    fn cwise_mul(self, rhs: Point<Rhs>) -> Self::Output {
+    fn cwise_mul(self, rhs: Point<T>) -> Self::Output {
         match self {
             Self::Vertical { x, y } => Self::Output::Vertical {
                 x: x * rhs.x,
@@ -246,14 +243,13 @@ where
     }
 }
 
-impl<Lhs, Rhs> Add<Point<Rhs>> for AxisArrow<Lhs>
+impl<T> Add<Point<T>> for AxisArrow<T>
 where
-    Lhs: Add<Rhs>,
-    Rhs: Copy,
+    T: Add<Output = T> + Copy,
 {
-    type Output = AxisArrow<<Lhs as Add<Rhs>>::Output>;
+    type Output = AxisArrow<T>;
 
-    fn add(self, rhs: Point<Rhs>) -> Self::Output {
+    fn add(self, rhs: Point<T>) -> Self::Output {
         match self {
             Self::Vertical { x, y } => Self::Output::Vertical {
                 x: x + rhs.x,

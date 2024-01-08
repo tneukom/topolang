@@ -196,41 +196,38 @@ impl Interval<f64> {
 }
 
 /// Right hand scalar add
-impl<Lhs, Rhs> Add<Rhs> for Interval<Lhs>
+impl<T> Add<T> for Interval<T>
 where
-    Lhs: Add<Rhs>,
-    Rhs: Copy,
+    T: Add<Output = T> + Copy,
 {
-    type Output = Interval<<Lhs as Add<Rhs>>::Output>;
+    type Output = Interval<T>;
 
-    fn add(self, rhs: Rhs) -> Self::Output {
+    fn add(self, rhs: T) -> Self::Output {
         Self::Output::new(self.low + rhs, self.high + rhs)
     }
 }
 
 /// Right hand scalar sub
-impl<Lhs, Rhs> Sub<Rhs> for Interval<Lhs>
+impl<T> Sub<T> for Interval<T>
 where
-    Lhs: Sub<Rhs>,
-    Rhs: Copy,
+    T: Sub<Output = T> + Copy,
 {
-    type Output = Interval<<Lhs as Sub<Rhs>>::Output>;
+    type Output = Interval<T>;
 
-    fn sub(self, rhs: Rhs) -> Self::Output {
+    fn sub(self, rhs: T) -> Self::Output {
         Self::Output::new(self.low - rhs, self.high - rhs)
     }
 }
 
 /// Right hand scalar mul, panics if rhs <= 0
-impl<Lhs, Rhs> Mul<Rhs> for Interval<Lhs>
+impl<T> Mul<T> for Interval<T>
 where
-    Lhs: Mul<Rhs>,
-    Rhs: Copy + PartialOrd + ConstZero,
+    T: Mul<Output = T> + Copy + PartialOrd + ConstZero,
 {
-    type Output = Interval<<Lhs as Mul<Rhs>>::Output>;
+    type Output = Interval<T>;
 
-    fn mul(self, rhs: Rhs) -> Self::Output {
-        assert!(rhs > Rhs::ZERO);
+    fn mul(self, rhs: T) -> Self::Output {
+        assert!(rhs > T::ZERO);
         Self::Output::new(self.low * rhs, self.high * rhs)
     }
 }
