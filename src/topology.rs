@@ -10,8 +10,9 @@ use crate::{
     utils::{UndirectedEdge, UndirectedGraph},
 };
 use itertools::Itertools;
+use petgraph::visit::Topo;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     fmt,
     fmt::{Display, Formatter},
     ops::{Index, IndexMut},
@@ -19,7 +20,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Seam {
     pub start: Side,
     pub stop: Side,
@@ -93,15 +94,13 @@ impl RegionKey {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Border {
     /// First side is minimum side of cycle
     pub cycle: Vec<Side>,
 
     /// Start side of first seam is first side in cycle
     pub seams: Vec<Seam>,
-
-    pub left: RegionKey,
 
     pub is_outer: bool,
 }
@@ -121,7 +120,7 @@ impl Border {
 }
 
 /// The boundary is counter clockwise. Is mutable so color can be changed.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Region {
     pub color: Rgba8,
     /// First item is outer Border
@@ -130,16 +129,25 @@ pub struct Region {
     /// Contains at least one pixel
     pub interior: BTreeSet<Pixel>,
 
-    /// If the region is not closed left_of(boundary) is not defined otherwise
-    /// left_of(boundary) = interior
-    pub closed: bool,
-
+    // /// If the region is not closed left_of(boundary) is not defined otherwise
+    // /// left_of(boundary) = interior
+    // pub closed: bool,
     pub bounds: Rect<i64>,
 }
 
 impl Region {
     pub fn iter_seams(&self) -> impl Iterator<Item = &Seam> {
         self.boundary.iter().flat_map(|border| border.seams.iter())
+    }
+
+    /// Any `pixel` in `pixels` either
+    pub fn touches(&self, pixmap: &Pixmap) -> bool {
+        pixmap.keys().any(|&pixel| {
+            pixel
+                .touching()
+                .iter()
+                .any(|touched| self.interior.contains(touched))
+        })
     }
 }
 
@@ -230,7 +238,6 @@ impl Topology {
                 let border = Border {
                     cycle,
                     seams,
-                    left: region_key,
                     is_outer: i_border == 0,
                 };
                 boundary.push(border);
@@ -245,7 +252,7 @@ impl Topology {
                 color,
                 bounds,
                 interior: component.interior,
-                closed: component.closed,
+                // closed: component.closed,
             };
             regions.insert(region_key, region);
         }
@@ -279,32 +286,35 @@ impl Topology {
         Ok(Self::from_bitmap(&bitmap))
     }
 
-    // pub fn remove_region(&mut self, key: RegionKey) -> Option<Region> {
-    //     if let Some(region) = self.regions.remove(&key) {
-    //         for seam in region.iter_seams() {
-    //             self.seam_indices.remove(seam)
-    //         }
-    //         Some(region)
-    //     } else {
-    //         None
-    //     }
-    // }
-    //
-    // /// Undefined behaviour if region overlaps existing regions
-    // pub fn insert_region(&mut self, key: RegionKey, region: Region) {
-    //     assert!(!self.regions.contains_key(&key));
-    //
-    //     for (i_border, border) in region.boundary.iter().enumerate() {
-    //         for (i_seam, seam) in border.seams.iter().enumerate() {
-    //             assert!(!self.seam_indices.contains_key(seam));
-    //             let seam_index = SeamIndex::new(key, i_border, i_seam);
-    //             self.seam_indices.insert(*seam, seam_index);
-    //         }
-    //     }
-    //
-    //     let previous_entry = self.regions.insert(key, region);
-    //     assert!(previous_entry.is_none());
-    // }
+    fn remove_seam(&mut self, seam: &Seam) -> Option<SeamIndex> {
+        self.seam_indices.remove(&seam.start)
+    }
+
+    pub fn remove_region(&mut self, key: RegionKey) -> Option<Region> {
+        if let Some(region) = self.regions.remove(&key) {
+            for seam in region.iter_seams() {
+                self.remove_seam(seam);
+            }
+            Some(region)
+        } else {
+            None
+        }
+    }
+
+    /// Undefined behaviour if region overlaps existing regions
+    pub fn insert_region(&mut self, region: Region) {
+        let region_key = RegionKey::unused();
+
+        for (i_border, border) in region.boundary.iter().enumerate() {
+            for (i_seam, seam) in border.seams.iter().enumerate() {
+                let seam_index = SeamIndex::new(region_key, i_border, i_seam);
+                let existing = self.seam_indices.insert(seam.start, seam_index);
+                assert!(existing.is_none());
+            }
+        }
+
+        self.regions.insert(region_key, region);
+    }
 
     /// Upper bound is exclusive, lower bound inclusive
     pub fn bounds(&self) -> Rect<i64> {
@@ -513,6 +523,40 @@ impl Topology {
     //     }
     // }
 
+    pub fn blit(&mut self, pixmap: &Pixmap) {
+        // Find regions that are touched by `pixels`
+        let touched_regions: Vec<_> = self
+            .regions
+            .iter()
+            .filter(|(_, region)| region.touches(pixmap))
+            .map(|(&key, _)| key)
+            .collect();
+
+        // Extract these regions into a Pixmap
+        let mut extracted_pixmap = Pixmap::new();
+        for region_key in touched_regions {
+            let region = self.remove_region(region_key).unwrap();
+            extracted_pixmap.fill_region(&region);
+        }
+
+        // Blit pixels to the Pixmap
+        extracted_pixmap.blit(pixmap);
+
+        // Convert Pixmap back to Topology
+        let topology = Topology::new(&extracted_pixmap);
+
+        // Merge topology with self
+        for region in topology.regions.into_values() {
+            self.insert_region(region);
+        }
+    }
+
+    pub fn fallback_blit(&mut self, pixmap: &Pixmap) {
+        let mut self_pixmap = self.to_pixmap();
+        self_pixmap.blit(pixmap);
+        *self = Topology::new(&self_pixmap);
+    }
+
     pub fn rgb_seam_graph(&self) -> UndirectedGraph<Option<Rgba8>> {
         let mut edges = BTreeSet::new();
         for seam in self.iter_seams() {
@@ -522,6 +566,15 @@ impl Topology {
         }
 
         edges
+    }
+}
+
+/// Warning: Slow
+impl PartialEq for Topology {
+    fn eq(&self, other: &Self) -> bool {
+        let self_regions: HashSet<_> = self.regions.values().collect();
+        let other_regions: HashSet<_> = other.regions.values().collect();
+        self_regions == other_regions
     }
 }
 
@@ -630,8 +683,10 @@ pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -
 #[cfg(test)]
 pub mod test {
     use crate::{
+        bitmap::Bitmap,
         math::rgba8::Rgba8,
-        topology::Topology,
+        pixmap::Pixmap,
+        topology::{Region, Topology},
         utils::{UndirectedEdge, UndirectedGraph},
     };
 
@@ -744,5 +799,52 @@ pub mod test {
             (Rgba8::RED, Rgba8::TRANSPARENT),
         ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
+    }
+
+    fn print_region(region: &Region, indent: &str) {
+        println!("{indent}color: {}", region.color);
+        println!("{indent}color: {:?}", region.bounds);
+    }
+
+    fn assert_blit(name: &str) {
+        let folder = format!("test_resources/topology/blit/{name}");
+
+        let mut base = Topology::from_bitmap_path(format!("{folder}/base.png")).unwrap();
+
+        let blit = Pixmap::from_bitmap_path(format!("{folder}/blit.png"))
+            .unwrap()
+            .without_color(Rgba8::TRANSPARENT);
+
+        let mut expected_result = base.clone();
+        expected_result.blit(&blit);
+
+        base.blit(&blit);
+
+        assert_eq!(base, expected_result);
+    }
+
+    #[test]
+    fn blit_a() {
+        assert_blit("a");
+    }
+
+    #[test]
+    fn blit_b() {
+        assert_blit("b");
+    }
+
+    #[test]
+    fn blit_c() {
+        assert_blit("c");
+    }
+
+    #[test]
+    fn blit_d() {
+        assert_blit("d");
+    }
+
+    #[test]
+    fn blit_e() {
+        assert_blit("e");
     }
 }

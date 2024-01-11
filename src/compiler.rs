@@ -70,10 +70,12 @@ impl Compiler {
             let rule = Rule::new(&before_pixmap, &after_pixmap)?;
             rules.push(rule);
 
-            // Clear rule frame
+            // Clear the frame of the compiled rule from the world
             for &region_key in self.rule_frame.iter_region_keys() {
                 let phi_region = &world[phi[region_key]];
-                world_pixmap.fill(Rgba8::TRANSPARENT, &phi_region.interior);
+                for &pixel in &phi_region.interior {
+                    world_pixmap.set(pixel, Rgba8::TRANSPARENT);
+                }
             }
         }
 

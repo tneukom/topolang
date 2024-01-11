@@ -27,7 +27,9 @@ impl<T> GridPoint<T> {
             _grid_type: PhantomData::default(),
         }
     }
+}
 
+impl<T: Copy + Eq> GridPoint<T> {
     pub fn point(&self) -> Point<i64> {
         Point::new(self.x, self.y)
     }
@@ -55,6 +57,24 @@ impl<T> GridPoint<T> {
             Direction::Up => self.up(),
             Direction::Down => self.down(),
         }
+    }
+
+    /// self is a neighbor of other lhs.is_neighbor(rhs) <=> rhs.is_neighbor(lhs)
+    pub fn is_neighbor(self, other: Self) -> bool {
+        self.up() == other || self.left() == other || self.down() == other || self.right() == other
+    }
+
+    pub fn neighbors(self) -> [Self; 4] {
+        [self.left(), self.down(), self.right(), self.up()]
+    }
+
+    pub fn touches(self, other: Self) -> bool {
+        self == other || self.is_neighbor(other)
+    }
+
+    /// self + neighbors
+    pub fn touching(self) -> [Self; 5] {
+        [self, self.left(), self.down(), self.right(), self.up()]
     }
 
     pub fn up_left(self) -> Self {

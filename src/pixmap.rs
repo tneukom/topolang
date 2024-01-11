@@ -6,7 +6,7 @@ use crate::{
         rect::{Rect, RectBounds},
         rgba8::Rgba8,
     },
-    topology::Border,
+    topology::{Border, Region},
 };
 use std::{
     collections::{btree_map, BTreeMap},
@@ -127,9 +127,15 @@ impl Pixmap {
         Self { map }
     }
 
-    pub fn fill<'a>(&mut self, color: Rgba8, pixels: impl IntoIterator<Item = &'a Pixel>) {
-        for &pixel in pixels {
-            self.set(pixel, color);
+    pub fn fill_region(&mut self, region: &Region) {
+        for &pixel in &region.interior {
+            self.set(pixel, region.color);
+        }
+    }
+
+    pub fn blit(&mut self, other: &Pixmap) {
+        for (&pixel, &color) in other {
+            self.set(pixel, color)
         }
     }
 }
