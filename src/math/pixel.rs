@@ -290,6 +290,21 @@ impl Side {
     pub fn undirected_equals(&self, other: &Side) -> bool {
         self == other || self.reversed() == *other
     }
+
+    /// See docs/border_crossings.jpg
+    pub fn next_forward(&self) -> Side {
+        Self::new(self.stop_vertex(), self.direction )
+    }
+
+    /// See docs/border_crossings.jpg
+    pub fn next_left(&self) -> Side {
+        Self::new(self.stop_vertex(), self.direction.rotate_ccw())
+    }
+
+    /// See docs/border_crossings.jpg
+    pub fn next_right(&self) -> Side {
+        Self::new(self.stop_vertex(), self.direction.rotate_cw())
+    }
 }
 
 impl Display for Side {

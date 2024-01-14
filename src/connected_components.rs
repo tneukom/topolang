@@ -2,21 +2,29 @@ use crate::{
     math::{
         direction::Direction,
         pixel::{Pixel, Side},
-        rgba8::Rgba8,
     },
     pixmap::Pixmap,
 };
 use std::collections::BTreeSet;
-
-pub enum Interior {
-    Bounded(BTreeSet<Pixel>),
-    Unbounded(),
-}
+use crate::math::rgba8::Rgba8;
 
 pub struct ConnectedComponent {
+    /// Cannot be empty
     pub interior: BTreeSet<Pixel>,
+
+    /// Cannot be empty
     pub sides: BTreeSet<Side>,
     pub closed: bool,
+}
+
+impl ConnectedComponent {
+    pub fn arbitrary_interior(&self) -> Pixel {
+        *self.interior.first().unwrap()
+    }
+
+    pub fn arbitrary_side(&self) -> Side {
+        *self.sides.first().unwrap()
+    }
 }
 
 pub enum SideClass {
@@ -110,6 +118,18 @@ pub fn color_components(pixels: &Pixmap) -> Vec<ColorComponent> {
 
     color_components
 }
+
+// pub fn component_map<'a>(components: impl Iterator<Item = &'a ConnectedComponent>) -> BTreeMap<Pixel, usize> {
+//     let mut map = BTreeMap::new();
+//     for (i, component) in components.enumerate() {
+//         for &pixel in &component.interior {
+//             let before = map.insert(pixel, i);
+//             assert!(before.is_none())
+//         }
+//     }
+//
+//     map
+// }
 
 /// Works if `boundary` is the boundary of a connected set of pixels, can contain holes.
 fn flood_fill_border(seed: Pixel, boundary: &BTreeSet<Side>) -> ConnectedComponent {

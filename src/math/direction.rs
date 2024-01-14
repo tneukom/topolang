@@ -84,6 +84,24 @@ impl Direction {
             Self::Down => '↓',
         }
     }
+
+    pub fn rotate_cw(self) -> Self {
+        match self {
+            Self::Left => Self::Up,
+            Self::Right => Self::Down,
+            Self::Up => Self::Right,
+            Self::Down => Self::Left
+        }
+    }
+
+    pub fn rotate_ccw(self) -> Self {
+        match self {
+            Self::Left => Self::Down,
+            Self::Right => Self::Up,
+            Self::Up => Self::Left,
+            Self::Down => Self::Right
+        }
+    }
 }
 
 impl ReflectEnum for Direction {

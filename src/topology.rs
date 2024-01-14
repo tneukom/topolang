@@ -10,7 +10,6 @@ use crate::{
     utils::{UndirectedEdge, UndirectedGraph},
 };
 use itertools::Itertools;
-use petgraph::visit::Topo;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     fmt,
@@ -19,6 +18,8 @@ use std::{
     path::Path,
     sync::atomic::{AtomicUsize, Ordering},
 };
+use std::collections::btree_map::Entry;
+use arrayvec::ArrayVec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Seam {
@@ -217,12 +218,12 @@ pub struct Topology {
 
 impl Topology {
     pub fn new(pixmap: &Pixmap) -> Self {
-        let connected_components = color_components(pixmap);
+        let color_components = color_components(pixmap);
 
         let mut regions: BTreeMap<RegionKey, Region> = BTreeMap::new();
         let mut seam_indices: BTreeMap<Side, SeamIndex> = BTreeMap::new();
 
-        for ColorComponent { component, color } in connected_components {
+        for ColorComponent { component, color } in color_components {
             let region_key = RegionKey::unused();
             // Each cycle in the sides is a border
             let mut boundary = Vec::new();
@@ -618,19 +619,51 @@ impl Display for Topology {
     }
 }
 
+// pub fn split_boundary_into_seams(
+//     boundary: &Vec<Side>,
+//     component_map: BTreeMap<Pixel, usize>,
+// ) -> Vec<Vec<Side>> {
+//     // Each group of sides has a constant right side
+//     let groups: HashMap<_, _> = boundary
+//         .into_iter()
+//         .into_group_map_by(|side| component_map.get(&side.right_pixel()));
+//
+//     // We still need to split each seam into connected paths
+//     for (_, group) in groups {
+//
+//     }
+// }
+
 /// Extract the side cycle that starts (and stops) at start_corner
-pub fn extract_cycle(side_graph: &mut BTreeMap<Vertex, Side>, mut corner: Vertex) -> Vec<Side> {
-    let mut cycle = Vec::new();
-    while let Some(side) = side_graph.remove(&corner) {
-        cycle.push(side);
-        corner = side.stop_vertex();
+pub fn extract_cycle(side_graph: &mut BTreeMap<Vertex, ArrayVec<Side, 2>>, mut vertex: Vertex) -> Vec<Side> {
+    let mut cycle: Vec<Side> = Vec::new();
+
+    loop {
+        let Entry::Occupied(mut occupied) = side_graph.entry(vertex) else {
+            panic!();
+        };
+
+        let next_side = if occupied.get().len() == 2 {
+            // We found a crossing, next side to the right (see docs/border_crossings.jpg)
+            let next_side = cycle.last().unwrap().next_right();
+            // Remove next_side from outgoing_sides
+            let outgoing_sides = occupied.get_mut();
+            outgoing_sides.retain(|side| side != &next_side);
+            assert_eq!(outgoing_sides.len(), 1);
+            next_side
+        } else if occupied.get().len() == 1 {
+            occupied.remove().pop().unwrap()
+        } else {
+            panic!();
+        };
+
+        vertex = next_side.stop_vertex();
+        cycle.push(next_side);
+
+        if vertex == cycle.first().unwrap().start_vertex() {
+            return cycle;
+        }
     }
-    assert_eq!(
-        cycle.first().unwrap().start_vertex(),
-        cycle.last().unwrap().stop_vertex(),
-        "borders with gaps are not allowed"
-    );
-    cycle
 }
 
 /// Split a set of sides into cycles. The start point of every cycle is its minimum
@@ -639,15 +672,15 @@ pub fn extract_cycle(side_graph: &mut BTreeMap<Vertex, Side>, mut corner: Vertex
 /// first cycle is the outer cycle.
 pub fn split_into_cycles<'a>(sides: impl IntoIterator<Item = &'a Side>) -> Vec<Vec<Side>> {
     // Maps corner to side that starts at the corner
-    let mut side_graph: BTreeMap<Vertex, Side> = sides
-        .into_iter()
-        .map(|&side| (side.start_vertex(), side))
-        .collect();
+    let mut side_graph: BTreeMap<Vertex, ArrayVec<Side, 2>> = BTreeMap::new();
+
+    for &side in sides {
+        side_graph.entry(side.start_vertex()).or_default().push(side);
+    }
 
     let mut cycles = Vec::new();
-
-    while let Some((&corner, _)) = side_graph.first_key_value() {
-        let cycle = extract_cycle(&mut side_graph, corner);
+    while let Some((&vertex, _)) = side_graph.first_key_value() {
+        let cycle = extract_cycle(&mut side_graph, vertex);
         cycles.push(cycle);
     }
 
@@ -683,7 +716,6 @@ pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -
 #[cfg(test)]
 pub mod test {
     use crate::{
-        bitmap::Bitmap,
         math::rgba8::Rgba8,
         pixmap::Pixmap,
         topology::{Region, Topology},
@@ -748,6 +780,12 @@ pub mod test {
             (Rgba8::RED, Rgba8::TRANSPARENT),
         ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
+    }
+
+    #[test]
+    fn image_2c() {
+        let topology = load_topology("2c.png");
+        assert_eq!(topology.regions.len(), 3);
     }
 
     #[test]
