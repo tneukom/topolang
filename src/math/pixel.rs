@@ -1,71 +1,174 @@
-/// https://en.wikipedia.org/wiki/Regular_grid
-/// Vertices,
-/// Elements (Cells) are Pixels,
-/// Sides
-use crate::math::{
-    direction::{DiagonalDirection, Direction},
-    point::Point,
-};
+/// See pixel_pattern.jpg, sides_and_corners.jpg
+use crate::math::point::Point;
 use std::{
     fmt::{Debug, Display, Formatter},
-    marker::PhantomData,
-    ops::{Add, Sub},
+    ops::Add,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct GridPoint<T> {
-    pub x: i64,
-    pub y: i64,
-    _grid_type: PhantomData<T>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum SideName {
+    Top,
+    Left,
+    BottomLeft,
+    Bottom,
+    Right,
+    TopRight,
 }
 
-impl<T> GridPoint<T> {
-    pub fn new(x: i64, y: i64) -> Self {
-        Self {
-            x,
-            y,
-            _grid_type: PhantomData::default(),
+impl SideName {
+    pub const fn opposite(self) -> Self {
+        match self {
+            Self::Top => Self::Bottom,
+            Self::Left => Self::Right,
+            Self::BottomLeft => Self::TopRight,
+            Self::Bottom => Self::Top,
+            Self::Right => Self::Left,
+            Self::TopRight => Self::BottomLeft,
         }
     }
+
+    pub const fn next_ccw(self) -> Self {
+        match self {
+            Self::Top => Self::Left,
+            Self::Left => Self::BottomLeft,
+            Self::BottomLeft => Self::Bottom,
+            Self::Bottom => Self::Right,
+            Self::Right => Self::TopRight,
+            Self::TopRight => Self::Top,
+        }
+    }
+
+    pub fn unicode_symbol(self) -> char {
+        match self {
+            SideName::Top => '↑',
+            SideName::Left => '←',
+            SideName::BottomLeft => '↙',
+            SideName::Bottom => '↓',
+            SideName::Right => '→',
+            SideName::TopRight => '↗',
+        }
+    }
+
+    pub const ALL: [SideName; 6] = [
+        Self::Top,
+        Self::Left,
+        Self::BottomLeft,
+        Self::Bottom,
+        Self::Right,
+        Self::TopRight,
+    ];
 }
 
-impl<T: Copy + Eq> GridPoint<T> {
-    pub fn point(&self) -> Point<i64> {
+/// Each pixel is connected to its top, left, bottom, right and bottom-left, top-right neighbors,
+/// see docs/pixel_pattern.jpg and
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Pixel {
+    pub x: i64,
+    pub y: i64,
+}
+
+impl Pixel {
+    pub const fn new(x: i64, y: i64) -> Self {
+        Self { x, y }
+    }
+
+    pub const fn point(self) -> Point<i64> {
         Point::new(self.x, self.y)
     }
 
-    pub fn left(self) -> Self {
-        Self::new(self.x - 1, self.y)
+    pub fn containing(p: Point<f64>) -> Self {
+        let i64_p = p.floor().cwise_into_lossy::<i64>();
+        Self::new(i64_p.x, i64_p.y)
     }
 
-    pub fn right(self) -> Self {
-        Self::new(self.x + 1, self.y)
-    }
-
-    pub fn up(self) -> Self {
+    pub const fn top_neighbor(self) -> Self {
         Self::new(self.x, self.y - 1)
     }
 
-    pub fn down(self) -> Self {
+    pub const fn left_neighbor(self) -> Self {
+        Self::new(self.x - 1, self.y)
+    }
+
+    pub const fn bottom_left_neighbor(self) -> Self {
+        Self::new(self.x - 1, self.y + 1)
+    }
+
+    pub const fn bottom_neighbor(self) -> Self {
         Self::new(self.x, self.y + 1)
     }
 
-    pub fn neighbor(self, direction: Direction) -> Self {
-        match direction {
-            Direction::Left => self.left(),
-            Direction::Right => self.right(),
-            Direction::Up => self.up(),
-            Direction::Down => self.down(),
+    pub const fn right_neighbor(self) -> Self {
+        Self::new(self.x + 1, self.y)
+    }
+
+    pub const fn top_right_neighbor(self) -> Self {
+        Self::new(self.x + 1, self.y - 1)
+    }
+
+    pub const fn neighbor(self, side: SideName) -> Self {
+        match side {
+            SideName::Top => self.top_neighbor(),
+            SideName::Left => self.left_neighbor(),
+            SideName::BottomLeft => self.bottom_left_neighbor(),
+            SideName::Bottom => self.bottom_neighbor(),
+            SideName::Right => self.right_neighbor(),
+            SideName::TopRight => self.top_right_neighbor(),
         }
+    }
+
+    pub const fn neighbors(self) -> [Self; 6] {
+        [
+            self.top_neighbor(),
+            self.left_neighbor(),
+            self.bottom_left_neighbor(),
+            self.bottom_neighbor(),
+            self.right_neighbor(),
+            self.top_right_neighbor(),
+        ]
+    }
+
+    pub const fn top_side(self) -> Side {
+        Side::new(self, SideName::Top)
+    }
+
+    pub const fn left_side(self) -> Side {
+        Side::new(self, SideName::Left)
+    }
+
+    pub const fn bottom_left_side(self) -> Side {
+        Side::new(self, SideName::BottomLeft)
+    }
+
+    pub const fn bottom_side(self) -> Side {
+        Side::new(self, SideName::Bottom)
+    }
+
+    pub const fn right_side(self) -> Side {
+        Side::new(self, SideName::Right)
+    }
+
+    pub const fn top_right_side(self) -> Side {
+        Side::new(self, SideName::TopRight)
+    }
+
+    pub const fn side_ccw(self, side_name: SideName) -> Side {
+        Side::new(self, side_name)
+    }
+
+    pub const fn sides_ccw(self) -> [Side; 6] {
+        [
+            self.top_side(),
+            self.left_side(),
+            self.bottom_left_side(),
+            self.bottom_side(),
+            self.right_side(),
+            self.top_right_side(),
+        ]
     }
 
     /// self is a neighbor of other lhs.is_neighbor(rhs) <=> rhs.is_neighbor(lhs)
     pub fn is_neighbor(self, other: Self) -> bool {
-        self.up() == other || self.left() == other || self.down() == other || self.right() == other
-    }
-
-    pub fn neighbors(self) -> [Self; 4] {
-        [self.left(), self.down(), self.right(), self.up()]
+        self.neighbors().iter().any(|&neighbor| neighbor == other)
     }
 
     pub fn touches(self, other: Self) -> bool {
@@ -73,153 +176,31 @@ impl<T: Copy + Eq> GridPoint<T> {
     }
 
     /// self + neighbors
-    pub fn touching(self) -> [Self; 5] {
-        [self, self.left(), self.down(), self.right(), self.up()]
-    }
-
-    pub fn up_left(self) -> Self {
-        Self::new(self.x - 1, self.y - 1)
-    }
-
-    pub fn up_right(self) -> Self {
-        Self::new(self.x + 1, self.y - 1)
-    }
-
-    pub fn down_left(self) -> Self {
-        Self::new(self.x - 1, self.y + 1)
-    }
-
-    pub fn down_right(self) -> Self {
-        Self::new(self.x + 1, self.y + 1)
-    }
-
-    pub fn diagonal_neighbor(self, direction: DiagonalDirection) -> Self {
-        match direction {
-            DiagonalDirection::UpLeft => self.up_left(),
-            DiagonalDirection::UpRight => self.up_right(),
-            DiagonalDirection::DownLeft => self.down_left(),
-            DiagonalDirection::DownRight => self.down_right(),
-        }
-    }
-}
-
-impl<T> From<Point<i64>> for GridPoint<T> {
-    fn from(value: Point<i64>) -> Self {
-        GridPoint::new(value.x, value.y)
-    }
-}
-
-impl<T> Add<Point<i64>> for GridPoint<T> {
-    type Output = GridPoint<T>;
-
-    fn add(self, rhs: Point<i64>) -> Self::Output {
-        GridPoint::new(self.x + rhs.x, self.y + rhs.y)
-    }
-}
-
-impl<T> Sub<GridPoint<T>> for GridPoint<T> {
-    type Output = Point<i64>;
-
-    fn sub(self, rhs: GridPoint<T>) -> Self::Output {
-        Point::new(self.x - rhs.x, self.y - rhs.y)
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialOrd, PartialEq, Ord, Eq, Hash)]
-pub struct PixelGrid {}
-
-#[derive(Clone, Copy, Debug, PartialOrd, PartialEq, Ord, Eq, Hash)]
-pub struct VertexGrid {}
-
-pub type Pixel = GridPoint<PixelGrid>;
-
-pub type Vertex = GridPoint<VertexGrid>;
-
-impl Pixel {
-    pub fn top_left_corner(self) -> Vertex {
-        Vertex::new(self.x, self.y)
-    }
-
-    pub fn top_right_corner(self) -> Vertex {
-        Vertex::new(self.x + 1, self.y)
-    }
-
-    pub fn bottom_left_corner(self) -> Vertex {
-        Vertex::new(self.x, self.y + 1)
-    }
-
-    pub fn bottom_right_corner(self) -> Vertex {
-        Vertex::new(self.x + 1, self.y + 1)
-    }
-
-    pub fn corner(self, direction: DiagonalDirection) -> Vertex {
-        match direction {
-            DiagonalDirection::UpLeft => self.top_left_corner(),
-            DiagonalDirection::UpRight => self.top_right_corner(),
-            DiagonalDirection::DownLeft => self.bottom_left_corner(),
-            DiagonalDirection::DownRight => self.bottom_right_corner(),
-        }
-    }
-
-    pub fn left_side_ccw(self) -> Side {
-        Side::new(self.top_left_corner(), Direction::Down)
-    }
-
-    pub fn bottom_side_ccw(self) -> Side {
-        Side::new(self.bottom_left_corner(), Direction::Right)
-    }
-
-    pub fn right_side_ccw(self) -> Side {
-        Side::new(self.bottom_right_corner(), Direction::Up)
-    }
-
-    pub fn top_side_ccw(self) -> Side {
-        Side::new(self.top_right_corner(), Direction::Left)
-    }
-
-    pub fn side_ccw(self, direction: Direction) -> Side {
-        match direction {
-            Direction::Left => self.left_side_ccw(),
-            Direction::Right => self.right_side_ccw(),
-            Direction::Up => self.top_side_ccw(),
-            Direction::Down => self.bottom_side_ccw(),
-        }
-    }
-
-    pub fn sides_ccw(self) -> [Side; 4] {
+    pub fn touching(self) -> [Self; 7] {
+        // TODO: Would be better if there was an array concat
         [
-            self.left_side_ccw(),
-            self.bottom_side_ccw(),
-            self.right_side_ccw(),
-            self.top_side_ccw(),
+            self,
+            self.top_neighbor(),
+            self.left_neighbor(),
+            self.bottom_left_neighbor(),
+            self.bottom_neighbor(),
+            self.right_neighbor(),
+            self.top_right_neighbor(),
         ]
     }
 }
 
-impl Vertex {
-    pub fn top_left_pixel(self) -> Pixel {
-        Pixel::new(self.x - 1, self.y - 1)
+impl From<Point<i64>> for Pixel {
+    fn from(value: Point<i64>) -> Self {
+        Pixel::new(value.x, value.y)
     }
+}
 
-    pub fn top_right_pixel(self) -> Pixel {
-        Pixel::new(self.x, self.y - 1)
-    }
+impl Add<Point<i64>> for Pixel {
+    type Output = Pixel;
 
-    pub fn bottom_left_pixel(self) -> Pixel {
-        Pixel::new(self.x - 1, self.y)
-    }
-
-    pub fn bottom_right_pixel(self) -> Pixel {
-        Pixel::new(self.x, self.y)
-    }
-
-    pub fn neighbor_pixel(self, direction: DiagonalDirection) -> Pixel {
-        match direction {
-            DiagonalDirection::UpLeft => self.top_left_pixel(),
-            DiagonalDirection::UpRight => self.top_right_pixel(),
-            DiagonalDirection::DownLeft => self.bottom_left_pixel(),
-            DiagonalDirection::DownRight => self.bottom_right_pixel(),
-        }
+    fn add(self, rhs: Point<i64>) -> Self::Output {
+        Pixel::new(self.x + rhs.x, self.y + rhs.y)
     }
 }
 
@@ -235,75 +216,46 @@ impl Debug for Pixel {
     }
 }
 
-impl Display for Vertex {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Corner({}, {})", self.x, self.y)
-    }
-}
-
-impl Debug for Vertex {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(self, f)
-    }
-}
-
-/// Directed side, has start and end corners
-#[derive(Clone, Copy, PartialOrd, PartialEq, Ord, Eq, Hash)]
+/// Side(pixel, side) is the counter clockwise side around pixel
+/// Each pixel has therefore 6 sides, see docs/sides_and_corners.jpg
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Side {
-    corner: Vertex,
-    direction: Direction,
+    /// pixel on the left side of the side
+    left_pixel: Pixel,
+    name: SideName,
 }
 
 impl Side {
-    pub fn new(corner: Vertex, direction: Direction) -> Self {
-        Side { corner, direction }
-    }
-
-    pub fn start_vertex(self) -> Vertex {
-        self.corner
-    }
-
-    pub fn stop_vertex(self) -> Vertex {
-        self.corner.neighbor(self.direction)
-    }
-
-    pub fn reversed(self) -> Self {
-        Self::new(
-            self.corner.neighbor(self.direction),
-            self.direction.reversed(),
-        )
-    }
-
-    pub fn left_pixel(self) -> Pixel {
-        match self.direction {
-            Direction::Left => self.corner.bottom_left_pixel(),
-            Direction::Right => self.corner.top_right_pixel(),
-            Direction::Up => self.corner.top_left_pixel(),
-            Direction::Down => self.corner.bottom_right_pixel(),
+    pub const fn new(pixel: Pixel, side_name: SideName) -> Self {
+        Self {
+            left_pixel: pixel,
+            name: side_name,
         }
     }
 
+    /// Same side but with reversed orientation, cw -> ccw, ccw -> cw
+    pub const fn reversed(self) -> Self {
+        Self::new(self.left_pixel.neighbor(self.name), self.name.opposite())
+    }
+
+    pub const fn next_ccw(self) -> Self {
+        Self::new(self.left_pixel, self.name.next_ccw())
+    }
+
+    pub const fn start_corner(self) -> Corner {
+        self.reversed().stop_corner()
+    }
+
+    pub const fn stop_corner(self) -> Corner {
+        Corner::side_stop(self)
+    }
+
+    pub fn left_pixel(self) -> Pixel {
+        self.left_pixel
+    }
+
     pub fn right_pixel(self) -> Pixel {
-        self.reversed().left_pixel()
-    }
-
-    pub fn undirected_equals(&self, other: &Side) -> bool {
-        self == other || self.reversed() == *other
-    }
-
-    /// See docs/border_crossings.jpg
-    pub fn next_forward(&self) -> Side {
-        Self::new(self.stop_vertex(), self.direction )
-    }
-
-    /// See docs/border_crossings.jpg
-    pub fn next_left(&self) -> Side {
-        Self::new(self.stop_vertex(), self.direction.rotate_ccw())
-    }
-
-    /// See docs/border_crossings.jpg
-    pub fn next_right(&self) -> Side {
-        Self::new(self.stop_vertex(), self.direction.rotate_cw())
+        self.reversed().left_pixel
     }
 }
 
@@ -311,10 +263,9 @@ impl Display for Side {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Side({}, {}, {})",
-            self.corner.x,
-            self.corner.y,
-            self.direction.unicode_symbol()
+            "Side({}, {})",
+            self.left_pixel,
+            self.name.unicode_symbol()
         )
     }
 }
@@ -322,5 +273,160 @@ impl Display for Side {
 impl Debug for Side {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Display::fmt(self, f)
+    }
+}
+
+/// Corner(side: Side) is the stop corner of side
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Corner(Side);
+
+impl Corner {
+    /// Stop corner of right side
+    pub const fn right_side_stop(pixel: Pixel) -> Self {
+        Self(pixel.right_side())
+    }
+
+    /// Stop corner of top right side
+    pub const fn top_right_side_stop(pixel: Pixel) -> Self {
+        Self(pixel.top_right_side())
+    }
+
+    /// Stop corner of top side
+    pub const fn top_side_stop(pixel: Pixel) -> Self {
+        Self(pixel.left_neighbor().right_side())
+    }
+
+    /// Stop corner of left side
+    pub const fn left_side_stop(pixel: Pixel) -> Self {
+        Self(pixel.bottom_left_neighbor().top_right_side())
+    }
+
+    /// Stop corner of bottom left side
+    pub const fn bottom_left_side_stop(pixel: Pixel) -> Self {
+        Self(pixel.bottom_left_neighbor().right_side())
+    }
+
+    /// Stop corner of bottom side
+    pub const fn bottom_side_stop(pixel: Pixel) -> Self {
+        Self(pixel.bottom_neighbor().top_right_side())
+    }
+
+    /// Multiple (pixel, name) represent the same corner (see docs/corner_normalization.png) so we normalize to make
+    /// the representation unique.
+    pub const fn side_stop(side: Side) -> Self {
+        match side.name {
+            SideName::Top => Self::top_side_stop(side.left_pixel),
+            SideName::Left => Self::left_side_stop(side.left_pixel),
+            SideName::BottomLeft => Self::bottom_left_side_stop(side.left_pixel),
+            SideName::Bottom => Self::bottom_side_stop(side.left_pixel),
+            SideName::Right => Self::right_side_stop(side.left_pixel),
+            SideName::TopRight => Self::top_right_side_stop(side.left_pixel),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::math::pixel::{Pixel, Side, SideName};
+
+    const PIXELS: [Pixel; 3] = [Pixel::new(0, 0), Pixel::new(-2, 4), Pixel::new(9, 17)];
+
+    fn example_sides() -> Vec<Side> {
+        PIXELS
+            .into_iter()
+            .flat_map(|pixel| pixel.sides_ccw())
+            .collect()
+    }
+
+    #[test]
+    fn opposite_of_opposite() {
+        for side_name in SideName::ALL {
+            assert_eq!(side_name.opposite().opposite(), side_name);
+        }
+    }
+
+    #[test]
+    fn opposite_neighbor_pixel() {
+        for side_name in SideName::ALL {
+            for pixel in PIXELS {
+                assert_eq!(
+                    pixel.neighbor(side_name).neighbor(side_name.opposite()),
+                    pixel
+                );
+            }
+        }
+    }
+
+    /// Make sure stop(side) == start(side.next_ccw())
+    #[test]
+    fn start_stop_corner() {
+        for side in example_sides() {
+            assert_eq!(side.stop_corner(), side.next_ccw().start_corner())
+        }
+    }
+
+    #[test]
+    fn equivalent_corners() {
+        for pixel in PIXELS {
+            // top side
+            assert_eq!(
+                pixel.top_side().stop_corner(),
+                pixel.left_neighbor().right_side().stop_corner()
+            );
+            assert_eq!(
+                pixel.top_side().stop_corner(),
+                pixel.top_neighbor().bottom_left_side().stop_corner()
+            );
+
+            // left side
+            assert_eq!(
+                pixel.left_side().stop_corner(),
+                pixel.left_neighbor().bottom_side().stop_corner()
+            );
+            assert_eq!(
+                pixel.left_side().stop_corner(),
+                pixel.bottom_left_neighbor().top_right_side().stop_corner()
+            );
+
+            // bottom left side
+            assert_eq!(
+                pixel.bottom_left_side().stop_corner(),
+                pixel.bottom_neighbor().top_side().stop_corner()
+            );
+            assert_eq!(
+                pixel.bottom_left_side().stop_corner(),
+                pixel.bottom_left_neighbor().right_side().stop_corner()
+            );
+
+            // bottom side
+            assert_eq!(
+                pixel.bottom_side().stop_corner(),
+                pixel.right_neighbor().left_side().stop_corner()
+            );
+            assert_eq!(
+                pixel.bottom_side().stop_corner(),
+                pixel.bottom_neighbor().top_right_side().stop_corner()
+            );
+
+            // right side
+            assert_eq!(
+                pixel.right_side().stop_corner(),
+                pixel.right_neighbor().top_side().stop_corner()
+            );
+            assert_eq!(
+                pixel.right_side().stop_corner(),
+                pixel.top_right_neighbor().bottom_left_side().stop_corner()
+            );
+
+            // top right side
+            assert_eq!(
+                pixel.top_right_side().stop_corner(),
+                pixel.top_neighbor().bottom_side().stop_corner()
+            );
+            assert_eq!(
+                pixel.top_right_side().stop_corner(),
+                pixel.top_right_neighbor().left_side().stop_corner()
+            );
+        }
     }
 }

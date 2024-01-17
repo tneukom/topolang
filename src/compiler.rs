@@ -1,9 +1,5 @@
 use crate::{
-    math::{
-        direction::Direction,
-        pixel::{Side, Vertex},
-        rgba8::Rgba8,
-    },
+    math::{pixel::Pixel, rgba8::Rgba8},
     pattern::{find_matches, NullTrace},
     pixmap::Pixmap,
     rule::Rule,
@@ -25,13 +21,13 @@ impl Compiler {
             .without_color(Self::RULE_FRAME_VOID_COLOR);
         let rule_frame = Topology::new(&rule_frame_pixmap);
 
-        // Side on the before border
-        let before_side = Side::new(Vertex::new(7, 7), Direction::Right);
+        // Side on the before border (inner border of the frame)
+        let before_side = Pixel::new(7, 7).top_side().reversed();
         let Some((before_border, _)) = rule_frame.border_containing_side(&before_side) else {
             anyhow::bail!("Before border not found.")
         };
 
-        let after_side = Side::new(Vertex::new(43, 8), Direction::Right);
+        let after_side = Pixel::new(43, 8).top_side().reversed();
         let Some((after_border, _)) = rule_frame.border_containing_side(&after_side) else {
             anyhow::bail!("After border not found.")
         };

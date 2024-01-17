@@ -90,7 +90,7 @@ impl Direction {
             Self::Left => Self::Up,
             Self::Right => Self::Down,
             Self::Up => Self::Right,
-            Self::Down => Self::Left
+            Self::Down => Self::Left,
         }
     }
 
@@ -99,7 +99,7 @@ impl Direction {
             Self::Left => Self::Down,
             Self::Right => Self::Up,
             Self::Up => Self::Left,
-            Self::Down => Self::Right
+            Self::Down => Self::Right,
         }
     }
 }

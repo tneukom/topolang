@@ -1,5 +1,5 @@
 use crate::{
-    math::{pixel::Vertex, rgba8::Rgba8},
+    math::{pixel::Corner, rgba8::Rgba8},
     morphism::Morphism,
     pixmap::Pixmap,
     topology::{RegionKey, Seam, SeamColors, Topology},
@@ -138,8 +138,8 @@ impl Trace for NullTrace {
 pub struct Unassigned {
     seam: Seam,
     phi_left: Option<RegionKey>,
-    phi_start_corner: Option<Vertex>,
-    phi_stop_corner: Option<Vertex>,
+    phi_start_corner: Option<Corner>,
+    phi_stop_corner: Option<Corner>,
     reverse_in_pattern: bool,
     colors: SeamColors,
 }

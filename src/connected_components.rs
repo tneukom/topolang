@@ -1,12 +1,11 @@
 use crate::{
     math::{
-        direction::Direction,
-        pixel::{Pixel, Side},
+        pixel::{Pixel, Side, SideName},
+        rgba8::Rgba8,
     },
     pixmap::Pixmap,
 };
 use std::collections::BTreeSet;
-use crate::math::rgba8::Rgba8;
 
 pub struct ConnectedComponent {
     /// Cannot be empty
@@ -51,9 +50,9 @@ pub fn flood_fill(
             continue;
         }
 
-        for direction in Direction::ALL {
-            let neighbor_pixel = pixel.neighbor(direction);
-            let neighbor_side = pixel.side_ccw(direction);
+        for side_name in SideName::ALL {
+            let neighbor_pixel = pixel.neighbor(side_name);
+            let neighbor_side = pixel.side_ccw(side_name);
 
             match classify(&neighbor_side, &neighbor_pixel) {
                 SideClass::Border => {
@@ -274,12 +273,12 @@ mod test {
 
     #[test]
     fn components_5a() {
-        assert_proper_components("5a.png", 5);
+        assert_proper_components("5a.png", 4);
     }
 
     #[test]
     fn components_7a() {
-        assert_proper_components("7a.png", 7);
+        assert_proper_components("7a.png", 6);
     }
 
     #[test]

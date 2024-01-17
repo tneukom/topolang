@@ -3,6 +3,7 @@ use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
     math::{point::Point, rect::Rect},
+    pixmap::Pixmap,
     topology::Topology,
 };
 
@@ -105,14 +106,7 @@ pub struct MoveCamera {
 
 #[derive(Debug, Clone)]
 pub struct Brushing {
-    /// Used for tile preview
-    pub hover_tile: Point<i64>,
-}
-
-impl Brushing {
-    pub fn draw(&self, world: &mut Topology, settings: &ViewSettings) {
-        todo!("Implement actual brush function in Brush")
-    }
+    pub brush: Brush,
 }
 
 #[derive(Debug, Clone)]
@@ -173,7 +167,7 @@ impl View {
 
     fn handle_brushing(
         &mut self,
-        mut op: Brushing,
+        op: Brushing,
         input: &ViewInput,
         settings: &ViewSettings,
     ) -> UiState {
@@ -183,10 +177,13 @@ impl View {
             return UiState::Idle;
         }
 
-        op.hover_tile = self.tile_containing(input.world_mouse);
-        if input.left_mouse.is_down {
-            op.draw(&mut self.world, settings);
+        if !input.left_mouse.is_down {
+            return UiState::Idle;
         }
+
+        let mut change = Pixmap::new();
+        op.brush.draw_point(&mut change, input.world_mouse);
+        self.world.blit(&change);
 
         UiState::Brushing(op)
     }
@@ -200,13 +197,11 @@ impl View {
             return UiState::MoveCamera(move_camera);
         }
 
-        let mouse_tile = self.tile_containing(input.world_mouse);
-
         match settings.edit_mode {
             EditMode::Brush => {
                 if input.left_mouse.is_down {
                     let op = Brushing {
-                        hover_tile: mouse_tile,
+                        brush: Brush::default(),
                     };
                     return self.handle_brushing(op, input, settings);
                 }

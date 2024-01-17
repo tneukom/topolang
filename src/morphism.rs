@@ -1,5 +1,5 @@
 use crate::{
-    math::pixel::Vertex,
+    math::pixel::Corner,
     topology::{BorderKey, RegionKey, Seam, Topology},
 };
 use itertools::Itertools;
@@ -22,7 +22,7 @@ pub struct Morphism {
     // codom: Topology
     pub region_map: BTreeMap<RegionKey, RegionKey>,
     pub seam_map: BTreeMap<Seam, Seam>,
-    pub corner_map: BTreeMap<Vertex, Vertex>,
+    pub corner_map: BTreeMap<Corner, Corner>,
     pub border_map: BTreeMap<BorderKey, BorderKey>,
 }
 
@@ -42,10 +42,10 @@ impl Index<Seam> for Morphism {
     }
 }
 
-impl Index<Vertex> for Morphism {
-    type Output = Vertex;
+impl Index<Corner> for Morphism {
+    type Output = Corner;
 
-    fn index(&self, index: Vertex) -> &Self::Output {
+    fn index(&self, index: Corner) -> &Self::Output {
         &self.corner_map[&index]
     }
 }
@@ -283,8 +283,8 @@ pub fn induced_border_map(
 ///     start ∘ φ = φ ∘ start
 ///     stop ∘ φ = φ ∘ stop
 #[inline(never)]
-pub fn induced_corner_map(seam_phi: &BTreeMap<Seam, Seam>) -> Option<BTreeMap<Vertex, Vertex>> {
-    let mut corner_map: BTreeMap<Vertex, Vertex> = BTreeMap::new();
+pub fn induced_corner_map(seam_phi: &BTreeMap<Seam, Seam>) -> Option<BTreeMap<Corner, Corner>> {
+    let mut corner_map: BTreeMap<Corner, Corner> = BTreeMap::new();
 
     for (seam, phi_seam) in seam_phi {
         // start corner

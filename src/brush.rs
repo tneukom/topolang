@@ -1,4 +1,7 @@
-use crate::math::rgba8::Rgba8;
+use crate::{
+    math::{pixel::Pixel, point::Point, rgba8::Rgba8},
+    pixmap::Pixmap,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Brush {
@@ -12,5 +15,10 @@ impl Brush {
             color: Rgba8::BLACK,
             radius: 1,
         }
+    }
+
+    pub fn draw_point(&self, target: &mut Pixmap, point: Point<f64>) {
+        let pixel = Pixel::containing(point);
+        target.set(pixel, self.color);
     }
 }
