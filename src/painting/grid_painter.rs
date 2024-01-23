@@ -1,4 +1,4 @@
-use std::{fs::read_to_string, mem::size_of, sync::Arc};
+use std::{mem::size_of, sync::Arc};
 
 use glow::HasContext;
 use memoffset::offset_of;
@@ -32,8 +32,8 @@ pub struct GridPainter {
 
 impl GridPainter {
     pub unsafe fn new(gl: Arc<glow::Context>) -> GridPainter {
-        let vs_source = read_to_string("resources/shaders/grid.vert").unwrap();
-        let fs_source = read_to_string("resources/shaders/grid.frag").unwrap();
+        let vs_source = include_str!("shaders/grid.vert");
+        let fs_source = include_str!("shaders/grid.frag");
         let shader = Shader::from_source(gl.clone(), &vs_source, &fs_source);
 
         let array_buffer = GlBuffer::new(gl.clone(), GlBufferTarget::ArrayBuffer);

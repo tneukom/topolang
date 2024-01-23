@@ -1,6 +1,6 @@
 use crate::math::{affine_map::AffineMap, point::Point, rect::Rect};
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone, Copy)]
 // An affine map that maps points from the view to the world coordinate system.
 pub struct Camera {
     pub offset: Point<f64>,

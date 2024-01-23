@@ -11,6 +11,8 @@ use crate::{
     widgets::FileChooser,
 };
 use glow::HasContext;
+use instant::Instant;
+use crate::bitmap::Bitmap;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum MouseButton {
@@ -60,7 +62,7 @@ impl MouseButtonState {
 
 pub struct EguiApp {
     scene_painter: ScenePainter,
-    start_time: std::time::Instant,
+    start_time: Instant,
     pub view_settings: ViewSettings,
 
     view_rect: Rect<i64>,
@@ -86,7 +88,7 @@ pub struct EguiApp {
 
 impl EguiApp {
     fn time(&self) -> f64 {
-        (std::time::Instant::now() - self.start_time).as_secs_f64()
+        (Instant::now() - self.start_time).as_secs_f64()
     }
 
     fn key_button(ctx: &egui::Context, key: egui::Key) -> ViewButton {
@@ -125,10 +127,15 @@ impl EguiApp {
 
     pub unsafe fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let scene_painter = ScenePainter::new(cc.gl.as_ref().unwrap().clone());
-        let start_time = std::time::Instant::now();
+        let start_time = Instant::now();
 
         // Load topology from file
-        let world = Topology::from_bitmap_path("test_resources/compiler/gate/world.png").unwrap();
+        // TODO: Should be fetched instead of included
+        let world_image_bytes = include_bytes!("../test_resources/compiler/gate/world.png");
+        let world_bitmap = Bitmap::load_from_memory(world_image_bytes).unwrap();
+        // let world_bitmap = Bitmap::transparent(512, 512);
+        let world = Topology::from_bitmap(&world_bitmap);
+        // let world = Topology::from_bitmap_path("test_resources/compiler/gate/world.png").unwrap();
         let view = View::new(world);
 
         let mouse_button_states: HashMap<_, _> = MouseButton::VALUES
@@ -139,15 +146,19 @@ impl EguiApp {
         let gl = cc.gl.clone().unwrap();
 
         let load_icon = |filename: &str| {
-            let path = format!("resources/icons/{filename}");
-            let imageio_bitmap = image::open(path).unwrap().into_rgba8();
+            // let path = format!("resources/icons/{filename}");
+            // let imageio_bitmap = image::open(path).unwrap().into_rgba8();
+            //
+            // let raw: &[u8] = &imageio_bitmap.as_raw();
+            // let size = [
+            //     imageio_bitmap.width() as usize,
+            //     imageio_bitmap.height() as usize,
+            // ];
+            // let egui_image = egui::ColorImage::from_rgba_unmultiplied(size, raw);
 
-            let raw: &[u8] = &imageio_bitmap.as_raw();
-            let size = [
-                imageio_bitmap.width() as usize,
-                imageio_bitmap.height() as usize,
-            ];
-            let egui_image = egui::ColorImage::from_rgba_unmultiplied(size, raw);
+            let raw = [0; 16 * 16 * 4];
+            let egui_image = egui::ColorImage::from_rgba_unmultiplied([16, 16], &raw);
+
             cc.egui_ctx
                 .load_texture(filename, egui_image, TextureOptions::LINEAR)
         };
@@ -355,7 +366,7 @@ impl eframe::App for EguiApp {
         // println!("side_panel_rect left: {}, right: {}", side_panel_rect.left(), side_panel_rect.right());
         self.view_rect = Rect::low_high([side_panel_rect.right() as i64, 0], view_size);
 
-        // view_input after the UI has been drawn so we know if the cursor is
+        // view_input after the UI has been drawn, so we know if the cursor is
         // over an element.
         self.view_input = self.view_input_from(ctx);
         let time = self.time();
@@ -370,9 +381,10 @@ impl eframe::App for EguiApp {
             self.gl.disable(glow::SCISSOR_TEST);
             self.gl.disable(glow::CULL_FACE);
             self.gl.disable(glow::DEPTH_TEST);
-            self.gl.enable(glow::FRAMEBUFFER_SRGB);
+            // self.gl.enable(glow::FRAMEBUFFER_SRGB);
 
-            self.gl.clear_color(0.1, 0.2, 0.3, 1.0);
+            self.gl.clear_color(89.0/255.0, 124.0/255.0, 149.0/255.0, 1.0);
+            // self.gl.clear_color(1.0, 1.0, 0.0, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT);
 
             self.scene_painter.draw_grid(&self.view.camera, &frames);
@@ -380,15 +392,6 @@ impl eframe::App for EguiApp {
             let pixmap = self.view.world.to_pixmap();
             self.scene_painter
                 .draw_pixmap(&pixmap, &self.view.camera, &frames);
-
-            // self.scene_painter.draw_tile_map(
-            //     &active_view.scene.tile_map,
-            //     &active_view.camera,
-            //     &frames,
-            // );
-            //
-            // self.scene_painter
-            //     .draw_tile_map(&preview, &active_view.camera, &frames);
         }
 
         self.scene_painter.i_frame += 1;
