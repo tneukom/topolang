@@ -24,8 +24,8 @@ pub struct SelectionPainter {
 
 impl SelectionPainter {
     pub unsafe fn new(gl: Arc<glow::Context>) -> Self {
-        let vs_source = read_to_string("resources/shaders/selection.vert").unwrap();
-        let fs_source = read_to_string("resources/shaders/selection.frag").unwrap();
+        let vs_source = include_str!("shaders/selection.vert");
+        let fs_source = include_str!("shaders/selection.frag");
         let shader = Shader::from_source(gl.clone(), &vs_source, &fs_source);
 
         // Create vertex, index buffers and assign to shader

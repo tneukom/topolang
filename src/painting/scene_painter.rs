@@ -46,17 +46,4 @@ impl ScenePainter {
         self.tile_painter
             .draw(&draw_tiles, &atlas, world_to_glwindow);
     }
-
-    // pub unsafe fn draw_tile_map(
-    //     &mut self,
-    //     tile_map: &TileMap,
-    //     camera: &Camera,
-    //     frames: &CoordinateFrames,
-    // ) {
-    //     let world_to_pixelwindow = frames.view_to_pixelwindow() * camera.world_to_view();
-    //     let pixelwindow_to_glwindow = frames.pixelwindow_to_glwindow();
-    //
-    //     let draw_tiles = self.tile_map_draw_tiles(tile_map, world_to_pixelwindow);
-    //     self.tile_painter.draw(&draw_tiles, pixelwindow_to_glwindow);
-    // }
 }

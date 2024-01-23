@@ -1,6 +1,6 @@
 use crate::math::{matrix2::Matrix2, matrix3::Matrix3, point::Point, rgba8::Rgba8};
 use glow::{self, HasContext};
-use std::{collections::HashMap, fs::read_to_string, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 pub struct VertexAttribDesc {
     components: i32,
@@ -56,13 +56,11 @@ pub struct Shader {
 
 impl Shader {
     pub fn compile_shader(gl: &glow::Context, source: &str, shader_type: u32) -> glow::Shader {
-        let preprocessed_source = Self::preprocess(source);
-
         unsafe {
             let shader = gl
                 .create_shader(shader_type)
                 .expect("Failed to create shader");
-            gl.shader_source(shader, &preprocessed_source);
+            gl.shader_source(shader, source);
             gl.compile_shader(shader);
             let success = gl.get_shader_compile_status(shader);
             if !success {
@@ -71,32 +69,6 @@ impl Shader {
             }
             shader
         }
-    }
-
-    /// Replace #include directives with file content
-    /// Currently only replaces "geometry.frag"
-    pub fn preprocess(source: &str) -> String {
-        let mut processed = String::new();
-
-        for (lineno, line) in source.lines().enumerate() {
-            if let Some(mut include_file) = line.strip_prefix("#include") {
-                include_file = include_file.trim().trim_matches('"');
-                if include_file == "geometry.frag" {
-                    let geometry_source =
-                        read_to_string("resources/shaders/geometry.frag").unwrap();
-                    processed.push_str(&format!("#line 0 1\n"));
-                    processed.push_str(&geometry_source);
-                    processed.push_str(&format!("\n#line {} 0", lineno + 2));
-                } else {
-                    panic!("Cannot #include {}", include_file);
-                }
-            } else {
-                processed.push_str(line);
-                processed.push_str("\n");
-            }
-        }
-
-        processed
     }
 
     pub unsafe fn from_source(
@@ -120,7 +92,7 @@ impl Shader {
         }
 
         let n_uniforms = gl.get_active_uniforms(program);
-        let mut uniforms: HashMap<String, (glow::NativeUniformLocation, glow::ActiveUniform)> =
+        let mut uniforms: HashMap<String, (glow::UniformLocation, glow::ActiveUniform)> =
             HashMap::new();
         for i in 0..n_uniforms {
             let active_uniform = gl

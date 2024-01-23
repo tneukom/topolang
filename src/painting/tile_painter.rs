@@ -10,7 +10,7 @@ use crate::{
 };
 use glow::HasContext;
 use memoffset::offset_of;
-use std::{collections::HashMap, fs::read_to_string, mem::size_of, sync::Arc};
+use std::{collections::HashMap, mem::size_of, sync::Arc};
 
 #[derive(Debug, Clone, Copy)]
 pub struct TileVertex {
@@ -78,8 +78,8 @@ impl TilePainter {
     const ATLAS_RESOLUTION: usize = Self::TILE_SIZE * Self::ATLAS_SIZE;
 
     pub unsafe fn new(gl: Arc<glow::Context>) -> Self {
-        let vs_source = read_to_string("resources/shaders/tile.vert").unwrap();
-        let fs_source = read_to_string("resources/shaders/tile.frag").unwrap();
+        let vs_source = include_str!("shaders/tile.vert");
+        let fs_source = include_str!("shaders/tile.frag");
         let shader = Shader::from_source(gl.clone(), &vs_source, &fs_source);
 
         let texture = GlTexture::from_size(

@@ -4,28 +4,18 @@
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 // #![allow(unsafe_code)]
 
-use crate::{app::EguiApp, compiler::Compiler, rule::stabilize, topology::Topology};
 
-mod app;
-mod array_2d;
-mod bitmap;
-mod brush;
-mod camera;
-mod compiler;
-mod connected_components;
-mod coordinate_frame;
-mod math;
-mod morphism;
-mod painting;
-mod pattern;
-mod pixmap;
-mod rule;
-mod topology;
-mod utils;
-mod view;
-mod widgets;
+use eframe::WebGlContextOption;
+use wasm_bindgen::prelude::wasm_bindgen;
+use seamlang::app::EguiApp;
+
+
 
 pub fn main_benchmark() {
+    use seamlang::topology::Topology;
+    use seamlang::compiler::Compiler;
+    use seamlang::rule::stabilize;
+
     let folder = "test_resources/compiler/b/";
     let world = Topology::from_bitmap_path(format!("{folder}/world.png")).unwrap();
 
@@ -49,6 +39,7 @@ pub fn main_benchmark() {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn main_editor() {
     unsafe {
         let native_options = eframe::NativeOptions::default();
@@ -65,7 +56,10 @@ pub fn main_editor() {
 }
 
 pub fn main() {
+    #[cfg(not(target_arch = "wasm32"))]
     main_editor()
 
     // main_benchmark();
 }
+
+
