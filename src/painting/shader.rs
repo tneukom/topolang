@@ -1,6 +1,6 @@
 use crate::math::{matrix2::Matrix2, matrix3::Matrix3, point::Point, rgba8::Rgba8};
 use glow::{self, HasContext};
-use std::{collections::HashMap, fs::read_to_string, rc::Rc};
+use std::{collections::HashMap, fs::read_to_string, sync::Arc};
 
 pub struct VertexAttribDesc {
     components: i32,
@@ -48,10 +48,10 @@ pub struct Shader {
     pub vertex_shader: glow::Shader,
     pub fragment_shader: glow::Shader,
 
-    pub uniforms: HashMap<String, (glow::NativeUniformLocation, glow::ActiveUniform)>,
+    pub uniforms: HashMap<String, (glow::UniformLocation, glow::ActiveUniform)>,
     pub attributes: HashMap<String, (u32, glow::ActiveAttribute)>,
 
-    context: Rc<glow::Context>,
+    context: Arc<glow::Context>,
 }
 
 impl Shader {
@@ -100,7 +100,7 @@ impl Shader {
     }
 
     pub unsafe fn from_source(
-        gl: Rc<glow::Context>,
+        gl: Arc<glow::Context>,
         vertex_shader_source: &str,
         fragment_shader_source: &str,
     ) -> Shader {

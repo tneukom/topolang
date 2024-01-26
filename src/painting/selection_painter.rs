@@ -7,7 +7,7 @@ use crate::{
 };
 use glow::HasContext;
 use memoffset::offset_of;
-use std::{fs::read_to_string, mem::size_of, rc::Rc};
+use std::{fs::read_to_string, mem::size_of, sync::Arc};
 
 #[derive(Debug, Clone, Copy)]
 pub struct SelectionVertex {
@@ -19,11 +19,11 @@ pub struct SelectionPainter {
     array_buffer: GlBuffer<SelectionVertex>,
     element_buffer: GlBuffer<u32>,
     vertex_array: GlVertexArray,
-    gl: Rc<glow::Context>,
+    gl: Arc<glow::Context>,
 }
 
 impl SelectionPainter {
-    pub unsafe fn new(gl: Rc<glow::Context>) -> Self {
+    pub unsafe fn new(gl: Arc<glow::Context>) -> Self {
         let vs_source = read_to_string("resources/shaders/selection.vert").unwrap();
         let fs_source = read_to_string("resources/shaders/selection.frag").unwrap();
         let shader = Shader::from_source(gl.clone(), &vs_source, &fs_source);
