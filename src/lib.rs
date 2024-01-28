@@ -1,8 +1,7 @@
-#![allow(dead_code)]
+// #![allow(dead_code)]
 
-use eframe::WebGlContextOption;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
-use crate::app::EguiApp;
 
 pub mod app;
 pub mod array_2d;
@@ -23,9 +22,13 @@ pub mod utils;
 pub mod view;
 pub mod widgets;
 
+
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn main() {
+    use eframe::WebGlContextOption;
+    use crate::app::EguiApp;
+
     // Redirect `log` message to `console.log` and friends:
     eframe::WebLogger::init(log::LevelFilter::Debug).ok();
 

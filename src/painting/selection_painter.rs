@@ -7,7 +7,7 @@ use crate::{
 };
 use glow::HasContext;
 use memoffset::offset_of;
-use std::{fs::read_to_string, mem::size_of, sync::Arc};
+use std::{mem::size_of, sync::Arc};
 
 #[derive(Debug, Clone, Copy)]
 pub struct SelectionVertex {
