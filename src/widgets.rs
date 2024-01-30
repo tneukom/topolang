@@ -1,22 +1,7 @@
 use itertools::Itertools;
 use std::{ffi::OsStr, fs, ops::RangeInclusive, path::PathBuf};
 
-use crate::{math::rgba8::Rgba8, utils::ReflectEnum};
-
-pub fn load_palette(path: &str) -> Option<Vec<Rgba8>> {
-    use image::{io::Reader, DynamicImage::ImageRgba8};
-
-    // TODO: Better error forwarding
-    if let ImageRgba8(img) = Reader::open(path).ok()?.decode().ok()? {
-        Some(
-            img.pixels()
-                .map(|img_rgba| Rgba8::new(img_rgba[0], img_rgba[1], img_rgba[2], img_rgba[3]))
-                .collect(),
-        )
-    } else {
-        None
-    }
-}
+use crate::{math::rgba8::Rgba8, palettes::Palette, utils::ReflectEnum};
 
 pub fn opt_drag_value<Num: egui::emath::Numeric>(
     ui: &mut egui::Ui,
@@ -38,15 +23,19 @@ pub fn opt_drag_value<Num: egui::emath::Numeric>(
     });
 }
 
-pub fn palette_widget(ui: &mut egui::Ui, palette: &Vec<Rgba8>, rgba: &mut Rgba8) {
+pub fn rgba_button(ui: &mut egui::Ui, rgba8: Rgba8, selected: bool) -> egui::Response {
+    let egui_color = egui::Color32::from_rgba_unmultiplied(rgba8.r, rgba8.g, rgba8.b, rgba8.a);
+
+    let button = egui::Button::new("").fill(egui_color).selected(selected);
+    ui.add_sized([28.0, 28.0], button)
+}
+
+pub fn palette_widget(ui: &mut egui::Ui, palette: &Palette, rgba: &mut Rgba8) {
     // 8 colors per row
-    for chunk in palette.chunks(8) {
+    for chunk in palette.colors.chunks(4) {
         ui.horizontal(|ui| {
             for choice in chunk {
-                let egui_color =
-                    egui::Color32::from_rgba_unmultiplied(choice.r, choice.g, choice.b, choice.a);
-                let response = ui.add_sized([20.0, 20.0], egui::Button::new("").fill(egui_color));
-                if response.clicked() {
+                if rgba_button(ui, *choice, choice == rgba).clicked() {
                     *rgba = *choice;
                 }
             }
@@ -54,76 +43,50 @@ pub fn palette_widget(ui: &mut egui::Ui, palette: &Vec<Rgba8>, rgba: &mut Rgba8)
     }
 }
 
-// pub fn Rational_slider(
-//     ui: &mut egui::Ui,
-//     value: &mut Rational,
-//     denom: u64,
-//     num_range: RangeInclusive<i64>,
-// ) {
-//     // assume arrow.head_size is a multiple of 1/10
-//     let mut num = (denom * value.into()).round();
-//     ui.add(egui::Slider::new(&mut num, num_range).text("Head Size"));
-//     *value = Rational::from_parts(num.into(), denom.into());
-// }
+pub struct ColorChooser {
+    pub palettes: Vec<Palette>,
+    pub current_palette: usize,
+    pub color: Rgba8,
+}
 
-// pub fn color_picker_srgba(ui: &mut egui::Ui, rgba8: &mut Rgba8) -> bool {
-//     // Convert srgba -> linear rgba -> hsva, call the color picker and convert back
-//     let mut linear_rgba = egui::Rgba::from_srgba_unmultiplied(rgba8.r, rgba8.g, rgba8.b, rgba8.a);
-//     let mut hsva = egui::color::Hsva::from(linear_rgba);
-//     let changed = egui::color_picker::color_picker_hsva_2d(ui, &mut hsva, egui::color_picker::Alpha::OnlyBlend);
-//     linear_rgba = egui::Rgba::from(hsva);
-//     *rgba8 = Rgba8::from(linear_rgba.to_srgba_unmultiplied());
-//     changed
-// }
-pub fn rgba_button(ui: &mut egui::Ui, palette: &Vec<Rgba8>, rgba: &mut Rgba8) -> egui::Response {
-    let egui_color = egui::Rgba::from_srgba_unmultiplied(rgba.r, rgba.g, rgba.b, rgba.a);
-    let response = ui.add_sized([40.0, 20.0], egui::Button::new("").fill(egui_color));
-
-    // let response = ui.button("Select color");
-    let popup_id = ui.make_persistent_id("rgba_popup");
-    if response.clicked() {
-        ui.memory_mut(|memory| memory.toggle_popup(popup_id));
+impl ColorChooser {
+    pub fn new(palettes: Vec<Palette>) -> Self {
+        assert!(palettes.len() > 0);
+        let color = palettes[0].colors[0];
+        Self {
+            palettes,
+            current_palette: 0,
+            color,
+        }
     }
 
-    egui::popup::popup_below_widget(ui, popup_id, &response, |ui| {
-        palette_widget(ui, palette, rgba);
+    pub fn default() -> Self {
+        let palettes = vec![
+            Palette::palette_pico8(),
+            Palette::palette_windows16(),
+            Palette::palette_na16(),
+            Palette::palette_desatur8(),
+        ];
+        Self::new(palettes)
+    }
 
-        // rgb sliders
-        ui.add(egui::Slider::new(&mut rgba.r, 0..=255).text("Red"));
-        ui.add(egui::Slider::new(&mut rgba.g, 0..=255).text("Green"));
-        ui.add(egui::Slider::new(&mut rgba.b, 0..=255).text("Blue"));
-        ui.add(egui::Slider::new(&mut rgba.a, 0..=255).text("Alpha"));
+    pub fn show(&mut self, ui: &mut egui::Ui) {
+        // Drop down of palettes
+        egui::ComboBox::from_label("Palettes")
+            .selected_text(&self.palettes[self.current_palette].name)
+            .show_ui(ui, |ui| {
+                for (i, palette) in self.palettes.iter().enumerate() {
+                    ui.selectable_value(&mut self.current_palette, i, &palette.name);
+                }
+            });
 
-        // Self::color_picker_srgba(ui, rgba);
-    });
-
-    // let mut rgbaf = rgba.to_f32();
-    // let response = ui.color_edit_button_rgba_unmultiplied(&mut rgbaf);
-    // *rgba = Rgba8::from(&rgbaf);
-    response
+        // Palette itself
+        palette_widget(ui, &self.palettes[self.current_palette], &mut self.color);
+    }
 }
 
-pub fn optional_rgba(
-    ui: &mut egui::Ui,
-    label: &str,
-    palette: &Vec<Rgba8>,
-    has_value: &mut bool,
-    color: &mut Rgba8,
-) {
-    ui.horizontal(|ui| {
-        ui.checkbox(has_value, label);
-
-        // Color
-        ui.add_enabled_ui(*has_value, |ui| {
-            rgba_button(ui, palette, color);
-        });
-
-        if *has_value {
-            // Show label with hex color
-            ui.label(color.hex());
-        }
-    });
-}
+/// Color of the brush is chosen separately
+pub struct BrushChooser {}
 
 pub fn enum_combo<T: ReflectEnum + PartialEq + 'static>(
     ui: &mut egui::Ui,

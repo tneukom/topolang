@@ -1,9 +1,10 @@
 [package]
-name = "seamlang"
+name = "seamlang_bin"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
+name = "seamlang"
 crate-type = ["cdylib", "rlib"]
 
 [patch.crates-io]

@@ -1,15 +1,10 @@
 // #![allow(dead_code)]
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-
 use seamlang::app::EguiApp;
 
-
-
 pub fn main_benchmark() {
-    use seamlang::topology::Topology;
-    use seamlang::compiler::Compiler;
-    use seamlang::rule::stabilize;
+    use seamlang::{compiler::Compiler, rule::stabilize, topology::Topology};
 
     let folder = "test_resources/compiler/b/";
     let world = Topology::from_bitmap_path(format!("{folder}/world.png")).unwrap();
@@ -56,5 +51,3 @@ pub fn main() {
 
     // main_benchmark();
 }
-
-

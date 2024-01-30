@@ -201,7 +201,7 @@ impl View {
             EditMode::Brush => {
                 if input.left_mouse.is_down {
                     let op = Brushing {
-                        brush: Brush::default(),
+                        brush: settings.brush,
                     };
                     return self.handle_brushing(op, input, settings);
                 }

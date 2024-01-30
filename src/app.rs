@@ -2,17 +2,17 @@ use egui::{epaint, load::SizedTexture, Sense, TextureOptions};
 use std::{collections::HashMap, hash::Hash, path::PathBuf, sync::Arc};
 
 use crate::{
+    bitmap::Bitmap,
     brush::Brush,
     coordinate_frame::CoordinateFrames,
     math::{point::Point, rect::Rect},
     painting::scene_painter::ScenePainter,
     topology::Topology,
     view::{EditMode, View, ViewButton, ViewInput, ViewSettings},
-    widgets::FileChooser,
+    widgets::{ColorChooser, FileChooser},
 };
 use glow::HasContext;
 use instant::Instant;
-use crate::bitmap::Bitmap;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum MouseButton {
@@ -84,6 +84,7 @@ pub struct EguiApp {
     edit_mode_icons: HashMap<EditMode, egui::TextureHandle>,
 
     file_chooser: FileChooser,
+    color_chooser: ColorChooser,
 }
 
 impl EguiApp {
@@ -186,6 +187,7 @@ impl EguiApp {
             view_input: ViewInput::EMPTY,
             edit_mode_icons,
             file_chooser: FileChooser::new(PathBuf::from("resources/saves")),
+            color_chooser: ColorChooser::default(),
         }
     }
 
@@ -325,6 +327,9 @@ impl EguiApp {
     pub fn side_panel_ui(&mut self, ui: &mut egui::Ui) {
         self.view_ui(ui);
         ui.separator();
+
+        self.color_chooser.show(ui);
+        self.view_settings.brush.color = self.color_chooser.color;
     }
 
     pub fn top_ui(&mut self, ui: &mut egui::Ui) {
@@ -383,7 +388,8 @@ impl eframe::App for EguiApp {
             self.gl.disable(glow::DEPTH_TEST);
             // self.gl.enable(glow::FRAMEBUFFER_SRGB);
 
-            self.gl.clear_color(89.0/255.0, 124.0/255.0, 149.0/255.0, 1.0);
+            self.gl
+                .clear_color(89.0 / 255.0, 124.0 / 255.0, 149.0 / 255.0, 1.0);
             // self.gl.clear_color(1.0, 1.0, 0.0, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT);
 

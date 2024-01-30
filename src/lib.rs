@@ -14,6 +14,7 @@ pub mod coordinate_frame;
 pub mod math;
 pub mod morphism;
 pub mod painting;
+pub mod palettes;
 pub mod pattern;
 pub mod pixmap;
 pub mod rule;
@@ -22,12 +23,11 @@ pub mod utils;
 pub mod view;
 pub mod widgets;
 
-
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn main() {
-    use eframe::WebGlContextOption;
     use crate::app::EguiApp;
+    use eframe::WebGlContextOption;
 
     // Redirect `log` message to `console.log` and friends:
     eframe::WebLogger::init(log::LevelFilter::Debug).ok();
@@ -47,5 +47,4 @@ pub fn main() {
                 .expect("failed to start eframe");
         });
     }
-
 }

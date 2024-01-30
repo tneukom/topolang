@@ -3,7 +3,7 @@ use crate::{
     pixmap::Pixmap,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Brush {
     pub color: Rgba8,
     pub radius: usize,
