@@ -99,6 +99,10 @@ impl<T> Array2d<T> {
     pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = &mut T> {
         self.elems.iter_mut()
     }
+
+    pub fn as_slice(&self) -> &[T] {
+        self.elems.as_slice()
+    }
 }
 
 impl<T: Clone> Array2d<T> {

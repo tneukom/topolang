@@ -62,6 +62,10 @@ impl Bitmap {
     pub fn is_zero(&self) -> bool {
         self.is_plain(Rgba8::TRANSPARENT)
     }
+
+    pub fn as_raw(&self) -> &[u8] {
+        unsafe { self.as_slice().align_to::<u8>().1 }
+    }
 }
 
 // TODO: Enable for non-wasm build

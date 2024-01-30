@@ -146,25 +146,20 @@ impl EguiApp {
 
         let gl = cc.gl.clone().unwrap();
 
-        let load_icon = |filename: &str| {
-            // let path = format!("resources/icons/{filename}");
-            // let imageio_bitmap = image::open(path).unwrap().into_rgba8();
-            //
-            // let raw: &[u8] = &imageio_bitmap.as_raw();
-            // let size = [
-            //     imageio_bitmap.width() as usize,
-            //     imageio_bitmap.height() as usize,
-            // ];
-            // let egui_image = egui::ColorImage::from_rgba_unmultiplied(size, raw);
-
-            let raw = [0; 16 * 16 * 4];
-            let egui_image = egui::ColorImage::from_rgba_unmultiplied([16, 16], &raw);
+        let load_egui_icon = |name: &str, bytes: &[u8]| {
+            let bitmap = Bitmap::load_from_memory(bytes).unwrap();
+            let raw: &[u8] = &bitmap.as_raw();
+            let size = [bitmap.width(), bitmap.height()];
+            let egui_image = egui::ColorImage::from_rgba_unmultiplied(size, raw);
 
             cc.egui_ctx
-                .load_texture(filename, egui_image, TextureOptions::LINEAR)
+                .load_texture(name, egui_image, TextureOptions::LINEAR)
         };
 
-        let edit_mode_icons = HashMap::from([(EditMode::Brush, load_icon("brush.png"))]);
+        let edit_mode_icons = HashMap::from([(
+            EditMode::Brush,
+            load_egui_icon("icons/brush.png", include_bytes!("icons/brush.png")),
+        )]);
 
         let view_settings = ViewSettings {
             edit_mode: EditMode::Brush,
