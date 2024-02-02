@@ -130,9 +130,12 @@ mod test {
         let expected_result_pixmap =
             Pixmap::from_bitmap_path(format!("{folder}/expected_result.png")).unwrap();
 
-        assert_eq!(result_pixmap, expected_result_pixmap);
+        // result_pixmap
+        //     .to_bitmap_with_size(world_bitmap.size())
+        //     .save(format!("{folder}/world_result.png"))
+        //     .unwrap();
 
-        // result_bitmap.save(format!("{folder}/world_result.png"));
+        assert_eq!(result_pixmap, expected_result_pixmap);
     }
 
     #[test]
@@ -153,6 +156,16 @@ mod test {
     #[test]
     fn rule_d() {
         assert_rule_application("d", 3)
+    }
+
+    #[test]
+    fn rule_circles_1() {
+        assert_rule_application("circles_1", 2)
+    }
+
+    #[test]
+    fn rule_circles_2() {
+        assert_rule_application("circles_2", 3)
     }
 
     #[test]

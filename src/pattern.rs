@@ -470,6 +470,16 @@ mod test {
     }
 
     #[test]
+    fn pattern_matches_interior_hole() {
+        assert_pattern_match("interior_hole/pattern.png", "interior_hole/miss_1.png", 0);
+        assert_pattern_match("interior_hole/pattern.png", "interior_hole/miss_2.png", 0);
+        assert_pattern_match("interior_hole/pattern.png", "interior_hole/match_1.png", 1);
+        assert_pattern_match("interior_hole/pattern.png", "interior_hole/match_2.png", 1);
+        assert_pattern_match("interior_hole/pattern.png", "interior_hole/match_3.png", 1);
+        assert_pattern_match("interior_hole/pattern.png", "interior_hole/match_4.png", 1);
+    }
+
+    #[test]
     fn pattern_matches_two_holes_a() {
         assert_pattern_match("two_holes_a/pattern.png", "two_holes_a/match_1.png", 2);
     }

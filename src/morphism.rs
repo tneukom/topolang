@@ -100,12 +100,11 @@ impl Morphism {
     }
 
     /// Check if phi : A → B preserves structure, (neighbor and next_neighbor), i.e.
-    ///     start * phi = phi * start
-    ///     stop * phi = phi * stop
+    ///   start * phi = phi * start
+    ///   stop * phi = phi * stop
     ///
-    ///     left * phi = phi * left
-    ///
-    ///     phi * reversed = reversed * phi
+    ///   left * phi = phi * left
+    ///   phi * reversed = reversed * phi
     #[inline(never)]
     pub fn preserves_structure(&self, dom: &Topology, codom: &Topology) -> bool {
         for (seam, phi_seam) in &self.seam_map {
@@ -238,8 +237,8 @@ pub fn induced_seam_map(
 }
 
 /// The resulting map satisfies
-///     left ∘ φ = φ ∘ left
-///     right ∘ φ = φ ∘ right
+///   left ∘ φ = φ ∘ left
+///   right ∘ φ = φ ∘ right
 #[inline(never)]
 pub fn induced_region_map(
     dom: &Topology,
@@ -280,8 +279,8 @@ pub fn induced_border_map(
 }
 
 /// The resulting map satisfies
-///     start ∘ φ = φ ∘ start
-///     stop ∘ φ = φ ∘ stop
+///   start ∘ φ = φ ∘ start
+///   stop ∘ φ = φ ∘ stop
 #[inline(never)]
 pub fn induced_corner_map(seam_phi: &BTreeMap<Seam, Seam>) -> Option<BTreeMap<Corner, Corner>> {
     let mut corner_map: BTreeMap<Corner, Corner> = BTreeMap::new();
