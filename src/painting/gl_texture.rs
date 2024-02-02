@@ -1,6 +1,6 @@
 use crate::{
     bitmap::Bitmap,
-    math::{affine_map::AffineMap, point::pt},
+    math::{affine_map::AffineMap, point::Point},
 };
 use glow::HasContext;
 use std::sync::Arc;
@@ -86,12 +86,12 @@ impl GlTexture {
     /// Affine map from bitmap coordinates (0,0 at top left) to Gltexture coordinates.
     pub fn bitmap_to_gltexture(&self) -> AffineMap<f64> {
         AffineMap::map_points(
-            pt(0.0, 0.0),
-            pt(0.0, 0.0),
-            pt(self.width as f64, 0.0),
-            pt(1.0, 0.0),
-            pt(0.0, self.height as f64),
-            pt(0.0, 1.0),
+            Point(0.0, 0.0),
+            Point(0.0, 0.0),
+            Point(self.width as f64, 0.0),
+            Point(1.0, 0.0),
+            Point(0.0, self.height as f64),
+            Point(0.0, 1.0),
         )
     }
 }

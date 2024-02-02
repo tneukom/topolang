@@ -5,11 +5,7 @@ use memoffset::offset_of;
 
 use crate::{
     coordinate_frame::CoordinateFrames,
-    math::{
-        matrix3::Matrix3,
-        point::{pt, Point},
-        rect::Rect,
-    },
+    math::{matrix3::Matrix3, point::Point, rect::Rect},
 };
 
 use super::{
@@ -51,7 +47,7 @@ impl GridPainter {
             size_of::<GridVertex>() as i32,
         );
 
-        let rect = Rect::<f64>::low_size(pt(-1.0, -1.0), pt(2.0, 2.0));
+        let rect = Rect::<f64>::low_size(Point(-1.0, -1.0), Point(2.0, 2.0));
         let vertices = rect.corners().map(|corner| GridVertex {
             position: corner.cwise_into_lossy().to_array(),
         });

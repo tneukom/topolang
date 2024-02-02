@@ -40,21 +40,6 @@ impl Rule {
         })
     }
 
-    pub fn from_bitmaps(before: &Bitmap, after: &Bitmap) -> anyhow::Result<Self> {
-        let before_pixmap = Pixmap::from_bitmap(before).without_void_color();
-        let after_pixmap = Pixmap::from_bitmap(after).without_void_color();
-        Self::new(&before_pixmap, &after_pixmap)
-    }
-
-    pub fn from_bitmap_paths(
-        before_path: impl AsRef<Path>,
-        after_path: impl AsRef<Path>,
-    ) -> anyhow::Result<Self> {
-        let before = Bitmap::from_path(before_path)?;
-        let after = Bitmap::from_path(after_path)?;
-        Self::from_bitmaps(&before, &after)
-    }
-
     /// The fill color of a given region or None if the color is not constant on the region
     /// pixels.
     pub fn fill_color(pixmap: &Pixmap, pixels: &BTreeSet<Pixel>) -> Option<Rgba8> {
@@ -106,14 +91,18 @@ mod test {
         rule::Rule,
         topology::Topology,
     };
+    use std::path::Path;
 
     fn assert_rule_application(folder: &str, expected_application_count: usize) {
         let folder = format!("test_resources/rules/{folder}");
-        let rule = Rule::from_bitmap_paths(
-            format!("{folder}/before.png"),
-            format!("{folder}/after.png"),
-        )
-        .unwrap();
+        let before_pixmap = Pixmap::from_bitmap_path(format!("{folder}/before.png"))
+            .unwrap()
+            .without_void_color();
+        let after_pixmap = Pixmap::from_bitmap_path(format!("{folder}/after.png"))
+            .unwrap()
+            .without_void_color();
+
+        let rule = Rule::new(&before_pixmap, &after_pixmap).unwrap();
 
         let world_bitmap = Bitmap::from_path(format!("{folder}/world.png")).unwrap();
         let mut world = Topology::from_bitmap(&world_bitmap);

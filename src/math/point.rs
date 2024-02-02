@@ -14,12 +14,9 @@ pub struct Point<T> {
     pub y: T,
 }
 
-pub fn pt<T>(x: T, y: T) -> Point<T> {
+#[allow(non_snake_case)]
+pub fn Point<T>(x: T, y: T) -> Point<T> {
     Point::new(x, y)
-}
-
-pub fn pt_from<T>(x: impl Into<T>, y: impl Into<T>) -> Point<T> {
-    Point::new(x.into(), y.into())
 }
 
 impl<T> Point<T> {

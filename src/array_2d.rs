@@ -253,18 +253,21 @@ impl Index2d for Point<usize> {
 mod test {
     use crate::{
         array_2d::Array2d,
-        math::{
-            point::{pt, Point},
-            turn::Turn,
-        },
+        math::{point::Point, turn::Turn},
     };
     use std::collections::HashMap;
 
     #[test]
     pub fn indices() {
         let indices: Vec<_> = Array2d::<()>::indices_for_size([3, 2]).collect();
-        let expected: Vec<Point<usize>> =
-            vec![pt(0, 0), pt(1, 0), pt(2, 0), pt(0, 1), pt(1, 1), pt(2, 1)];
+        let expected: Vec<Point<usize>> = vec![
+            Point(0, 0),
+            Point(1, 0),
+            Point(2, 0),
+            Point(0, 1),
+            Point(1, 1),
+            Point(2, 1),
+        ];
         assert_eq!(indices, expected);
     }
 

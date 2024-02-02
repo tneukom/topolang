@@ -46,7 +46,7 @@ impl Pixmap {
         Ok(Self::from_bitmap(&bitmap))
     }
 
-    /// Pixels outside of the bitmap are ignored.
+    /// Pixels outside the bitmap are ignored.
     pub fn paint_to_bitmap(&self, bitmap: &mut Bitmap) {
         for (&pixel, &color) in &self.map {
             if let Ok(index) = pixel.point().cwise_try_into::<usize>() {
@@ -57,9 +57,9 @@ impl Pixmap {
         }
     }
 
-    /// Default color is transparent.
-    pub fn to_bitmap_with_size(&self, bounds: Point<usize>) -> Bitmap {
-        let mut bitmap = Bitmap::plain(bounds.x, bounds.y, Rgba8::BLACK);
+    /// Default color is transparent, any pixels outside [0, size.x] x [0, size.y] are ignored.
+    pub fn to_bitmap_with_size(&self, size: Point<usize>) -> Bitmap {
+        let mut bitmap = Bitmap::plain(size.x, size.y, Rgba8::BLACK);
         self.paint_to_bitmap(&mut bitmap);
         bitmap
     }

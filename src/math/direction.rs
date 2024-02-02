@@ -1,10 +1,5 @@
 use crate::{
-    math::{
-        arrow::Arrow,
-        axis_line::AxisArrow,
-        generic::Num,
-        point::{pt, Point},
-    },
+    math::{arrow::Arrow, axis_line::AxisArrow, generic::Num, point::Point},
     utils::ReflectEnum,
 };
 
@@ -31,10 +26,10 @@ impl Direction {
     /// A step of length one in the given direction
     pub fn unit_step(self) -> Point<i64> {
         match self {
-            Self::Left => pt(-1, 0),
-            Self::Right => pt(1, 0),
-            Self::Up => pt(0, -1),
-            Self::Down => pt(0, 1),
+            Self::Left => Point(-1, 0),
+            Self::Right => Point(1, 0),
+            Self::Up => Point(0, -1),
+            Self::Down => Point(0, 1),
         }
     }
 

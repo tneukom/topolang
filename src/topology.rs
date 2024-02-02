@@ -118,7 +118,19 @@ impl Border {
     }
 }
 
-/// The boundary is counter clockwise. Is mutable so color can be changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RegionFlags {
+    /// Regions cannot be matched or overwritten.
+    pub isolated: bool,
+}
+
+impl Default for RegionFlags {
+    fn default() -> Self {
+        Self { isolated: false }
+    }
+}
+
+/// The boundary is counterclockwise. Is mutable so color can be changed.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Region {
     pub color: Rgba8,
@@ -132,6 +144,8 @@ pub struct Region {
     // /// left_of(boundary) = interior
     // pub closed: bool,
     pub bounds: Rect<i64>,
+
+    pub flags: RegionFlags,
 }
 
 impl Region {
@@ -251,6 +265,7 @@ impl Topology {
                 color,
                 bounds,
                 interior: component.interior,
+                flags: RegionFlags::default(),
                 // closed: component.closed,
             };
             regions.insert(region_key, region);
@@ -554,6 +569,10 @@ impl Topology {
         let mut self_pixmap = self.to_pixmap();
         self_pixmap.blit(pixmap);
         *self = Topology::new(&self_pixmap);
+    }
+
+    pub fn isolate(&mut self, region_key: RegionKey) {
+        self[region_key].flags.isolated = true;
     }
 
     pub fn rgb_seam_graph(&self) -> UndirectedGraph<Option<Rgba8>> {

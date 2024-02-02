@@ -1,5 +1,5 @@
 use crate::{
-    math::{pixel::Pixel, rgba8::Rgba8},
+    math::{pixel::Pixel, point::Point, rgba8::Rgba8},
     pattern::{find_matches, NullTrace},
     pixmap::Pixmap,
     rule::Rule,
@@ -46,14 +46,27 @@ impl Compiler {
         // Extract all matches and creates rules from them
         let mut world_pixmap = world.to_pixmap();
         let mut rules: Vec<Rule> = Vec::new();
+
         for phi in matches {
             // Extract before and after from rule
             let phi_before_border = phi[self.before_border];
-            let before_pixmap =
-                world_pixmap.extract_right(&world[phi_before_border], Some(Rgba8::TRANSPARENT));
+            let before_pixmap = world_pixmap
+                .extract_right(&world[phi_before_border], Some(Rgba8::TRANSPARENT))
+                .without_void_color();
+
             let phi_after_border = phi[self.after_border];
-            let after_pixmap =
-                world_pixmap.extract_right(&world[phi_after_border], Some(Rgba8::TRANSPARENT));
+            let after_pixmap = world_pixmap
+                .extract_right(&world[phi_after_border], Some(Rgba8::TRANSPARENT))
+                .without_void_color();
+
+            // before_pixmap
+            //     .to_bitmap_with_size(Point(128, 128))
+            //     .save("before.png")
+            //     .unwrap();
+            // after_pixmap
+            //     .to_bitmap_with_size(Point(128, 128))
+            //     .save("after.png")
+            //     .unwrap();
 
             // Find translation from after to before
             let before_bounds = before_pixmap.bounds();
@@ -134,5 +147,10 @@ mod test {
     #[test]
     fn gate() {
         assert_execute_world("gate", 3);
+    }
+
+    #[test]
+    fn hole() {
+        assert_execute_world("hole", 2);
     }
 }

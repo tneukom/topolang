@@ -1,4 +1,4 @@
-use egui::{epaint, load::SizedTexture, Sense, TextureOptions};
+use egui::{epaint, load::SizedTexture, Sense, TextureOptions, Widget};
 use std::{collections::HashMap, hash::Hash, path::PathBuf, sync::Arc};
 
 use crate::{
@@ -323,8 +323,21 @@ impl EguiApp {
         self.view_ui(ui);
         ui.separator();
 
+        // Color and brush
         self.color_chooser.show(ui);
         self.view_settings.brush.color = self.color_chooser.color;
+        ui.separator();
+
+        // Step and run
+        // ui.horizontal(|ui| {
+        //     if ui.add_enabled(!self.run, egui::Button::new("Step")).clicked() {
+        //         self.view.world
+        //     }
+        //
+        //     if egui::Button::new("Run").selected(self.run).ui(ui).clicked() {
+        //         self.run = !self.run;
+        //     }
+        // });
     }
 
     pub fn top_ui(&mut self, ui: &mut egui::Ui) {

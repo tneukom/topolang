@@ -15,10 +15,7 @@
 // 0,h          w,h
 // Center of Glpixel refernce frame is at w/h, h/2
 
-use crate::math::{
-    affine_map::AffineMap,
-    point::{pt, Point},
-};
+use crate::math::{affine_map::AffineMap, point::Point};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct CoordinateFrames {
@@ -32,7 +29,7 @@ impl CoordinateFrames {
     }
 
     pub fn pixelwindow_center(self) -> Point<f64> {
-        pt(self.width as f64, self.height as f64) / 2.0
+        Point(self.width as f64, self.height as f64) / 2.0
     }
 
     pub fn view_center(self) -> Point<f64> {
@@ -41,12 +38,12 @@ impl CoordinateFrames {
 
     pub fn pixelwindow_to_glwindow(self) -> AffineMap<f64> {
         AffineMap::map_points(
-            pt(0.0, 0.0),
-            pt(-1.0, 1.0),
-            pt(self.width as f64, 0.0),
-            pt(1.0, 1.0),
-            pt(0.0, self.height as f64),
-            pt(-1.0, -1.0),
+            Point(0.0, 0.0),
+            Point(-1.0, 1.0),
+            Point(self.width as f64, 0.0),
+            Point(1.0, 1.0),
+            Point(0.0, self.height as f64),
+            Point(-1.0, -1.0),
         )
     }
 
