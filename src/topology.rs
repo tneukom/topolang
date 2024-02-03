@@ -95,10 +95,10 @@ impl RegionKey {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Border {
-    /// First side is minimum side of cycle
+    /// First side is minimum side of cycle, contains at least one item
     pub cycle: Vec<Side>,
 
-    /// Start side of first seam is first side in cycle
+    /// Start side of first seam is first side in cycle, contains at least one item
     pub seams: Vec<Seam>,
 
     pub is_outer: bool,
@@ -233,7 +233,6 @@ impl Topology {
         let color_components = color_components(pixmap);
 
         let mut regions: BTreeMap<RegionKey, Region> = BTreeMap::new();
-        let mut seam_indices: BTreeMap<Side, SeamIndex> = BTreeMap::new();
 
         for ColorComponent { component, color } in color_components {
             let region_key = RegionKey::unused();
@@ -242,11 +241,6 @@ impl Topology {
 
             for (i_border, cycle) in split_into_cycles(&component.sides).into_iter().enumerate() {
                 let seams = split_cycle_into_seams(&cycle, |side| pixmap.get(&side.right_pixel()));
-
-                for (i_seam, &seam) in seams.iter().enumerate() {
-                    let seam_index = SeamIndex::new(region_key, i_border, i_seam);
-                    seam_indices.insert(seam.start, seam_index);
-                }
 
                 let border = Border {
                     cycle,
@@ -268,7 +262,22 @@ impl Topology {
                 flags: RegionFlags::default(),
                 // closed: component.closed,
             };
-            regions.insert(region_key, region);
+            regions.insert(RegionKey::unused(), region);
+        }
+
+        Self::from_regions(regions)
+    }
+
+    pub fn from_regions(regions: BTreeMap<RegionKey, Region>) -> Self {
+        let mut seam_indices: BTreeMap<Side, SeamIndex> = BTreeMap::new();
+
+        for (&region_key, region) in &regions {
+            for (i_border, border) in region.boundary.iter().enumerate() {
+                for (i_seam, &seam) in border.seams.iter().enumerate() {
+                    let seam_index = SeamIndex::new(region_key, i_border, i_seam);
+                    seam_indices.insert(seam.start, seam_index);
+                }
+            }
         }
 
         Topology {
@@ -494,48 +503,49 @@ impl Topology {
             .find(|(_, border)| border.cycle.contains(side))
     }
 
-    // pub fn connected_borders(&self, seed: BorderKey) -> BTreeSet<BorderKey> {
-    //     let mut visited: BTreeSet<BorderKey> = BTreeSet::new();
-    //     let mut todos: Vec<BorderKey> = vec![seed];
-    //
-    //     while let Some(todo) = todos.pop() {
-    //         if visited.insert(todo) {
-    //             // newly inserted
-    //             for seam in &self[seed].seams {
-    //                 if let Some(reversed_seam_index) = self.seam_indices.get(&seam.reversed().start) {
-    //                     todos.push(reversed_seam_index.border_index());
-    //                 }
-    //             }
-    //         }
-    //     }
-    //
-    //     visited
-    // }
+    /// Whole are is one single component
+    pub fn is_connected() -> bool {
+        todo!()
+    }
 
-    // /// Moves everything on the left side of `border_key` to `into` including `border_key`
-    // /// itself.
-    // pub fn extract_left_of_border(&mut self, border_key: BorderKey, into: &mut Topology) {
-    //     let region_key = border_key.region_key;
-    //     let region = self.remove_region(region_key).unwrap();
-    //
-    //     for (i_other, other_border) in region.boundary.iter().enumerate() {
-    //         if i_other != border_key.i_border {
-    //             self.extract_right_of_border(BorderKey::new(border_key.region_key, i_other), into);
-    //         }
-    //     }
-    //
-    //     into.insert_region(region_key, region);
-    // }
-    //
-    // /// Moves everything on the right side of `border_key` to `into`, NOT including
-    // /// the boundary itself.
-    // pub fn extract_right_of_border(&mut self, border_key: BorderKey, into: &mut Topology) {
-    //     for other_border_key in self.connected_borders(border_key) {
-    //         if other_border_key != border_key {
-    //             self.extract_left_of_border(other_border_key, into);
-    //         }
-    //     }
-    // }
+    /// Whole area is connected and does not contain any holes.
+    /// https://en.wikipedia.org/wiki/Simply_connected_space
+    pub fn is_simply_connected() -> bool {
+        todo!()
+    }
+
+    /// Returns the set of all regions that are right of `border`. Only returns regions that are connected to the passed
+    /// border.
+    /// If there is a region on the right side of the passed border inside a hole it is not returned!
+    pub fn right_of_border(&self, border: &Border) -> BTreeSet<RegionKey> {
+        // flood fill regions over seams
+        let mut right_of: BTreeSet<RegionKey> = BTreeSet::new();
+
+        // start with the regions directly right of the passed border.
+        let mut todo: Vec<_> = border
+            .seams
+            .iter()
+            .flat_map(|seam| self.right_of(seam))
+            .collect();
+
+        while let Some(region_key) = todo.pop() {
+            if right_of.insert(region_key) {
+                // new region added, add all regions touching the boundary
+                for seam in self[region_key].iter_seams() {
+                    if border.seams.contains(&seam.reversed()) {
+                        // Don't go outside the border
+                        continue;
+                    }
+
+                    if let Some(right_region_key) = self.right_of(seam) {
+                        todo.push(right_region_key);
+                    }
+                }
+            }
+        }
+
+        right_of
+    }
 
     pub fn blit(&mut self, pixmap: &Pixmap) {
         // Find regions that are touched by `pixels`
@@ -584,6 +594,15 @@ impl Topology {
         }
 
         edges
+    }
+
+    pub fn sub_topology_from_iter(&self, iter: impl Iterator<Item = RegionKey>) -> Self {
+        let regions = iter.map(|key| (key, self[key].clone())).collect();
+        Self::from_regions(regions)
+    }
+
+    pub fn sub_topology(&self, into_iter: impl IntoIterator<Item = RegionKey>) -> Self {
+        self.sub_topology_from_iter(into_iter.into_iter())
     }
 }
 
@@ -718,11 +737,12 @@ pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -
 #[cfg(test)]
 pub mod test {
     use crate::{
-        math::rgba8::Rgba8,
+        math::{point::Point, rgba8::Rgba8},
         pixmap::Pixmap,
-        topology::{Region, Topology},
+        topology::{BorderKey, Region, Topology},
         utils::{UndirectedEdge, UndirectedGraph},
     };
+    use itertools::Itertools;
 
     fn load_topology(filename: &str) -> Topology {
         let path = format!("test_resources/topology/{filename}");
@@ -886,5 +906,49 @@ pub mod test {
     #[test]
     fn blit_e() {
         assert_blit("e");
+    }
+
+    fn assert_right_of(name: &str) {
+        let folder = "test_resources/topology/right_of";
+        let topology = Topology::from_bitmap_path(format!("{folder}/{name}.png")).unwrap();
+
+        let (&red_region_key, red_region) = topology
+            .regions
+            .iter()
+            .filter(|(_, region)| region.color == Rgba8::RED)
+            .exactly_one()
+            .unwrap();
+
+        // Outer and a single interior border
+        assert_eq!(red_region.boundary.len(), 2);
+
+        // let border_key = BorderKey::new(red_region_key, 1);
+        let red_interior_border = &red_region.boundary[1];
+        let regions_right_of = topology.right_of_border(red_interior_border);
+        let right_of_topology = topology.sub_topology(regions_right_of);
+
+        // right_of_topology
+        //     .to_pixmap()
+        //     .to_bitmap_with_size(Point(128, 128))
+        //     .save("result.png")
+        //     .unwrap();
+
+        // Load expected result from bitmap and strip transparent pixels
+        let expected_pixmap = Pixmap::from_bitmap_path(format!("{folder}/{name}_expected.png"))
+            .unwrap()
+            .without_color(Rgba8::TRANSPARENT);
+        let expected = Topology::new(&expected_pixmap);
+
+        assert_eq!(right_of_topology, expected);
+    }
+
+    #[test]
+    fn right_of_a() {
+        assert_right_of("a");
+    }
+
+    #[test]
+    fn right_of_b() {
+        assert_right_of("b");
     }
 }
