@@ -107,7 +107,7 @@ impl<T: Num> Point<T> {
 }
 
 impl<T: SignedNum> Point<T> {
-    // Return counter clockwise orthogonal vector (with x pointing right and y pointing up)
+    // Return counterclockwise orthogonal vector (with x pointing right and y pointing up)
     // (1,0) -> (0,1)
     // (0,1) -> (-1,0)
     pub fn orthogonal_ccw(self) -> Self {

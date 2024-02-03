@@ -361,15 +361,10 @@ pub fn extract_pattern(pixmap: &mut Pixmap) -> Pixmap {
 mod test {
     use crate::{
         math::rgba8::Rgba8,
-        pattern::{extract_pattern, find_matches, CoutTrace, NullTrace},
+        pattern::{extract_pattern, find_matches, NullTrace},
         pixmap::Pixmap,
         topology::Topology,
     };
-
-    fn load_topology(filename: &str) -> Topology {
-        let path = format!("test_resources/patterns/{filename}");
-        Topology::from_bitmap_path(path).unwrap()
-    }
 
     fn pixmap_with_void_from_path(path: &str) -> Pixmap {
         Pixmap::from_bitmap_path(path)

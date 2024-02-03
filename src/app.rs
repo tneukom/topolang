@@ -1,4 +1,4 @@
-use egui::{epaint, load::SizedTexture, Sense, TextureOptions, Widget};
+use egui::{epaint, load::SizedTexture, Sense, TextureOptions};
 use std::{collections::HashMap, hash::Hash, path::PathBuf, sync::Arc};
 
 use crate::{
@@ -74,13 +74,11 @@ pub struct EguiApp {
     view_input: ViewInput,
 
     file_name: String,
-    current_folder: PathBuf,
-
+    // current_folder: PathBuf,
     run: bool,
 
-    stabilize: bool,
-    stabilize_count: i64,
-
+    // stabilize: bool,
+    // stabilize_count: i64,
     edit_mode_icons: HashMap<EditMode, egui::TextureHandle>,
 
     file_chooser: FileChooser,
@@ -176,9 +174,9 @@ impl EguiApp {
             gl,
             file_name: "".to_string(),
             run: false,
-            stabilize: false,
-            stabilize_count: 0,
-            current_folder: PathBuf::from("resources/saves"),
+            // stabilize: false,
+            // stabilize_count: 0,
+            // current_folder: PathBuf::from("resources/saves"),
             view_input: ViewInput::EMPTY,
             edit_mode_icons,
             file_chooser: FileChooser::new(PathBuf::from("resources/saves")),

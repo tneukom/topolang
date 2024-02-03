@@ -1,5 +1,5 @@
 use crate::{
-    math::{pixel::Pixel, point::Point, rgba8::Rgba8},
+    math::{pixel::Pixel, rgba8::Rgba8},
     pattern::{find_matches, NullTrace},
     pixmap::Pixmap,
     rule::Rule,
@@ -50,34 +50,35 @@ impl Compiler {
         for phi in matches {
             // Extract before and after from rule
             let phi_before_border = phi[self.before_border];
-            let before_pixmap = world_pixmap
-                .extract_right(&world[phi_before_border], Some(Rgba8::TRANSPARENT))
-                .without_void_color();
+            let before = world.topology_right_of_border(&world[phi_before_border]);
 
             let phi_after_border = phi[self.after_border];
-            let after_pixmap = world_pixmap
-                .extract_right(&world[phi_after_border], Some(Rgba8::TRANSPARENT))
-                .without_void_color();
+            let after = world.topology_right_of_border(&world[phi_after_border]);
 
-            // before_pixmap
-            //     .to_bitmap_with_size(Point(128, 128))
-            //     .save("before.png")
-            //     .unwrap();
-            // after_pixmap
-            //     .to_bitmap_with_size(Point(128, 128))
-            //     .save("after.png")
-            //     .unwrap();
+            // Clear before
+            for phi_region in before.regions.values() {
+                for &pixel in &phi_region.interior {
+                    world_pixmap.set(pixel, Rgba8::TRANSPARENT);
+                }
+            }
+
+            // Clear after
+            for phi_region in after.regions.values() {
+                for &pixel in &phi_region.interior {
+                    world_pixmap.set(pixel, Rgba8::TRANSPARENT);
+                }
+            }
+
+            let before = before.without_color(Rgba8::VOID);
+            let after = after.without_color(Rgba8::VOID);
 
             // Find translation from after to before
-            let before_bounds = before_pixmap.bounds();
-            let after_bounds = after_pixmap.bounds();
+            let before_bounds = before.bounds();
+            let after_bounds = after.bounds();
             assert_eq!(before_bounds.size(), after_bounds.size());
 
             let offset = before_bounds.low() - after_bounds.low();
-            let after_pixmap = after_pixmap.translated(offset);
-
-            let rule = Rule::new(&before_pixmap, &after_pixmap)?;
-            rules.push(rule);
+            let after = after.translated(offset);
 
             // Clear the frame of the compiled rule from the world
             for &region_key in self.rule_frame.iter_region_keys() {
@@ -86,6 +87,9 @@ impl Compiler {
                     world_pixmap.set(pixel, Rgba8::TRANSPARENT);
                 }
             }
+
+            let rule = Rule::new(before, after)?;
+            rules.push(rule);
         }
 
         *world = Topology::new(&world_pixmap);

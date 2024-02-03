@@ -216,7 +216,7 @@ impl Debug for Pixel {
     }
 }
 
-/// Side(pixel, side) is the counter clockwise side around pixel
+/// Side(pixel, side) is the counterclockwise side around pixel
 /// Each pixel has therefore 6 sides, see docs/sides_and_corners.jpg
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Side {
@@ -256,6 +256,14 @@ impl Side {
 
     pub fn right_pixel(self) -> Pixel {
         self.reversed().left_pixel
+    }
+}
+
+impl Add<Point<i64>> for Side {
+    type Output = Side;
+
+    fn add(self, rhs: Point<i64>) -> Self::Output {
+        Self::new(self.left_pixel + rhs, self.name)
     }
 }
 

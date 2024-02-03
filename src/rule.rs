@@ -1,5 +1,4 @@
 use crate::{
-    bitmap::Bitmap,
     math::{pixel::Pixel, rgba8::Rgba8},
     morphism::Morphism,
     pattern::{find_first_match, NullTrace},
@@ -7,7 +6,7 @@ use crate::{
     topology::{FillRegion, Topology},
 };
 use itertools::Itertools;
-use std::{collections::BTreeSet, path::Path};
+use std::collections::BTreeSet;
 
 pub struct Rule {
     pub pattern: Topology,
@@ -15,13 +14,13 @@ pub struct Rule {
 }
 
 impl Rule {
-    pub fn new(before: &Pixmap, after: &Pixmap) -> anyhow::Result<Self> {
-        let pattern = Topology::new(before);
-
+    pub fn new(before: Topology, after: Topology) -> anyhow::Result<Self> {
         let mut fill_regions: Vec<FillRegion> = Vec::new();
 
-        for (&region_key, region) in &pattern.regions {
-            let Some(fill_color) = Self::fill_color(after, &region.interior) else {
+        let after_pixmap = after.to_pixmap();
+
+        for (&region_key, region) in &before.regions {
+            let Some(fill_color) = Self::fill_color(&after_pixmap, &region.interior) else {
                 anyhow::bail!("Region {region_key} color not constant.")
             };
 
@@ -35,7 +34,7 @@ impl Rule {
         }
 
         Ok(Rule {
-            pattern,
+            pattern: before,
             fill_regions,
         })
     }
@@ -86,23 +85,30 @@ pub fn stabilize(world: &mut Topology, rules: &Vec<Rule>) -> usize {
 mod test {
     use crate::{
         bitmap::Bitmap,
+        math::rgba8::Rgba8,
         pattern::{find_first_match, NullTrace},
         pixmap::Pixmap,
         rule::Rule,
         topology::Topology,
     };
-    use std::path::Path;
 
     fn assert_rule_application(folder: &str, expected_application_count: usize) {
         let folder = format!("test_resources/rules/{folder}");
-        let before_pixmap = Pixmap::from_bitmap_path(format!("{folder}/before.png"))
-            .unwrap()
-            .without_void_color();
-        let after_pixmap = Pixmap::from_bitmap_path(format!("{folder}/after.png"))
-            .unwrap()
-            .without_void_color();
+        // let before_pixmap = Pixmap::from_bitmap_path(format!("{folder}/before.png"))
+        //     .unwrap()
+        //     .without_void_color();
+        // let after_pixmap = Pixmap::from_bitmap_path(format!("{folder}/after.png"))
+        //     .unwrap()
+        //     .without_void_color();
 
-        let rule = Rule::new(&before_pixmap, &after_pixmap).unwrap();
+        let before = Topology::from_bitmap_path(format!("{folder}/before.png"))
+            .unwrap()
+            .without_color(Rgba8::VOID);
+        let after = Topology::from_bitmap_path(format!("{folder}/after.png"))
+            .unwrap()
+            .without_color(Rgba8::VOID);
+
+        let rule = Rule::new(before, after).unwrap();
 
         let world_bitmap = Bitmap::from_path(format!("{folder}/world.png")).unwrap();
         let mut world = Topology::from_bitmap(&world_bitmap);

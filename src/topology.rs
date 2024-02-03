@@ -3,6 +3,7 @@ use crate::{
     connected_components::{color_components, left_of, right_of, ColorComponent},
     math::{
         pixel::{Corner, Pixel, Side},
+        point::Point,
         rect::{Rect, RectBounds},
         rgba8::Rgba8,
     },
@@ -58,6 +59,14 @@ impl Seam {
 
     pub fn is_loop(&self) -> bool {
         self.start_corner() == self.stop_corner()
+    }
+
+    pub fn translated(self, offset: Point<i64>) -> Self {
+        Self {
+            start: self.start + offset,
+            stop: self.stop + offset,
+            len: self.len,
+        }
     }
 }
 
@@ -116,6 +125,21 @@ impl Border {
         let sides: BTreeSet<_> = self.cycle.iter().copied().collect();
         right_of(&sides).interior
     }
+
+    pub fn translate(&mut self, offset: Point<i64>) {
+        for side in &mut self.cycle {
+            *side = *side + offset;
+        }
+
+        for seam in &mut self.seams {
+            *seam = seam.translated(offset);
+        }
+    }
+
+    pub fn translated(mut self, offset: Point<i64>) -> Self {
+        self.translate(offset);
+        self
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -161,6 +185,20 @@ impl Region {
                 .iter()
                 .any(|touched| self.interior.contains(touched))
         })
+    }
+
+    pub fn translate(&mut self, offset: Point<i64>) {
+        for border in &mut self.boundary {
+            border.translate(offset);
+        }
+
+        self.interior = self.interior.iter().map(|&pixel| pixel + offset).collect();
+        self.bounds = self.bounds + offset;
+    }
+
+    pub fn translated(mut self, offset: Point<i64>) -> Self {
+        self.translate(offset);
+        self
     }
 }
 
@@ -235,7 +273,6 @@ impl Topology {
         let mut regions: BTreeMap<RegionKey, Region> = BTreeMap::new();
 
         for ColorComponent { component, color } in color_components {
-            let region_key = RegionKey::unused();
             // Each cycle in the sides is a border
             let mut boundary = Vec::new();
 
@@ -342,6 +379,14 @@ impl Topology {
     /// Upper bound is exclusive, lower bound inclusive
     pub fn bounds(&self) -> Rect<i64> {
         RectBounds::iter_bounds(self.regions.values().map(|region| region.bounds))
+    }
+
+    pub fn translated(self, offset: Point<i64>) -> Self {
+        let mut regions = self.regions;
+        for region in regions.values_mut() {
+            region.translate(offset);
+        }
+        Self::from_regions(regions)
     }
 
     pub fn iter_borders(&self) -> impl Iterator<Item = &Border> + Clone {
@@ -517,7 +562,7 @@ impl Topology {
     /// Returns the set of all regions that are right of `border`. Only returns regions that are connected to the passed
     /// border.
     /// If there is a region on the right side of the passed border inside a hole it is not returned!
-    pub fn right_of_border(&self, border: &Border) -> BTreeSet<RegionKey> {
+    pub fn regions_right_of_border(&self, border: &Border) -> BTreeSet<RegionKey> {
         // flood fill regions over seams
         let mut right_of: BTreeSet<RegionKey> = BTreeSet::new();
 
@@ -545,6 +590,11 @@ impl Topology {
         }
 
         right_of
+    }
+
+    pub fn topology_right_of_border(&self, border: &Border) -> Self {
+        let regions = self.regions_right_of_border(border);
+        self.sub_topology(regions)
     }
 
     pub fn blit(&mut self, pixmap: &Pixmap) {
@@ -603,6 +653,20 @@ impl Topology {
 
     pub fn sub_topology(&self, into_iter: impl IntoIterator<Item = RegionKey>) -> Self {
         self.sub_topology_from_iter(into_iter.into_iter())
+    }
+
+    pub fn filter(self, mut predicate: impl FnMut(RegionKey, &Region) -> bool) -> Self {
+        let regions = self
+            .regions
+            .into_iter()
+            .filter(|(key, region)| predicate(*key, region))
+            .collect();
+        Self::from_regions(regions)
+    }
+
+    /// Remove all regions of the given color
+    pub fn without_color(self, color: Rgba8) -> Self {
+        self.filter(|_, region| region.color != color)
     }
 }
 
@@ -737,9 +801,9 @@ pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -
 #[cfg(test)]
 pub mod test {
     use crate::{
-        math::{point::Point, rgba8::Rgba8},
+        math::rgba8::Rgba8,
         pixmap::Pixmap,
-        topology::{BorderKey, Region, Topology},
+        topology::{Region, Topology},
         utils::{UndirectedEdge, UndirectedGraph},
     };
     use itertools::Itertools;
@@ -912,7 +976,7 @@ pub mod test {
         let folder = "test_resources/topology/right_of";
         let topology = Topology::from_bitmap_path(format!("{folder}/{name}.png")).unwrap();
 
-        let (&red_region_key, red_region) = topology
+        let (_, red_region) = topology
             .regions
             .iter()
             .filter(|(_, region)| region.color == Rgba8::RED)
@@ -924,7 +988,7 @@ pub mod test {
 
         // let border_key = BorderKey::new(red_region_key, 1);
         let red_interior_border = &red_region.boundary[1];
-        let regions_right_of = topology.right_of_border(red_interior_border);
+        let regions_right_of = topology.regions_right_of_border(red_interior_border);
         let right_of_topology = topology.sub_topology(regions_right_of);
 
         // right_of_topology
