@@ -1,4 +1,5 @@
 use crate::{
+    bitmap::Bitmap,
     math::{pixel::Pixel, rgba8::Rgba8},
     pattern::{NullTrace, Search},
     pixmap::Pixmap,
@@ -14,37 +15,40 @@ pub struct CompiledRule {
     rule: Rule,
 }
 
-pub struct Compiler {
+pub struct Interpreter {
     rule_frame: Topology,
     before_border: BorderKey,
     after_border: BorderKey,
 }
 
-impl Compiler {
+impl Interpreter {
     const RULE_FRAME_VOID_COLOR: Rgba8 = Rgba8::CYAN;
 
-    pub fn new() -> anyhow::Result<Self> {
+    pub fn new() -> Self {
         // Load rule_frame pattern from file
-        let rule_frame_pixmap = Pixmap::from_bitmap_path("resources/rule_frame.png")?
-            .without_color(Self::RULE_FRAME_VOID_COLOR);
+        let rule_frame_bitmap = Bitmap::load_from_memory(include_bytes!("rule_frame.png")).unwrap();
+        let rule_frame_pixmap =
+            Pixmap::from_bitmap(&rule_frame_bitmap).without_color(Self::RULE_FRAME_VOID_COLOR);
         let rule_frame = Topology::new(&rule_frame_pixmap);
 
         // Side on the before border (inner border of the frame)
         let before_side = Pixel::new(7, 7).top_side().reversed();
-        let Some((before_border, _)) = rule_frame.border_containing_side(&before_side) else {
-            anyhow::bail!("Before border not found.")
-        };
+        let before_border = rule_frame
+            .border_containing_side(&before_side)
+            .expect("Before border not found.")
+            .0;
 
         let after_side = Pixel::new(43, 8).top_side().reversed();
-        let Some((after_border, _)) = rule_frame.border_containing_side(&after_side) else {
-            anyhow::bail!("After border not found.")
-        };
+        let after_border = rule_frame
+            .border_containing_side(&after_side)
+            .expect("After border not found.")
+            .0;
 
-        Ok(Self {
+        Self {
             rule_frame,
             before_border,
             after_border,
-        })
+        }
     }
 
     pub fn compile(&self, world: &mut Topology) -> anyhow::Result<Vec<CompiledRule>> {
@@ -134,12 +138,12 @@ impl Compiler {
 
 #[cfg(test)]
 mod test {
-    use crate::{bitmap::Bitmap, compiler::Compiler, pixmap::Pixmap, topology::Topology};
+    use crate::{bitmap::Bitmap, interpreter::Interpreter, pixmap::Pixmap, topology::Topology};
     use pretty_assertions::assert_eq;
 
     #[test]
     fn init() {
-        let _compiler = Compiler::new().unwrap();
+        let _compiler = Interpreter::new();
     }
 
     fn assert_execute_world(name: &str, expected_steps: usize) {
@@ -148,7 +152,7 @@ mod test {
         let world_pixmap = Pixmap::from_bitmap(&world_bitmap);
         let mut world = Topology::new(&world_pixmap);
 
-        let compiler = Compiler::new().unwrap();
+        let compiler = Interpreter::new();
 
         let mut steps = 0;
         loop {

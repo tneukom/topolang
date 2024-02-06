@@ -1,10 +1,11 @@
-use egui::{epaint, load::SizedTexture, Sense, TextureOptions};
+use egui::{epaint, load::SizedTexture, Sense, TextureOptions, Widget};
 use std::{collections::HashMap, hash::Hash, path::PathBuf, sync::Arc};
 
 use crate::{
     bitmap::Bitmap,
     brush::Brush,
     coordinate_frame::CoordinateFrames,
+    interpreter::Interpreter,
     math::{point::Point, rect::Rect},
     painting::scene_painter::ScenePainter,
     topology::Topology,
@@ -76,6 +77,7 @@ pub struct EguiApp {
     file_name: String,
     // current_folder: PathBuf,
     run: bool,
+    interpreter: Interpreter,
 
     // stabilize: bool,
     // stabilize_count: i64,
@@ -181,6 +183,7 @@ impl EguiApp {
             edit_mode_icons,
             file_chooser: FileChooser::new(PathBuf::from("resources/saves")),
             color_chooser: ColorChooser::default(),
+            interpreter: Interpreter::new(),
         }
     }
 
@@ -327,15 +330,22 @@ impl EguiApp {
         ui.separator();
 
         // Step and run
-        // ui.horizontal(|ui| {
-        //     if ui.add_enabled(!self.run, egui::Button::new("Step")).clicked() {
-        //         self.view.world
-        //     }
-        //
-        //     if egui::Button::new("Run").selected(self.run).ui(ui).clicked() {
-        //         self.run = !self.run;
-        //     }
-        // });
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(!self.run, egui::Button::new("Step"))
+                .clicked()
+            {
+                self.interpreter.step(&mut self.view.world);
+            }
+
+            if egui::Button::new("Run").selected(self.run).ui(ui).clicked() {
+                self.run = !self.run;
+            }
+        });
+
+        if self.run {
+            self.interpreter.step(&mut self.view.world);
+        }
     }
 
     pub fn top_ui(&mut self, ui: &mut egui::Ui) {
