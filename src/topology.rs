@@ -148,12 +148,6 @@ pub struct RegionFlags {
     pub isolated: bool,
 }
 
-impl Default for RegionFlags {
-    fn default() -> Self {
-        Self { isolated: false }
-    }
-}
-
 /// The boundary is counterclockwise. Is mutable so color can be changed.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Region {
@@ -168,8 +162,6 @@ pub struct Region {
     // /// left_of(boundary) = interior
     // pub closed: bool,
     pub bounds: Rect<i64>,
-
-    pub flags: RegionFlags,
 }
 
 impl Region {
@@ -296,7 +288,6 @@ impl Topology {
                 color,
                 bounds,
                 interior: component.interior,
-                flags: RegionFlags::default(),
                 // closed: component.closed,
             };
             regions.insert(RegionKey::unused(), region);
@@ -592,6 +583,7 @@ impl Topology {
         right_of
     }
 
+    /// Keys of resulting Regions are unchanged
     pub fn topology_right_of_border(&self, border: &Border) -> Self {
         let regions = self.regions_right_of_border(border);
         self.sub_topology(regions)
@@ -631,10 +623,6 @@ impl Topology {
         *self = Topology::new(&self_pixmap);
     }
 
-    pub fn isolate(&mut self, region_key: RegionKey) {
-        self[region_key].flags.isolated = true;
-    }
-
     pub fn rgb_seam_graph(&self) -> UndirectedGraph<Option<Rgba8>> {
         let mut edges = BTreeSet::new();
         for seam in self.iter_seams() {
@@ -655,7 +643,7 @@ impl Topology {
         self.sub_topology_from_iter(into_iter.into_iter())
     }
 
-    pub fn filter(self, mut predicate: impl FnMut(RegionKey, &Region) -> bool) -> Self {
+    pub fn filter_regions(self, mut predicate: impl FnMut(RegionKey, &Region) -> bool) -> Self {
         let regions = self
             .regions
             .into_iter()
@@ -666,7 +654,7 @@ impl Topology {
 
     /// Remove all regions of the given color
     pub fn without_color(self, color: Rgba8) -> Self {
-        self.filter(|_, region| region.color != color)
+        self.filter_regions(|_, region| region.color != color)
     }
 }
 

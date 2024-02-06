@@ -5,6 +5,7 @@ use crate::{
     topology::{RegionKey, Seam, SeamColors, Topology},
 };
 use std::{cmp::Ordering, collections::BTreeMap};
+use std::collections::BTreeSet;
 
 /// Returns all seams (including non atomic ones) in topo
 #[inline(never)]
@@ -275,65 +276,83 @@ impl Unassigned {
     }
 }
 
-#[inline(never)]
-pub fn search_step(
-    world: &Topology,
-    pattern: &Topology,
-    partial: BTreeMap<Seam, Seam>,
-    solutions: &mut Vec<Morphism>,
-    trace: impl Trace,
-) {
-    // Check if partial assignment is consistent
-    let Some(phi) = Morphism::induced_from_seam_map(pattern, world, partial.clone()) else {
-        trace.failed("Partial assignment inconsistent");
-        return;
-    };
-
-    if !phi.is_homomorphism(pattern, world) || !phi.is_injective() {
-        trace.failed("Morphism inconsistent");
-        return;
-    }
-
-    // Find a seam that is not yet assigned
-    let unassigned = Unassigned::choose(pattern, &phi);
-    let Some(unassigned) = unassigned else {
-        // If seams are assigned, check morphism is proper
-        trace.success();
-        solutions.push(phi);
-        return;
-    };
-
-    let assignment_candidates = unassigned.assignment_candidates(world, pattern);
-    if assignment_candidates.is_empty() {
-        trace.failed("No assignment candidates");
-        return;
-    }
-
-    // Assign the found seam to all possible candidates and recurse
-    for phi_unassigned in assignment_candidates {
-        let mut ext_partial = partial.clone();
-        ext_partial.insert(unassigned.seam, phi_unassigned);
-        trace.assign(&unassigned.seam, &phi_unassigned);
-        search_step(world, pattern, ext_partial, solutions, trace.recurse())
-    }
+pub struct Search<'a> {
+    pub world: &'a Topology,
+    pub pattern: &'a Topology,
+    pub hidden: Option<&'a BTreeSet<RegionKey>>,
 }
 
-#[inline(never)]
-pub fn find_matches(world: &Topology, pattern: &Topology, trace: impl Trace) -> Vec<Morphism> {
-    let mut solutions = Vec::new();
-    let partial = BTreeMap::new();
-    search_step(world, pattern, partial, &mut solutions, trace);
-    solutions
-}
+impl<'a> Search<'a> {
+    pub fn new(world: &'a Topology, pattern: &'a Topology) -> Self {
+        Self { world, pattern, hidden: None }
+    }
 
-#[inline(never)]
-pub fn find_first_match(
-    world: &Topology,
-    pattern: &Topology,
-    trace: impl Trace,
-) -> Option<Morphism> {
-    let phis = find_matches(world, pattern, trace);
-    phis.into_iter().next()
+    #[inline(never)]
+    pub fn search_step(
+        &self,
+        partial: BTreeMap<Seam, Seam>,
+        solutions: &mut Vec<Morphism>,
+        trace: impl Trace,
+    ) {
+        // Check if partial assignment is consistent
+        let Some(phi) = Morphism::induced_from_seam_map(self.pattern, self.world, partial.clone())
+        else {
+            trace.failed("Partial assignment inconsistent");
+            return;
+        };
+
+        if !phi.is_homomorphism(self.pattern, self.world) || !phi.is_injective() {
+            trace.failed("Morphism inconsistent");
+            return;
+        }
+
+        if let Some(hidden) = self.hidden {
+            // Mapping to hidden regions is not allowed
+            for (_, &phi_region) in &phi.region_map {
+                if hidden.contains(&phi_region) {
+                    trace.failed("Matched isolated Region");
+                    return;
+                }
+            }
+        }
+
+        // Find a seam that is not yet assigned
+        let unassigned = Unassigned::choose(self.pattern, &phi);
+        let Some(unassigned) = unassigned else {
+            // If seams are assigned, check morphism is proper
+            trace.success();
+            solutions.push(phi);
+            return;
+        };
+
+        let assignment_candidates = unassigned.assignment_candidates(self.world, self.pattern);
+        if assignment_candidates.is_empty() {
+            trace.failed("No assignment candidates");
+            return;
+        }
+
+        // Assign the found seam to all possible candidates and recurse
+        for phi_unassigned in assignment_candidates {
+            let mut ext_partial = partial.clone();
+            ext_partial.insert(unassigned.seam, phi_unassigned);
+            trace.assign(&unassigned.seam, &phi_unassigned);
+            self.search_step(ext_partial, solutions, trace.recurse());
+        }
+    }
+
+    #[inline(never)]
+    pub fn find_matches(&self, trace: impl Trace) -> Vec<Morphism> {
+        let mut solutions = Vec::new();
+        let partial = BTreeMap::new();
+        self.search_step(partial, &mut solutions, trace);
+        solutions
+    }
+
+    #[inline(never)]
+    pub fn find_first_match(&self, trace: impl Trace) -> Option<Morphism> {
+        let phis = self.find_matches(trace);
+        phis.into_iter().next()
+    }
 }
 
 const PATTERN_FRAME_COLOR: Rgba8 = Rgba8::MAGENTA;
@@ -361,10 +380,11 @@ pub fn extract_pattern(pixmap: &mut Pixmap) -> Pixmap {
 mod test {
     use crate::{
         math::rgba8::Rgba8,
-        pattern::{extract_pattern, find_matches, NullTrace},
+        pattern::{extract_pattern, NullTrace},
         pixmap::Pixmap,
         topology::Topology,
     };
+    use crate::pattern::Search;
 
     fn pixmap_with_void_from_path(path: &str) -> Pixmap {
         Pixmap::from_bitmap_path(path)
@@ -411,7 +431,7 @@ mod test {
         let trace = NullTrace::new();
         // let trace = CoutTrace::new();
 
-        let matches = find_matches(&world, &pattern, trace);
+        let matches = Search::new(&world, &pattern).find_matches(trace);
         assert_eq!(matches.len(), n_solutions);
 
         // for a_match in &matches {

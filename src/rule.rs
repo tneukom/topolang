@@ -1,7 +1,7 @@
 use crate::{
     math::{pixel::Pixel, rgba8::Rgba8},
     morphism::Morphism,
-    pattern::{find_first_match, NullTrace},
+    pattern::{NullTrace, Search},
     pixmap::Pixmap,
     topology::{FillRegion, Topology},
 };
@@ -68,7 +68,8 @@ pub fn stabilize(world: &mut Topology, rules: &Vec<Rule>) -> usize {
     loop {
         let mut applied = false;
         for rule in rules {
-            if let Some(phi) = find_first_match(world, &rule.pattern, NullTrace::new()) {
+            if let Some(phi) = Search::new(world, &rule.pattern).find_first_match(NullTrace::new())
+            {
                 rule.apply_ops(&phi, world);
                 steps += 1;
                 applied = true;
@@ -86,7 +87,7 @@ mod test {
     use crate::{
         bitmap::Bitmap,
         math::rgba8::Rgba8,
-        pattern::{find_first_match, NullTrace},
+        pattern::{NullTrace, Search},
         pixmap::Pixmap,
         rule::Rule,
         topology::Topology,
@@ -114,7 +115,8 @@ mod test {
         let mut world = Topology::from_bitmap(&world_bitmap);
 
         let mut application_count: usize = 0;
-        while let Some(phi) = find_first_match(&world, &rule.pattern, NullTrace::new()) {
+        while let Some(phi) = Search::new(&world, &rule.pattern).find_first_match(NullTrace::new())
+        {
             rule.apply_ops(&phi, &mut world);
             application_count += 1;
         }
