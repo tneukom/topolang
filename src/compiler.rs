@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use crate::{
     math::{pixel::Pixel, rgba8::Rgba8},
     pattern::{NullTrace, Search},
@@ -6,6 +5,7 @@ use crate::{
     rule::Rule,
     topology::{BorderKey, RegionKey, Topology},
 };
+use std::collections::BTreeSet;
 
 pub struct CompiledRule {
     /// All regions in the Rule frame, before and after. These elements should be hidden during Rule execution.
@@ -104,9 +104,13 @@ impl Compiler {
             let mut search = Search::new(&world, &rule.pattern);
             search.hidden = Some(&hidden);
 
-            if let Some(phi) = search.find_first_match(NullTrace::new()){
-                rule.apply_ops(&phi, world);
-                return true;
+            let solutions = search.find_matches(NullTrace::new());
+
+            for phi in solutions {
+                let modified = rule.apply_ops(&phi, world);
+                if modified {
+                    return true;
+                }
                 // world
                 //     .to_pixmap()
                 //     .to_bitmap_with_size(world_bitmap.size())
@@ -125,18 +129,12 @@ impl Compiler {
         //     .to_bitmap_with_size(world_bitmap.size())
         //     .save(format!("{folder}/hidden.png"))
         //     .unwrap();
-
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        bitmap::Bitmap,
-        compiler::Compiler,
-        pixmap::Pixmap,
-        topology::Topology,
-    };
+    use crate::{bitmap::Bitmap, compiler::Compiler, pixmap::Pixmap, topology::Topology};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -159,6 +157,7 @@ mod test {
                 break;
             }
             steps += 1;
+            assert!(steps <= expected_steps);
         }
 
         // Apply a rule
@@ -220,6 +219,12 @@ mod test {
     #[test]
     fn fail_rule_applied_to_its_source() {
         assert_execute_world("fail_rule_applied_to_its_source", 1);
+    }
+
+    /// Failure case: Rule was applied to its own source.
+    #[test]
+    fn fail_noop() {
+        assert_execute_world("fail_noop", 0);
     }
 
     #[test]

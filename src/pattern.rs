@@ -4,8 +4,10 @@ use crate::{
     pixmap::Pixmap,
     topology::{RegionKey, Seam, SeamColors, Topology},
 };
-use std::{cmp::Ordering, collections::BTreeMap};
-use std::collections::BTreeSet;
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, BTreeSet},
+};
 
 /// Returns all seams (including non atomic ones) in topo
 #[inline(never)]
@@ -284,7 +286,11 @@ pub struct Search<'a> {
 
 impl<'a> Search<'a> {
     pub fn new(world: &'a Topology, pattern: &'a Topology) -> Self {
-        Self { world, pattern, hidden: None }
+        Self {
+            world,
+            pattern,
+            hidden: None,
+        }
     }
 
     #[inline(never)]
@@ -380,11 +386,10 @@ pub fn extract_pattern(pixmap: &mut Pixmap) -> Pixmap {
 mod test {
     use crate::{
         math::rgba8::Rgba8,
-        pattern::{extract_pattern, NullTrace},
+        pattern::{extract_pattern, NullTrace, Search},
         pixmap::Pixmap,
         topology::Topology,
     };
-    use crate::pattern::Search;
 
     fn pixmap_with_void_from_path(path: &str) -> Pixmap {
         Pixmap::from_bitmap_path(path)

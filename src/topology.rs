@@ -511,13 +511,24 @@ impl Topology {
     }
 
     /// Invalidates all regions keys
+    /// Returns true if any regions were changed
     #[inline(never)]
-    pub fn fill_regions(&mut self, fill_regions: &Vec<FillRegion>) {
+    pub fn fill_regions(&mut self, fill_regions: &Vec<FillRegion>) -> bool {
+        let mut modified = false;
         let mut remaining = Vec::new();
+
         for &fill_region in fill_regions {
             // If all neighboring regions have a different color than fill_region.color we can
             // simply replace Region.color
             let region = &self[fill_region.region_key];
+
+            if region.color == fill_region.color {
+                // already has desired color, skip
+                continue;
+            }
+
+            modified = true;
+
             if region
                 .iter_seams()
                 .all(|seam| self.color_right_of(seam) != Some(fill_region.color))
@@ -532,6 +543,8 @@ impl Topology {
         if !remaining.is_empty() {
             self.fill_regions_fallback(&remaining);
         }
+
+        modified
     }
 
     pub fn border_containing_side(&self, side: &Side) -> Option<(BorderKey, &Border)> {

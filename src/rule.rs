@@ -49,7 +49,8 @@ impl Rule {
             .ok()
     }
 
-    pub fn apply_ops(&self, phi: &Morphism, world: &mut Topology) {
+    /// Returns true if there were any changes to the world
+    pub fn apply_ops(&self, phi: &Morphism, world: &mut Topology) -> bool {
         let phi_fill_regions = self
             .fill_regions
             .iter()
@@ -59,7 +60,8 @@ impl Rule {
             })
             .collect();
 
-        world.fill_regions(&phi_fill_regions);
+        let modified = world.fill_regions(&phi_fill_regions);
+        modified
     }
 }
 
