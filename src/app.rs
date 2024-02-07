@@ -411,7 +411,7 @@ impl eframe::App for EguiApp {
 
             self.scene_painter.draw_grid(&self.view.camera, &frames);
 
-            let pixmap = self.view.world.to_pixmap();
+            let pixmap = self.view.world.to_pixmap_without_transparent();
             self.scene_painter
                 .draw_pixmap(&pixmap, &self.view.camera, &frames);
         }

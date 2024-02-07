@@ -497,6 +497,21 @@ impl Topology {
         pixmap
     }
 
+    pub fn to_pixmap_without_transparent(&self) -> Pixmap {
+        let mut pixmap = Pixmap::new();
+        for region in self.regions.values() {
+            if region.color.a == 0 {
+                continue;
+            }
+
+            for &pixel in &region.interior {
+                pixmap.set(pixel, region.color);
+            }
+        }
+
+        pixmap
+    }
+
     #[inline(never)]
     fn fill_regions_fallback(&mut self, fill_regions: &Vec<FillRegion>) {
         let mut pixmap = self.to_pixmap();
