@@ -8,24 +8,25 @@ use crate::{
 use glow::HasContext;
 use memoffset::offset_of;
 use std::{mem::size_of, sync::Arc};
+use crate::math::arrow::Arrow;
 
 #[derive(Debug, Clone, Copy)]
-pub struct SelectionVertex {
+struct LineVertex {
     pub position: [f32; 2],
 }
 
-pub struct SelectionPainter {
+pub struct LinePainter {
     shader: Shader,
-    array_buffer: GlBuffer<SelectionVertex>,
+    array_buffer: GlBuffer<LineVertex>,
     element_buffer: GlBuffer<u32>,
     vertex_array: GlVertexArray,
     gl: Arc<glow::Context>,
 }
 
-impl SelectionPainter {
+impl LinePainter {
     pub unsafe fn new(gl: Arc<glow::Context>) -> Self {
-        let vs_source = include_str!("shaders/selection.vert");
-        let fs_source = include_str!("shaders/selection.frag");
+        let vs_source = include_str!("shaders/line.vert");
+        let fs_source = include_str!("shaders/line.frag");
         let shader = Shader::from_source(gl.clone(), &vs_source, &fs_source);
 
         // Create vertex, index buffers and assign to shader
@@ -37,11 +38,11 @@ impl SelectionPainter {
         array_buffer.bind();
         element_buffer.bind();
 
-        let size = size_of::<SelectionVertex>();
+        let size = size_of::<LineVertex>();
         shader.assign_attribute_f32(
             "in_glwindow_position",
             &VertexAttribDesc::VEC2,
-            offset_of!(SelectionVertex, position) as i32,
+            offset_of!(LineVertex, position) as i32,
             size as i32,
         );
 
@@ -54,23 +55,18 @@ impl SelectionPainter {
         }
     }
 
-    /// Draw a list of selection rects
-    pub unsafe fn draw(&mut self, rects: &[Rect<f64>], to_glwindow: AffineMap<f64>, time: f64) {
-        // Create list of vertices for draw_tiles with texture coordinates from atlas
-        // Draw two triangles
-        let mut vertices: Vec<SelectionVertex> = Vec::new();
+    pub unsafe fn draw_lines(&mut self, lines: &[Arrow<f64>], to_glwindow: AffineMap<f64>, time: f64) {
+        let mut vertices: Vec<LineVertex> = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
 
-        for rect in rects {
-            for arrow in rect.ccw_side_arrows() {
-                for corner in arrow.corners() {
-                    let vertex = SelectionVertex {
-                        position: (to_glwindow * corner).cwise_into_lossy().to_array(),
-                    };
+        for line in lines {
+            for corner in line.corners() {
+                let vertex = LineVertex {
+                    position: (to_glwindow * corner).cwise_into_lossy().to_array(),
+                };
 
-                    indices.push(vertices.len() as u32);
-                    vertices.push(vertex);
-                }
+                indices.push(vertices.len() as u32);
+                vertices.push(vertex);
             }
         }
 
@@ -90,4 +86,10 @@ impl SelectionPainter {
         self.gl
             .draw_elements(glow::LINES, indices.len() as i32, glow::UNSIGNED_INT, 0);
     }
+
+    pub unsafe fn draw_rect(&mut self, rect: Rect<f64>, to_glwindow: AffineMap<f64>, time: f64) {
+        let sides = rect.ccw_side_arrows();
+        self.draw_lines(&sides, to_glwindow, time);
+    }
+
 }

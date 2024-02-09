@@ -132,7 +132,7 @@ impl EguiApp {
 
         // Load topology from file
         // TODO: Should be fetched instead of included
-        let world_image_bytes = include_bytes!("../test_resources/compiler/gate/world.png");
+        let world_image_bytes = include_bytes!("../resources/saves/circles.png");
         let world_bitmap = Bitmap::load_from_memory(world_image_bytes).unwrap();
         // let world_bitmap = Bitmap::transparent(512, 512);
         let world = Topology::from_bitmap(&world_bitmap);
@@ -315,6 +315,8 @@ impl EguiApp {
         if ui.button("Save").clicked() {
             println!("Saving edit scene to {}", self.file_name);
 
+
+
             todo!("Implement save");
             ui.close_menu();
         }
@@ -414,6 +416,9 @@ impl eframe::App for EguiApp {
             let pixmap = self.view.world.to_pixmap_without_transparent();
             self.scene_painter
                 .draw_pixmap(&pixmap, &self.view.camera, &frames);
+
+            let bounds = self.view.world.bounds();
+            self.scene_painter.draw_bounds(bounds, &self.view.camera, &frames, time);
         }
 
         self.scene_painter.i_frame += 1;
