@@ -1,5 +1,5 @@
 use crate::{
-    math::{affine_map::AffineMap, rect::Rect},
+    math::{affine_map::AffineMap, arrow::Arrow, rect::Rect},
     painting::{
         gl_buffer::{GlBuffer, GlBufferTarget, GlVertexArray},
         shader::{Shader, VertexAttribDesc},
@@ -8,7 +8,6 @@ use crate::{
 use glow::HasContext;
 use memoffset::offset_of;
 use std::{mem::size_of, sync::Arc};
-use crate::math::arrow::Arrow;
 
 #[derive(Debug, Clone, Copy)]
 struct LineVertex {
@@ -55,7 +54,12 @@ impl LinePainter {
         }
     }
 
-    pub unsafe fn draw_lines(&mut self, lines: &[Arrow<f64>], to_glwindow: AffineMap<f64>, time: f64) {
+    pub unsafe fn draw_lines(
+        &mut self,
+        lines: &[Arrow<f64>],
+        to_glwindow: AffineMap<f64>,
+        time: f64,
+    ) {
         let mut vertices: Vec<LineVertex> = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
 
@@ -91,5 +95,4 @@ impl LinePainter {
         let sides = rect.ccw_side_arrows();
         self.draw_lines(&sides, to_glwindow, time);
     }
-
 }

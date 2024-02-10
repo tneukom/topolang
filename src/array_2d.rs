@@ -64,9 +64,7 @@ impl<T> Array2d<T> {
     }
 
     pub fn indices_for_size(size: impl Index2d) -> impl Iterator<Item = Point<usize>> {
-        (0..size.y())
-            .cartesian_product(0..size.x())
-            .map(|(y, x)| Point::new(x, y))
+        Rect::low_size([0, 0], [size.x(), size.y()]).iter_half_open()
     }
 
     /// Iterator of indices (0, 0), (1, 0), (2, 0), ..., (0, 1), ...

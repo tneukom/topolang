@@ -54,9 +54,10 @@ impl ScenePainter {
         bounds: Rect<i64>,
         camera: &Camera,
         frames: &CoordinateFrames,
-        time: f64
+        time: f64,
     ) {
         let world_to_glwindow = frames.view_to_glwindow() * camera.world_to_view();
-        self.line_painter.draw_rect(bounds.cwise_into_lossy(), world_to_glwindow, time);
+        self.line_painter
+            .draw_rect(bounds.cwise_into_lossy(), world_to_glwindow, time);
     }
 }

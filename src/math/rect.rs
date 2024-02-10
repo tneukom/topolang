@@ -1,4 +1,5 @@
 use crate::{
+    array_2d::Index2d,
     math::{
         arrow::Arrow,
         axis_line::AxisLine,
@@ -12,7 +13,7 @@ use itertools::Itertools;
 use std::{
     fmt::Debug,
     hash::{Hash, Hasher},
-    ops::{Add, Mul, Range, Sub},
+    ops::{Add, Mul, Range, RangeInclusive, Sub},
 };
 
 ///  low
@@ -664,10 +665,25 @@ impl<T> Rect<T>
 where
     T: Clone,
     Range<T>: Clone + Iterator<Item = T>,
+    RangeInclusive<T>: Clone + Iterator<Item = T>,
 {
-    pub fn iter_half_open(self) -> impl Iterator<Item = Point<T>> + Clone {
+    /// FIXME: Use impl trait alias when stable
+    /// All whole number points in [x.low, x.high) x [y.low, y.high)
+    pub fn iter_half_open(
+        self,
+    ) -> impl Iterator<Item = Point<T>> + IntoIterator<Item = Point<T>> + Clone {
         (self.y.low..self.y.high)
             .cartesian_product(self.x.low..self.x.high)
+            .map(|(y, x)| Point::new(x, y))
+    }
+
+    /// FIXME: Use impl trait alias when stable
+    /// All whole number points in [x.low, x.high] x [y.low, y.high]
+    pub fn iter_closed(
+        self,
+    ) -> impl Iterator<Item = Point<T>> + IntoIterator<Item = Point<T>> + Clone {
+        (self.y.low..=self.y.high)
+            .cartesian_product(self.x.low..=self.x.high)
             .map(|(y, x)| Point::new(x, y))
     }
 }

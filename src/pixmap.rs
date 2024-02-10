@@ -138,6 +138,10 @@ impl Pixmap {
             self.set(pixel, color)
         }
     }
+
+    pub fn retain(&mut self, mut f: impl FnMut(&Pixel, &mut Rgba8) -> bool) {
+        self.map.retain(f)
+    }
 }
 
 impl Index<&Pixel> for Pixmap {

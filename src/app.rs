@@ -315,8 +315,6 @@ impl EguiApp {
         if ui.button("Save").clicked() {
             println!("Saving edit scene to {}", self.file_name);
 
-
-
             todo!("Implement save");
             ui.close_menu();
         }
@@ -418,7 +416,8 @@ impl eframe::App for EguiApp {
                 .draw_pixmap(&pixmap, &self.view.camera, &frames);
 
             let bounds = self.view.world.bounds();
-            self.scene_painter.draw_bounds(bounds, &self.view.camera, &frames, time);
+            self.scene_painter
+                .draw_bounds(bounds, &self.view.camera, &frames, time);
         }
 
         self.scene_painter.i_frame += 1;

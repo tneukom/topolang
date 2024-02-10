@@ -2,13 +2,19 @@ use super::{
     point::Point,
     rect::{Rect, RectBounds},
 };
-use crate::math::generic::Num;
+use crate::math::generic::{Dot, Num};
+use num_traits::clamp;
 use std::{clone::Clone, fmt::Debug};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct Arrow<T> {
     pub a: Point<T>,
     pub b: Point<T>,
+}
+
+#[allow(non_snake_case)]
+pub fn Arrow<T>(a: Point<T>, b: Point<T>) -> Arrow<T> {
+    Arrow { a, b }
 }
 
 impl<T> Arrow<T> {
@@ -60,5 +66,33 @@ impl<T: Num> Arrow<T> {
 
     pub fn bounds(self) -> Rect<T> {
         self.corners().bounds()
+    }
+
+    /// P - closest point on the line
+    pub fn closest_point_offset(self, p: Point<T>) -> Point<T> {
+        // Let A + tAB be the projection of p onto the line then we have
+        // <P - (A + tAB), AB> = 0 and therefore
+        // <P - A, AB> - t<AB, AB> = 0
+        // t = <P - A, AB>/<AB, AB>
+        let ap = p - self.a;
+        let ab = self.dir();
+        let t = ap.dot(ab) / ab.dot(ab);
+        // If t is outside the range [0, 1] the closest point is the endpoint of the line segment.
+
+        let t_clamped = clamp(t, T::ZERO, T::ONE);
+
+        // A + t * AB is the closest point on the line to P
+        // P - A + t * AB = AP - t * AB
+        ap - ab * t_clamped
+    }
+
+    /// Returns the point on the line closest to p
+    pub fn closest_point(self, p: Point<T>) -> Point<T> {
+        self.closest_point_offset(p) + self.a
+    }
+
+    pub fn distance_squared(self, p: Point<T>) -> T {
+        let offset = self.closest_point_offset(p);
+        offset.norm_squared()
     }
 }

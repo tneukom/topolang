@@ -2,7 +2,7 @@ use crate::{
     brush::Brush,
     camera::Camera,
     coordinate_frame::CoordinateFrames,
-    math::{point::Point, rect::Rect},
+    math::{arrow::Arrow, point::Point, rect::Rect},
     pixmap::Pixmap,
     topology::Topology,
 };
@@ -107,6 +107,7 @@ pub struct MoveCamera {
 #[derive(Debug, Clone)]
 pub struct Brushing {
     pub brush: Brush,
+    pub world_mouse: Point<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -167,7 +168,7 @@ impl View {
 
     fn handle_brushing(
         &mut self,
-        op: Brushing,
+        mut op: Brushing,
         input: &ViewInput,
         settings: &ViewSettings,
     ) -> UiState {
@@ -182,7 +183,17 @@ impl View {
         }
 
         let mut change = Pixmap::new();
-        op.brush.draw_point(&mut change, input.world_mouse);
+        op.brush
+            .draw_line(&mut change, Arrow(op.world_mouse, input.world_mouse));
+        op.world_mouse = input.world_mouse;
+        // op.brush.draw_point(&mut change, input.world_mouse);
+
+        // Only draw points within bounds of world
+        let bounds = self.world.bounds();
+        change
+            .map
+            .retain(|pixel, color| bounds.contains(pixel.point()));
+
         self.world.blit(&change);
 
         UiState::Brushing(op)
@@ -201,6 +212,7 @@ impl View {
             EditMode::Brush => {
                 if input.left_mouse.is_down {
                     let op = Brushing {
+                        world_mouse: input.world_mouse,
                         brush: settings.brush,
                     };
                     return self.handle_brushing(op, input, settings);
