@@ -5,6 +5,7 @@ use super::{
 use crate::math::generic::{Dot, Num};
 use num_traits::clamp;
 use std::{clone::Clone, fmt::Debug};
+use crate::math::generic::MinimumMaximum;
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct Arrow<T> {
@@ -52,6 +53,10 @@ impl<T: Num> Arrow<T> {
         self.a == p || self.b == p
     }
 
+    pub const fn endpoints(self) -> [Point<T>; 2] {
+        [self.a, self.b]
+    }
+
     pub fn dir(self) -> Point<T> {
         self.b - self.a
     }
@@ -94,5 +99,27 @@ impl<T: Num> Arrow<T> {
     pub fn distance_squared(self, p: Point<T>) -> T {
         let offset = self.closest_point_offset(p);
         offset.norm_squared()
+    }
+
+    pub fn distance_squared_to_rect_boundary(self, rect: Rect<T>) -> T {
+        // Let P be on the rect boundary and Q on the line such that |P - Q| minimal.
+        // A) P is a rect corner: Minimum of distances of rect corners to side
+        // B) Q is a line endpoint: Minimum of endpoint to rect distances
+        // C) Otherwise: Line must be parallel to one of the sides of the rectangle. We move PQ
+        //    to and endpoint/corner while keeping it parallel, reducing this case to case A or B
+
+        let endpoint_dist_sq = self
+            .endpoints()
+            .map(|endpoint| rect.distance_squared(endpoint))
+            .minimum()
+            .unwrap();
+
+        let corner_dist_sq = rect
+            .corners()
+            .map(|corner| self.distance_squared(corner))
+            .minimum()
+            .unwrap();
+
+        [endpoint_dist_sq, corner_dist_sq].minimum().unwrap()
     }
 }

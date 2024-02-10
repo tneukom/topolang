@@ -451,6 +451,17 @@ impl<T: Num> Rect<T> {
     pub fn center(self) -> Point<T> {
         Point::new(self.x.center(), self.y.center())
     }
+
+    // fn intersects_line(&self, line: Arrow<T>) -> bool {
+    //     if self.contains_point(line.a) || self.contains_point(line.b) {
+    //         return true;
+    //     }
+    //
+    //     self.ccw_side_arrows().into_iter().any(|side| side.inter)
+    //
+    //     self.sides()
+    //         .any(|side| side.does_intersect_line_segment(other))
+    // }
 }
 
 /// Right hand Point add
