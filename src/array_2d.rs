@@ -1,5 +1,4 @@
 use crate::math::{point::Point, rect::Rect, turn::Turn};
-use itertools::Itertools;
 use num_traits::Inv;
 use std::ops::{Index, IndexMut};
 

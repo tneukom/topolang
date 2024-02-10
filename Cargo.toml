@@ -32,18 +32,18 @@ log = "0.4"
 #serde_json = "1.0.81"
 memoffset = "0.9.0"
 by_address = "1.1.0"
-image = { default-features = false, features = [ "png" ] }
-itertools = "0.12.0"
+image = { version = "0.24.8", default-features = false, features = [ "png" ] }
+itertools = "0.12.1"
 petgraph = "0.6.4"
 #arboard = "3.2.1"
 #weak-table = "0.3.2"
-bytemuck = { version = "1.14.0", features = ["derive"] }
-data-encoding = "2.4.0"
-smallvec = { version = "1.11.1", features = ["union", "const_generics", "const_new"] }
+bytemuck = { version = "1.14.3", features = ["derive"] }
+data-encoding = "2.5.0"
+smallvec = { version = "1.13.1", features = ["union", "const_generics", "const_new"] }
 # num-integer = { version = "0.1.45", features = ["i128"] }
 bimap = "0.6.3"
-num-traits = "0.2.17"
-anyhow = { version = "1.0.75", features = ["backtrace"] }
+num-traits = "0.2.18"
+anyhow = { version = "1.0.79", features = ["backtrace"] }
 hex = "0.4.3"
 arrayvec = "0.7.4"
 pretty_assertions = "1.4.0"

@@ -139,7 +139,7 @@ impl Pixmap {
         }
     }
 
-    pub fn retain(&mut self, mut f: impl FnMut(&Pixel, &mut Rgba8) -> bool) {
+    pub fn retain(&mut self, f: impl FnMut(&Pixel, &mut Rgba8) -> bool) {
         self.map.retain(f)
     }
 }

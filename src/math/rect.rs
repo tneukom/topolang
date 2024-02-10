@@ -1,5 +1,4 @@
 use crate::{
-    array_2d::Index2d,
     math::{
         arrow::Arrow,
         axis_line::AxisLine,

@@ -190,9 +190,7 @@ impl View {
 
         // Only draw points within bounds of world
         let bounds = self.world.bounds();
-        change
-            .map
-            .retain(|pixel, color| bounds.contains(pixel.point()));
+        change.map.retain(|pixel, _| bounds.contains(pixel.point()));
 
         self.world.blit(&change);
 

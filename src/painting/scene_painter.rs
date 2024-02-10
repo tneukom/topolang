@@ -27,8 +27,6 @@ impl ScenePainter {
         }
     }
 
-    pub unsafe fn draw_rect_outline(&self, camera: &Camera, frame: &CoordinateFrames) {}
-
     pub unsafe fn draw_grid(&self, camera: &Camera, frames: &CoordinateFrames) {
         let world_to_pixelwindow = frames.view_to_pixelwindow() * camera.world_to_view();
         let origin = world_to_pixelwindow * Point::ZERO;
