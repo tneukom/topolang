@@ -325,6 +325,37 @@ macro_rules! impl_min_max_primitive {
 impl_min_max_primitive!(f32);
 impl_min_max_primitive!(f64);
 
+pub trait MinimumMaximum {
+    type Output;
+
+    fn minimum(self) -> Option<Self::Output>;
+    fn maximum(self) -> Option<Self::Output>;
+}
+
+impl<T: MinMax + Copy> MinimumMaximum for &[T] {
+    type Output = T;
+
+    fn minimum(self) -> Option<Self::Output> {
+        self.iter().copied().reduce(|lhs, rhs| lhs.min(rhs))
+    }
+
+    fn maximum(self) -> Option<Self::Output> {
+        self.iter().copied().reduce(|lhs, rhs| lhs.max(rhs))
+    }
+}
+
+impl<T: MinMax, const N: usize> MinimumMaximum for [T; N] {
+    type Output = T;
+
+    fn minimum(self) -> Option<Self::Output> {
+        self.into_iter().reduce(|lhs, rhs| lhs.min(rhs))
+    }
+
+    fn maximum(self) -> Option<Self::Output> {
+        self.into_iter().reduce(|lhs, rhs| lhs.max(rhs))
+    }
+}
+
 pub trait Num:
     Copy
     + Sized
