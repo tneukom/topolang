@@ -2,7 +2,7 @@ use crate::{
     brush::Brush,
     camera::Camera,
     coordinate_frame::CoordinateFrames,
-    math::{arrow::Arrow, point::Point, rect::Rect},
+    math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect, rgba8::Rgba8},
     pixmap::Pixmap,
     topology::Topology,
 };
@@ -81,16 +81,20 @@ impl ViewInput {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EditMode {
     Brush,
+    Eraser,
+    Fill,
 }
 
 impl EditMode {
     pub fn ui_label(self) -> &'static str {
         match self {
             Self::Brush => "Brush",
+            Self::Eraser => "Eraser",
+            Self::Fill => "Fill",
         }
     }
 
-    pub const ALL: [EditMode; 1] = [Self::Brush];
+    pub const ALL: [EditMode; 3] = [Self::Brush, Self::Eraser, Self::Fill];
 }
 
 #[derive(Debug, Clone)]
@@ -174,7 +178,7 @@ impl View {
     ) -> UiState {
         // Because the brushing op is started even if left mouse is not down, we need to exit if
         // mode changes.
-        if settings.edit_mode != EditMode::Brush {
+        if settings.edit_mode != EditMode::Brush && settings.edit_mode != EditMode::Eraser {
             return UiState::Idle;
         }
 
@@ -191,7 +195,6 @@ impl View {
         // Only draw points within bounds of world
         let bounds = self.world.bounds();
         change.map.retain(|pixel, _| bounds.contains(pixel.point()));
-
         self.world.blit(&change);
 
         UiState::Brushing(op)
@@ -207,13 +210,27 @@ impl View {
         }
 
         match settings.edit_mode {
-            EditMode::Brush => {
+            EditMode::Brush | EditMode::Eraser => {
                 if input.left_mouse.is_down {
+                    let mut brush = settings.brush;
+                    // Clear is brushing with transparent color
+                    if settings.edit_mode == EditMode::Eraser {
+                        brush.color = Rgba8::TRANSPARENT;
+                    }
+
                     let op = Brushing {
                         world_mouse: input.world_mouse,
-                        brush: settings.brush,
+                        brush,
                     };
                     return self.handle_brushing(op, input, settings);
+                }
+            }
+            EditMode::Fill => {
+                if input.left_mouse.is_down {
+                    let pixel: Pixel = input.world_mouse.floor().cwise_into_lossy().into();
+                    if let Some((&region_key, _)) = self.world.region_at(pixel) {
+                        self.world.fill_region(region_key, settings.brush.color);
+                    }
                 }
             }
         }

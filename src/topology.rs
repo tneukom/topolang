@@ -562,6 +562,17 @@ impl Topology {
         modified
     }
 
+    pub fn fill_region(&mut self, region_key: RegionKey, color: Rgba8) -> bool {
+        let fill_regions = vec![FillRegion { region_key, color }];
+        self.fill_regions(&fill_regions)
+    }
+
+    pub fn region_at(&self, pixel: Pixel) -> Option<(&RegionKey, &Region)> {
+        self.regions
+            .iter()
+            .find(|(_, region)| region.interior.contains(&pixel))
+    }
+
     pub fn border_containing_side(&self, side: &Side) -> Option<(BorderKey, &Border)> {
         self.iter_borders_with_key()
             .find(|(_, border)| border.cycle.contains(side))

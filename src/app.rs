@@ -156,10 +156,20 @@ impl EguiApp {
                 .load_texture(name, egui_image, TextureOptions::LINEAR)
         };
 
-        let edit_mode_icons = HashMap::from([(
-            EditMode::Brush,
-            load_egui_icon("icons/brush.png", include_bytes!("icons/brush.png")),
-        )]);
+        let edit_mode_icons = HashMap::from([
+            (
+                EditMode::Brush,
+                load_egui_icon("icons/brush.png", include_bytes!("icons/brush.png")),
+            ),
+            (
+                EditMode::Eraser,
+                load_egui_icon("icons/eraser.png", include_bytes!("icons/eraser.png")),
+            ),
+            (
+                EditMode::Fill,
+                load_egui_icon("icons/fill.png", include_bytes!("icons/fill.png")),
+            ),
+        ]);
 
         let view_settings = ViewSettings {
             edit_mode: EditMode::Brush,

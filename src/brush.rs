@@ -18,11 +18,6 @@ impl Brush {
         }
     }
 
-    pub fn draw_point(&self, target: &mut Pixmap, point: Point<f64>) {
-        let pixel = Pixel::containing(point);
-        target.set(pixel, self.color);
-    }
-
     /// Circle
     fn stamp(radius: i64) -> Vec<Point<i64>> {
         Rect::low_high([-radius, -radius], [radius, radius])
