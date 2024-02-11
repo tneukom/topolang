@@ -41,6 +41,9 @@ pub fn palette_widget(ui: &mut egui::Ui, palette: &Palette, rgba: &mut Rgba8) {
             }
         });
     }
+
+    // Link to palette
+    ui.hyperlink_to("Link", &palette.link);
 }
 
 pub struct ColorChooser {

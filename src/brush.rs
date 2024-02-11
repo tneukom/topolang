@@ -7,14 +7,14 @@ use crate::{
 #[derive(Debug, Clone, Copy)]
 pub struct Brush {
     pub color: Rgba8,
-    pub radius: f64,
+    pub radius: i64,
 }
 
 impl Brush {
     pub fn default() -> Self {
         Self {
             color: Rgba8::BLACK,
-            radius: 0.5_f64.sqrt(), // half diagonal
+            radius: 0,
         }
     }
 
@@ -23,17 +23,30 @@ impl Brush {
         target.set(pixel, self.color);
     }
 
+    /// Circle
+    fn stamp(radius: i64) -> Vec<Point<i64>> {
+        Rect::low_high([-radius, -radius], [radius, radius])
+            .iter_closed()
+            .filter(|&p| p.norm_squared() <= radius * radius)
+            .collect()
+    }
+
     pub fn draw_line(&self, target: &mut Pixmap, line: Arrow<f64>) {
         // for point in Self::points_within_radius(line, self.radius) {
         //     target.set(point.into(), self.color);
         // }
 
+        let stamp = Self::stamp(self.radius);
+
         let pixel_line: Arrow<i64> = Arrow(
             line.a.floor().cwise_into_lossy(),
             line.b.floor().cwise_into_lossy(),
         );
+
         for point in pixel_line.draw() {
-            target.set(point.into(), self.color);
+            for &offset in &stamp {
+                target.set((point + offset).into(), self.color);
+            }
         }
     }
 

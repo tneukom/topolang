@@ -293,8 +293,6 @@ impl EguiApp {
                 }
             }
         });
-
-        ui.separator();
     }
 
     pub fn load_save_ui(&mut self, ui: &mut egui::Ui) {
@@ -324,9 +322,14 @@ impl EguiApp {
         self.view_ui(ui);
         ui.separator();
 
-        // Color and brush
+        ui.label("Brush");
+
+        // Brush color
         self.color_chooser.show(ui);
         self.view_settings.brush.color = self.color_chooser.color;
+
+        // Brush shape
+        ui.add(egui::Slider::new(&mut self.view_settings.brush.radius, 0..=5).text("Radius"));
         ui.separator();
 
         // Step and run
