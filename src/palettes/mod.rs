@@ -1,4 +1,4 @@
-use crate::{bitmap::Bitmap, math::rgba8::Rgba8};
+use crate::{bitmap::Bitmap, math::rgba8::Rgba8, utils::ReflectEnum};
 use itertools::Itertools;
 
 pub struct Palette {
@@ -47,5 +47,35 @@ impl Palette {
     pub fn palette_na16() -> Palette {
         let bitmap = Bitmap::load_from_memory(include_bytes!("na16.png")).unwrap();
         Self::from_bitmap(&bitmap, "NA16", "https://lospec.com/palette-list/na16")
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SystemPalette {
+    Rule,
+    Arrow,
+}
+
+impl SystemPalette {
+    pub const ALL: [Self; 2] = [Self::Rule, Self::Arrow];
+
+    pub const fn rgba(self) -> Rgba8 {
+        match self {
+            Self::Rule => Rgba8::VOID,
+            Self::Arrow => Rgba8::new(0xFF, 0x6E, 0x00, 0xFF), // ff6e00
+        }
+    }
+}
+
+impl ReflectEnum for SystemPalette {
+    fn all() -> &'static [Self] {
+        &Self::ALL
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Rule => "Rule",
+            Self::Arrow => "Arrow",
+        }
     }
 }

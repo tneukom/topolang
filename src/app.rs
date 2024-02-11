@@ -10,7 +10,7 @@ use crate::{
     painting::scene_painter::ScenePainter,
     topology::Topology,
     view::{EditMode, View, ViewButton, ViewInput, ViewSettings},
-    widgets::{ColorChooser, FileChooser},
+    widgets::{system_colors_widget, ColorChooser, FileChooser},
 };
 use glow::HasContext;
 use instant::Instant;
@@ -327,6 +327,9 @@ impl EguiApp {
         // Brush color
         self.color_chooser.show(ui);
         self.view_settings.brush.color = self.color_chooser.color;
+
+        ui.label("System colors");
+        system_colors_widget(ui, &mut self.color_chooser.color);
 
         // Brush shape
         ui.add(egui::Slider::new(&mut self.view_settings.brush.radius, 0..=5).text("Radius"));

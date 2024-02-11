@@ -1,7 +1,11 @@
 use itertools::Itertools;
 use std::{ffi::OsStr, fs, ops::RangeInclusive, path::PathBuf};
 
-use crate::{math::rgba8::Rgba8, palettes::Palette, utils::ReflectEnum};
+use crate::{
+    math::rgba8::Rgba8,
+    palettes::{Palette, SystemPalette},
+    utils::ReflectEnum,
+};
 
 pub fn opt_drag_value<Num: egui::emath::Numeric>(
     ui: &mut egui::Ui,
@@ -44,6 +48,17 @@ pub fn palette_widget(ui: &mut egui::Ui, palette: &Palette, rgba: &mut Rgba8) {
 
     // Link to palette
     ui.hyperlink_to("Link", &palette.link);
+}
+
+pub fn system_colors_widget(ui: &mut egui::Ui, rgba: &mut Rgba8) {
+    for system_color in SystemPalette::ALL {
+        ui.horizontal(|ui| {
+            if rgba_button(ui, system_color.rgba(), system_color.rgba() == *rgba).clicked() {
+                *rgba = system_color.rgba();
+            }
+            ui.label(system_color.as_str());
+        });
+    }
 }
 
 pub struct ColorChooser {
