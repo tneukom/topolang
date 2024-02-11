@@ -1,6 +1,7 @@
 use crate::{
     math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect, rgba8::Rgba8},
     pixmap::Pixmap,
+    utils::IteratorPlus,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -23,18 +24,22 @@ impl Brush {
     }
 
     pub fn draw_line(&self, target: &mut Pixmap, line: Arrow<f64>) {
-        for point in Self::points_within_radius(line, self.radius) {
+        // for point in Self::points_within_radius(line, self.radius) {
+        //     target.set(point.into(), self.color);
+        // }
+
+        let pixel_line: Arrow<i64> = Arrow(
+            line.a.floor().cwise_into_lossy(),
+            line.b.floor().cwise_into_lossy(),
+        );
+        for point in pixel_line.draw() {
             target.set(point.into(), self.color);
         }
     }
 
     /// Slow but flexible line drawing, only use for small lines!
     /// FIXME: Find something faster than iterating over bounding box
-    /// FIXME: Use trait alias for return trait when stable
-    pub fn points_within_radius(
-        line: Arrow<f64>,
-        radius: f64,
-    ) -> impl Iterator<Item = Point<i64>> + IntoIterator<Item = Point<i64>> + Clone {
+    pub fn points_within_radius(line: Arrow<f64>, radius: f64) -> impl IteratorPlus<Point<i64>> {
         let bbox = line.bounds().padded(radius.ceil());
         let low = bbox.low().floor().cwise_into_lossy::<i64>();
         let high = bbox.high().ceil().cwise_into_lossy::<i64>();

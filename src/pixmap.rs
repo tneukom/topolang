@@ -7,6 +7,7 @@ use crate::{
         rgba8::Rgba8,
     },
     topology::{Border, Region},
+    utils::IteratorPlus,
 };
 use std::{
     collections::{btree_map, BTreeMap},
@@ -85,11 +86,11 @@ impl Pixmap {
         self.map.remove(pixel)
     }
 
-    pub fn keys(&self) -> impl Iterator<Item = &Pixel> + Clone {
+    pub fn keys(&self) -> impl IteratorPlus<&Pixel> {
         self.map.keys()
     }
 
-    pub fn values(&self) -> impl Iterator<Item = &Rgba8> + Clone {
+    pub fn values(&self) -> impl IteratorPlus<&Rgba8> {
         self.map.values()
     }
 

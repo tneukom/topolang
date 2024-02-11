@@ -66,10 +66,7 @@ impl<T> Point<T> {
     }
 
     pub fn swap_xy(self) -> Self {
-        Self {
-            x: self.y,
-            y: self.x,
-        }
+        Self::new(self.y, self.x)
     }
 }
 
@@ -112,6 +109,14 @@ impl<T: SignedNum> Point<T> {
     // (0,1) -> (-1,0)
     pub fn orthogonal_ccw(self) -> Self {
         Self::new(-self.y, self.x)
+    }
+
+    pub fn mirror_x(self) -> Self {
+        Self::new(-self.x, self.y)
+    }
+
+    pub fn mirror_y(self) -> Self {
+        Self::new(self.x, -self.y)
     }
 }
 

@@ -1,4 +1,7 @@
-use crate::math::{point::Point, rect::Rect, turn::Turn};
+use crate::{
+    math::{point::Point, rect::Rect, turn::Turn},
+    utils::IteratorPlus,
+};
 use num_traits::Inv;
 use std::ops::{Index, IndexMut};
 
@@ -62,16 +65,16 @@ impl<T> Array2d<T> {
         Point::new(self.width, self.height)
     }
 
-    pub fn indices_for_size(size: impl Index2d) -> impl Iterator<Item = Point<usize>> {
+    pub fn indices_for_size(size: impl Index2d) -> impl IteratorPlus<Point<usize>> {
         Rect::low_size([0, 0], [size.x(), size.y()]).iter_half_open()
     }
 
     /// Iterator of indices (0, 0), (1, 0), (2, 0), ..., (0, 1), ...
-    pub fn indices(&self) -> impl Iterator<Item = Point<usize>> {
+    pub fn indices(&self) -> impl IteratorPlus<Point<usize>> {
         Self::indices_for_size(self.size())
     }
 
-    pub fn enumerate(&self) -> impl Iterator<Item = (Point<usize>, &T)> {
+    pub fn enumerate(&self) -> impl IteratorPlus<(Point<usize>, &T)> {
         self.indices().map(|index| (index, &self[index]))
     }
 
@@ -84,7 +87,7 @@ impl<T> Array2d<T> {
     }
 
     /// Iterate linearly over the given rectangle (half open indices)
-    pub fn iter_sub_rect(&self, rect: impl Into<Rect<usize>>) -> impl Iterator<Item = &T> + Clone {
+    pub fn iter_sub_rect(&self, rect: impl Into<Rect<usize>>) -> impl IteratorPlus<&T> {
         let rect = rect.into();
         rect.iter_half_open().map(|idx| &self[idx])
     }

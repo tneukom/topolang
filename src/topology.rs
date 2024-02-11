@@ -8,7 +8,7 @@ use crate::{
         rgba8::Rgba8,
     },
     pixmap::Pixmap,
-    utils::{UndirectedEdge, UndirectedGraph},
+    utils::{IteratorPlus, UndirectedEdge, UndirectedGraph},
 };
 use itertools::Itertools;
 use std::{
@@ -165,7 +165,7 @@ pub struct Region {
 }
 
 impl Region {
-    pub fn iter_seams(&self) -> impl Iterator<Item = &Seam> {
+    pub fn iter_seams(&self) -> impl IteratorPlus<&Seam> {
         self.boundary.iter().flat_map(|border| border.seams.iter())
     }
 
@@ -380,13 +380,13 @@ impl Topology {
         Self::from_regions(regions)
     }
 
-    pub fn iter_borders(&self) -> impl Iterator<Item = &Border> + Clone {
+    pub fn iter_borders(&self) -> impl IteratorPlus<&Border> {
         self.regions
             .values()
             .flat_map(|region| region.boundary.iter())
     }
 
-    pub fn iter_borders_with_key(&self) -> impl Iterator<Item = (BorderKey, &Border)> + Clone {
+    pub fn iter_borders_with_key(&self) -> impl IteratorPlus<(BorderKey, &Border)> {
         self.regions.iter().flat_map(|(&region_key, region)| {
             region
                 .boundary
@@ -396,19 +396,19 @@ impl Topology {
         })
     }
 
-    pub fn iter_seams(&self) -> impl Iterator<Item = &Seam> + Clone {
+    pub fn iter_seams(&self) -> impl IteratorPlus<&Seam> {
         self.iter_borders().flat_map(|border| border.seams.iter())
     }
 
-    pub fn iter_seam_indices(&self) -> impl Iterator<Item = &SeamIndex> {
+    pub fn iter_seam_indices(&self) -> impl IteratorPlus<&SeamIndex> {
         self.seam_indices.values()
     }
 
-    pub fn iter_region_keys<'a>(&'a self) -> impl Iterator<Item = &RegionKey> + Clone + 'a {
+    pub fn iter_region_keys<'a>(&'a self) -> impl IteratorPlus<&RegionKey> + 'a {
         self.regions.keys()
     }
 
-    pub fn iter_region_values<'a>(&'a self) -> impl Iterator<Item = &Region> + Clone + 'a {
+    pub fn iter_region_values<'a>(&'a self) -> impl IteratorPlus<&Region> + 'a {
         self.regions.values()
     }
 
@@ -470,7 +470,7 @@ impl Topology {
 
     /// Seam between left and right region
     /// Component index errors cause panic
-    pub fn seams_between(&self, left: RegionKey, right: RegionKey) -> impl Iterator<Item = &Seam> {
+    pub fn seams_between(&self, left: RegionKey, right: RegionKey) -> impl IteratorPlus<&Seam> {
         let left_comp = &self.regions[&left];
         left_comp
             .iter_seams()
