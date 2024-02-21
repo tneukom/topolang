@@ -1,5 +1,11 @@
 use egui::{epaint, load::SizedTexture, Sense, TextureOptions, Widget};
-use std::{collections::HashMap, hash::Hash, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    fs::File,
+    hash::Hash,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use crate::{
     bitmap::Bitmap,
@@ -13,6 +19,8 @@ use crate::{
     widgets::{system_colors_widget, ColorChooser, FileChooser},
 };
 use glow::HasContext;
+use image::{codecs::gif::GifEncoder, ColorType};
+use image::codecs::gif::Repeat;
 use instant::Instant;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -85,6 +93,8 @@ pub struct EguiApp {
 
     file_chooser: FileChooser,
     color_chooser: ColorChooser,
+
+    gif_encoder: Option<GifEncoder<File>>,
 }
 
 impl EguiApp {
@@ -132,7 +142,7 @@ impl EguiApp {
 
         // Load topology from file
         // TODO: Should be fetched instead of included
-        let world_image_bytes = include_bytes!("../resources/saves/circles.png");
+        let world_image_bytes = include_bytes!("../resources/saves/turing.png");
         let world_bitmap = Bitmap::load_from_memory(world_image_bytes).unwrap();
         // let world_bitmap = Bitmap::transparent(512, 512);
         let world = Topology::from_bitmap(&world_bitmap);
@@ -194,6 +204,7 @@ impl EguiApp {
             file_chooser: FileChooser::new(PathBuf::from("resources/saves")),
             color_chooser: ColorChooser::default(),
             interpreter: Interpreter::new(),
+            gif_encoder: None,
         }
     }
 
@@ -352,10 +363,45 @@ impl EguiApp {
                 .clicked()
             {
                 self.interpreter.step(&mut self.view.world);
+                if let Some(gif_encoder) = &mut self.gif_encoder {
+                    // TODO: Offset world pixmap by bounds.low()
+                    // TODO: Paint over white background to remove transparency or use apng instead
+                    let bounds = self.view.world.bounds();
+                    let size: Point<usize> = bounds.high().cwise_try_into().unwrap();
+                    let image = self.view.world.to_pixmap().to_bitmap_with_size(size);
+                    gif_encoder
+                        .encode(
+                            image.as_raw(),
+                            image.width() as u32,
+                            image.height() as u32,
+                            ColorType::Rgba8,
+                        )
+                        .unwrap();
+                }
             }
 
             if egui::Button::new("Run").selected(self.run).ui(ui).clicked() {
                 self.run = !self.run;
+            }
+        });
+
+        // Gif recording
+        ui.horizontal(|ui| {
+            let mut recording_gif = self.gif_encoder.is_some();
+            ui.checkbox(&mut recording_gif, "Gif");
+
+            if recording_gif && self.gif_encoder.is_none() {
+                // Start gif recording
+                let path = "run.gif";
+                // TODO: Proper handling of error
+                let file = File::create(path).unwrap();
+                let mut gif_encoder = GifEncoder::new_with_speed(file, 10);
+                gif_encoder.set_repeat(Repeat::Infinite).unwrap();
+                self.gif_encoder = Some(gif_encoder);
+            }
+
+            if !recording_gif {
+                self.gif_encoder = None;
             }
         });
 

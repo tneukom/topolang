@@ -74,7 +74,7 @@ pub struct TilePainter {
 
 impl TilePainter {
     const TILE_SIZE: usize = 8;
-    const ATLAS_SIZE: usize = 32; // Number of rows and columns in in the atlas
+    const ATLAS_SIZE: usize = 64; // Number of rows and columns in the atlas
     const ATLAS_RESOLUTION: usize = Self::TILE_SIZE * Self::ATLAS_SIZE;
 
     pub unsafe fn new(gl: Arc<glow::Context>) -> Self {
