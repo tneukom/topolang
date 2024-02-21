@@ -65,6 +65,18 @@ impl Pixmap {
         bitmap
     }
 
+    /// Translate pixmap to positive coordinates, top left pixel will be at (0, 0) and convert
+    /// to bitmap.
+    pub fn to_bitmap(&self) -> Bitmap {
+        let translated = self.translated(-self.bounds().low());
+        let size = translated
+            .bounds()
+            .size()
+            .cwise_try_into::<usize>()
+            .unwrap();
+        translated.to_bitmap_with_size(size)
+    }
+
     pub fn without_color(mut self, color: Rgba8) -> Self {
         self.map.retain(|_, &mut pixel_color| pixel_color != color);
         self

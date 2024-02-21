@@ -135,9 +135,6 @@ impl FileChooser {
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui) -> PathBuf {
-        // File & dir list
-        let geo_extension = OsStr::new("tiles");
-
         // parent folder
         if ui.add(egui::Button::new("../").wrap(false)).clicked() {
             self.current_folder.pop();
@@ -167,10 +164,11 @@ impl FileChooser {
             }
         }
 
-        // files ending in ".geo" in folder "resources/saves"
+        // files ending in ".png" in folder "resources/saves"
+        let extension = OsStr::new("png");
         let files: Vec<_> = dir_entries
             .iter()
-            .filter(|path| path.extension() == Some(&geo_extension))
+            .filter(|path| path.extension() == Some(extension))
             .collect();
 
         let file_names: Vec<_> = files

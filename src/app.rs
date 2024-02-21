@@ -12,15 +12,20 @@ use crate::{
     brush::Brush,
     coordinate_frame::CoordinateFrames,
     interpreter::Interpreter,
-    math::{point::Point, rect::Rect},
+    math::{
+        point::Point,
+        rect::{Rect, RectSide::Top},
+    },
     painting::scene_painter::ScenePainter,
     topology::Topology,
     view::{EditMode, View, ViewButton, ViewInput, ViewSettings},
     widgets::{system_colors_widget, ColorChooser, FileChooser},
 };
 use glow::HasContext;
-use image::{codecs::gif::GifEncoder, ColorType};
-use image::codecs::gif::Repeat;
+use image::{
+    codecs::gif::{GifEncoder, Repeat},
+    ColorType,
+};
 use instant::Instant;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -279,6 +284,10 @@ impl EguiApp {
         input
     }
 
+    pub fn reset_camera(&mut self) {
+        self.view.center_camera(self.view_rect.cwise_into_lossy());
+    }
+
     pub fn view_ui(&mut self, ui: &mut egui::Ui) {
         // Mouse world position
         ui.label(format!(
@@ -287,7 +296,7 @@ impl EguiApp {
         ));
 
         if ui.button("Reset camera").clicked() {
-            self.view.center_camera(self.view_rect.cwise_into_lossy());
+            self.reset_camera();
         }
 
         // Edit mode choices
@@ -324,17 +333,28 @@ impl EguiApp {
         let path = self.file_chooser.show(ui);
 
         if ui.button("Load").clicked() {
-            //let path = format!("resources/saves/{}", self.file_name);
             println!("Loading file {:?} in folder", &path);
 
-            todo!("Load from bitmap file");
+            match Topology::from_bitmap_path(&path) {
+                Ok(world) => {
+                    self.view = View::new(world);
+                    self.reset_camera();
+                }
+                Err(err) => println!("Failed to load world from {path:?} with error {err}"),
+            }
+
             ui.close_menu();
         }
 
         if ui.button("Save").clicked() {
             println!("Saving edit scene to {}", self.file_name);
 
-            todo!("Implement save");
+            let bitmap = self.view.world.to_pixmap().to_bitmap();
+            match bitmap.save(&path) {
+                Ok(_) => println!("Saved {path:?}"),
+                Err(err) => println!("Failed to save {path:?} with error {err}"),
+            }
+
             ui.close_menu();
         }
     }
