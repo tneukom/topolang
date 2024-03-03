@@ -1,21 +1,12 @@
 use egui::{epaint, load::SizedTexture, Sense, TextureOptions, Widget};
-use std::{
-    collections::HashMap,
-    fs::File,
-    hash::Hash,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{collections::HashMap, fs::File, hash::Hash, path::PathBuf, sync::Arc};
 
 use crate::{
     bitmap::Bitmap,
     brush::Brush,
     coordinate_frame::CoordinateFrames,
     interpreter::Interpreter,
-    math::{
-        point::Point,
-        rect::{Rect, RectSide::Top},
-    },
+    math::{point::Point, rect::Rect},
     painting::scene_painter::ScenePainter,
     topology::Topology,
     view::{EditMode, View, ViewButton, ViewInput, ViewSettings},

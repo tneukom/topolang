@@ -6,7 +6,7 @@ use crate::{
         rect::{Rect, RectBounds},
         rgba8::Rgba8,
     },
-    topology::{Border, Region},
+    topology::{Border, Interior},
     utils::IteratorPlus,
 };
 use std::{
@@ -140,9 +140,9 @@ impl Pixmap {
         Self { map }
     }
 
-    pub fn fill_region(&mut self, region: &Region) {
-        for &pixel in &region.interior {
-            self.set(pixel, region.color);
+    pub fn fill_interior(&mut self, interior: &Interior) {
+        for &pixel in &interior.pixels {
+            self.set(pixel, interior.color);
         }
     }
 

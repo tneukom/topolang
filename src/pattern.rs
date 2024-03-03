@@ -9,13 +9,13 @@ use std::{
     collections::{BTreeMap, BTreeSet},
 };
 
-/// Returns all seams (including non atomic ones) in topo
+/// Returns all seams (including non-atomic ones) in topo
 #[inline(never)]
 pub fn generalized_seams(topo: &Topology, left_color: Rgba8) -> Vec<Seam> {
     let mut seams = Vec::new();
 
     for region in topo.regions.values() {
-        if region.color != left_color {
+        if region.interior.color != left_color {
             continue;
         }
 
@@ -197,7 +197,9 @@ impl Unassigned {
         pattern: &Topology,
         phi_seam: &Seam,
     ) -> bool {
-        if pattern[pattern.left_of(&self.seam)].color != world[world.left_of(phi_seam)].color {
+        if pattern[pattern.left_of(&self.seam)].interior.color
+            != world[world.left_of(phi_seam)].interior.color
+        {
             // Inconsistent left side color
             return false;
         }
@@ -212,8 +214,10 @@ impl Unassigned {
                 return false;
             };
 
-            if world[right_of_phi_seam].color
-                != pattern[pattern.right_of(&self.seam).unwrap()].color
+            if world[right_of_phi_seam].interior.color
+                != pattern[pattern.right_of(&self.seam).unwrap()]
+                    .interior
+                    .color
             {
                 // Inconsistent right color
                 return false;
@@ -252,7 +256,7 @@ impl Unassigned {
         world
             .regions
             .values()
-            .filter(|region| self.colors.left == region.color)
+            .filter(|region| self.colors.left == region.interior.color)
             .flat_map(|region| region.iter_seams().copied())
             .filter(|phi_seam| self.possible_assignment(world, pattern, phi_seam))
             .collect()
@@ -370,7 +374,7 @@ pub fn extract_pattern(pixmap: &mut Pixmap) -> Pixmap {
     let frame = topo
         .regions
         .values()
-        .find(|&region| region.color == PATTERN_FRAME_COLOR)
+        .find(|&region| region.interior.color == PATTERN_FRAME_COLOR)
         .unwrap();
     assert_eq!(frame.boundary.len(), 2);
 

@@ -20,11 +20,11 @@ impl Rule {
         let after_pixmap = after.to_pixmap();
 
         for (&region_key, region) in &before.regions {
-            let Some(fill_color) = Self::fill_color(&after_pixmap, &region.interior) else {
+            let Some(fill_color) = Self::fill_color(&after_pixmap, &region.interior.pixels) else {
                 anyhow::bail!("Region {region_key} color not constant.")
             };
 
-            if fill_color != region.color {
+            if fill_color != region.interior.color {
                 let fill_region = FillRegion {
                     region_key,
                     color: fill_color,

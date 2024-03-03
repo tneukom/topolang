@@ -1,5 +1,5 @@
 use crate::{
-    math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect, rgba8::Rgba8},
+    math::{arrow::Arrow, point::Point, rect::Rect, rgba8::Rgba8},
     pixmap::Pixmap,
     utils::IteratorPlus,
 };

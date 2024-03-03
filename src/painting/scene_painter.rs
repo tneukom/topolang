@@ -1,3 +1,4 @@
+use super::grid_painter::GridPainter;
 use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
@@ -6,8 +7,6 @@ use crate::{
     pixmap::Pixmap,
 };
 use std::sync::Arc;
-
-use super::grid_painter::GridPainter;
 
 pub struct ScenePainter {
     pub grid_painter: GridPainter,
@@ -33,6 +32,10 @@ impl ScenePainter {
         let spacing = world_to_pixelwindow.linear * Point::ONE;
         self.grid_painter.draw(origin, spacing, frames);
     }
+
+    // pub unsafe fn draw_regions(&mut self, regions: Vec<(Rc<Interior>, Rgba8)>) {
+    //
+    // }
 
     pub unsafe fn draw_pixmap(
         &mut self,

@@ -10,6 +10,7 @@ pub mod brush;
 pub mod camera;
 pub mod connected_components;
 pub mod coordinate_frame;
+pub mod frozen;
 pub mod interpreter;
 pub mod math;
 pub mod morphism;

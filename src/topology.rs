@@ -1,6 +1,7 @@
 use crate::{
     bitmap::Bitmap,
     connected_components::{color_components, left_of, right_of, ColorComponent},
+    frozen::Frozen,
     math::{
         pixel::{Corner, Pixel, Side},
         point::Point,
@@ -148,25 +149,59 @@ pub struct RegionFlags {
     pub isolated: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Interior {
+    pub pixels: BTreeSet<Pixel>,
+    pub bounds: Rect<i64>,
+    pub color: Rgba8,
+}
+
+impl Interior {
+    pub fn new(pixels: BTreeSet<Pixel>, color: Rgba8) -> Self {
+        // Upper bound is exclusive
+        let interior_points = pixels.iter().map(|pixel| pixel.point());
+        let bounds = RectBounds::iter_bounds(interior_points).inc_high();
+        Self {
+            pixels,
+            color,
+            bounds,
+        }
+    }
+
+    pub fn translated(&self, offset: Point<i64>) -> Self {
+        let pixels = self.pixels.iter().map(|&pixel| pixel + offset).collect();
+        let bounds = self.bounds + offset;
+        Self {
+            pixels,
+            bounds,
+            color: self.color,
+        }
+    }
+}
+
 /// The boundary is counterclockwise. Is mutable so color can be changed.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Region {
-    pub color: Rgba8,
     /// First item is outer Border
     pub boundary: Vec<Border>,
 
     /// Contains at least one pixel
-    pub interior: BTreeSet<Pixel>,
-
+    pub interior: Frozen<Interior>,
     // /// If the region is not closed left_of(boundary) is not defined otherwise
     // /// left_of(boundary) = interior
     // pub closed: bool,
-    pub bounds: Rect<i64>,
 }
 
 impl Region {
     pub fn iter_seams(&self) -> impl IteratorPlus<&Seam> {
         self.boundary.iter().flat_map(|border| border.seams.iter())
+    }
+
+    pub fn iter_boundary_sides<'a>(&'a self) -> impl IteratorPlus<Side> + 'a {
+        self.boundary
+            .iter()
+            .flat_map(|border| border.cycle.iter())
+            .copied()
     }
 
     /// Any `pixel` in `pixels` either
@@ -175,7 +210,7 @@ impl Region {
             pixel
                 .touching()
                 .iter()
-                .any(|touched| self.interior.contains(touched))
+                .any(|touched| self.interior.pixels.contains(touched))
         })
     }
 
@@ -184,13 +219,17 @@ impl Region {
             border.translate(offset);
         }
 
-        self.interior = self.interior.iter().map(|&pixel| pixel + offset).collect();
-        self.bounds = self.bounds + offset;
+        self.interior = Frozen::new(self.interior.translated(offset));
     }
 
     pub fn translated(mut self, offset: Point<i64>) -> Self {
         self.translate(offset);
         self
+    }
+
+    /// Pixels touching border on the left side, each pixel might appear more than once.
+    pub fn interior_padding<'a>(&'a self) -> impl IteratorPlus<Pixel> + 'a {
+        self.iter_boundary_sides().map(|side| side.left_pixel())
     }
 }
 
@@ -279,15 +318,9 @@ impl Topology {
                 boundary.push(border);
             }
 
-            // Upper bound is exclusive
-            let interior_points = component.interior.iter().map(|pixel| pixel.point());
-            let bounds = RectBounds::iter_bounds(interior_points).inc_high();
-
             let region = Region {
                 boundary,
-                color,
-                bounds,
-                interior: component.interior,
+                interior: Frozen::new(Interior::new(component.interior, color)),
                 // closed: component.closed,
             };
             regions.insert(RegionKey::unused(), region);
@@ -369,7 +402,7 @@ impl Topology {
 
     /// Upper bound is exclusive, lower bound inclusive
     pub fn bounds(&self) -> Rect<i64> {
-        RectBounds::iter_bounds(self.regions.values().map(|region| region.bounds))
+        RectBounds::iter_bounds(self.regions.values().map(|region| region.interior.bounds))
     }
 
     pub fn translated(self, offset: Point<i64>) -> Self {
@@ -432,7 +465,7 @@ impl Topology {
 
     pub fn color_left_of(&self, seam: &Seam) -> Rgba8 {
         let left_key = self.left_of(seam);
-        self[left_key].color
+        self[left_key].interior.color
     }
 
     /// Not every seam has a region on the right, it can be empty space
@@ -444,7 +477,7 @@ impl Topology {
 
     pub fn color_right_of(&self, seam: &Seam) -> Option<Rgba8> {
         let right_key = self.right_of(seam)?;
-        Some(self[right_key].color)
+        Some(self[right_key].interior.color)
     }
 
     /// Only fails if seam is not self.contains_seam(seam)
@@ -489,8 +522,8 @@ impl Topology {
     pub fn to_pixmap(&self) -> Pixmap {
         let mut pixmap = Pixmap::new();
         for region in self.regions.values() {
-            for &pixel in &region.interior {
-                pixmap.set(pixel, region.color);
+            for &pixel in &region.interior.pixels {
+                pixmap.set(pixel, region.interior.color);
             }
         }
 
@@ -500,12 +533,12 @@ impl Topology {
     pub fn to_pixmap_without_transparent(&self) -> Pixmap {
         let mut pixmap = Pixmap::new();
         for region in self.regions.values() {
-            if region.color.a == 0 {
+            if region.interior.color.a == 0 {
                 continue;
             }
 
-            for &pixel in &region.interior {
-                pixmap.set(pixel, region.color);
+            for &pixel in &region.interior.pixels {
+                pixmap.set(pixel, region.interior.color);
             }
         }
 
@@ -517,7 +550,7 @@ impl Topology {
         let mut pixmap = self.to_pixmap();
 
         for fill_region in fill_regions.into_iter() {
-            for &pixel in &self.regions[&fill_region.region_key].interior {
+            for &pixel in &self.regions[&fill_region.region_key].interior.pixels {
                 pixmap.set(pixel, fill_region.color);
             }
         }
@@ -537,7 +570,7 @@ impl Topology {
             // simply replace Region.color
             let region = &self[fill_region.region_key];
 
-            if region.color == fill_region.color {
+            if region.interior.color == fill_region.color {
                 // already has desired color, skip
                 continue;
             }
@@ -549,7 +582,9 @@ impl Topology {
                 .all(|seam| self.color_right_of(seam) != Some(fill_region.color))
             {
                 let region = &mut self[fill_region.region_key];
-                region.color = fill_region.color;
+                Frozen::modify(&mut region.interior, |interior| {
+                    interior.color = fill_region.color
+                });
             } else {
                 remaining.push(fill_region)
             }
@@ -570,7 +605,7 @@ impl Topology {
     pub fn region_at(&self, pixel: Pixel) -> Option<(&RegionKey, &Region)> {
         self.regions
             .iter()
-            .find(|(_, region)| region.interior.contains(&pixel))
+            .find(|(_, region)| region.interior.pixels.contains(&pixel))
     }
 
     pub fn border_containing_side(&self, side: &Side) -> Option<(BorderKey, &Border)> {
@@ -641,7 +676,7 @@ impl Topology {
         let mut extracted_pixmap = Pixmap::new();
         for region_key in touched_regions {
             let region = self.remove_region(region_key).unwrap();
-            extracted_pixmap.fill_region(&region);
+            extracted_pixmap.fill_interior(&region.interior);
         }
 
         // Blit pixels to the Pixmap
@@ -693,7 +728,7 @@ impl Topology {
 
     /// Remove all regions of the given color
     pub fn without_color(self, color: Rgba8) -> Self {
-        self.filter_regions(|_, region| region.color != color)
+        self.filter_regions(|_, region| region.interior.color != color)
     }
 }
 
@@ -953,8 +988,8 @@ pub mod test {
     }
 
     fn print_region(region: &Region, indent: &str) {
-        println!("{indent}color: {}", region.color);
-        println!("{indent}color: {:?}", region.bounds);
+        println!("{indent}color: {}", region.interior.color);
+        println!("{indent}color: {:?}", region.interior.bounds);
     }
 
     fn assert_blit(name: &str) {
@@ -1006,7 +1041,7 @@ pub mod test {
         let (_, red_region) = topology
             .regions
             .iter()
-            .filter(|(_, region)| region.color == Rgba8::RED)
+            .filter(|(_, region)| region.interior.color == Rgba8::RED)
             .exactly_one()
             .unwrap();
 
