@@ -1,10 +1,10 @@
 use crate::{
     bitmap::Bitmap,
-    frozen::{counter, Frozen},
+    frozen::counter,
     math::{affine_map::AffineMap, generic::CwiseMul, rect::Rect},
     painting::{
         gl_texture::{Filter, GlTexture},
-        tile_painter::{DrawRect, RectPainter},
+        rect_painter::{DrawRect, RectPainter},
         tile_store::TileStore,
     },
     topology::Topology,

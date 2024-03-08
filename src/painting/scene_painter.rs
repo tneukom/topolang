@@ -5,7 +5,7 @@ use crate::{
     coordinate_frame::CoordinateFrames,
     math::{point::Point, rect::Rect},
     painting::{
-        line_painter::LinePainter, tile_painter::RectPainter, topology_painter::TopologyPainter,
+        line_painter::LinePainter, rect_painter::RectPainter, topology_painter::TopologyPainter,
     },
     topology::Topology,
 };
