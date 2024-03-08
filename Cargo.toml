@@ -44,6 +44,7 @@ hex = "0.4.3"
 arrayvec = "0.7.4"
 pretty_assertions = "1.4.0"
 instant = { version = "0.1.12", features = ["wasm-bindgen"] }
+ahash = "0.8.11"
 #slotmap = "1.0.7"
 # dlv-list = "0.5.1"
 # fastrand = "2.0.1"

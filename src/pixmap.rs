@@ -1,3 +1,11 @@
+use std::{
+    ops::Index,
+    path::Path,
+};
+use std::collections::hash_map;
+
+use ahash::HashMap;
+
 use crate::{
     bitmap::Bitmap,
     math::{
@@ -9,26 +17,21 @@ use crate::{
     topology::{Border, Interior},
     utils::IteratorPlus,
 };
-use std::{
-    collections::{btree_map, BTreeMap},
-    ops::Index,
-    path::Path,
-};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pixmap {
-    pub map: BTreeMap<Pixel, Rgba8>,
+    pub map: HashMap<Pixel, Rgba8>,
 }
 
 impl Pixmap {
     pub fn new() -> Self {
         Self {
-            map: BTreeMap::new(),
+            map: HashMap::default(),
         }
     }
 
     pub fn from_bitmap(bitmap: &Bitmap) -> Self {
-        let mut map: BTreeMap<Pixel, Rgba8> = BTreeMap::new();
+        let mut map: HashMap<Pixel, Rgba8> = HashMap::default();
         for idx in bitmap.indices() {
             let color = bitmap[idx];
 
@@ -113,7 +116,7 @@ impl Pixmap {
     /// If fill is None the entries right of boundary are removed otherwise they are set to the fill color.
     pub fn extract_right(&mut self, boundary: &Border, fill: Option<Rgba8>) -> Pixmap {
         // Extract pixels left of inner_border
-        let mut right = BTreeMap::new();
+        let mut right = HashMap::default();
         for pixel in boundary.right_pixels() {
             let color = if let Some(fill) = fill {
                 self.map.insert(pixel, fill).unwrap()
@@ -167,7 +170,7 @@ impl Index<&Pixel> for Pixmap {
 
 impl<'a> IntoIterator for &'a Pixmap {
     type Item = (&'a Pixel, &'a Rgba8);
-    type IntoIter = btree_map::Iter<'a, Pixel, Rgba8>;
+    type IntoIter = hash_map::Iter<'a, Pixel, Rgba8>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.map.iter()
