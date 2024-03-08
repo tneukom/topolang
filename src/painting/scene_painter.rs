@@ -1,17 +1,22 @@
-use super::grid_painter::GridPainter;
+use std::sync::Arc;
+
 use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
     math::{point::Point, rect::Rect},
-    painting::{line_painter::LinePainter, tile_painter::TilePainter},
-    pixmap::Pixmap,
+    painting::{
+        line_painter::LinePainter, tile_painter::RectPainter, topology_painter::TopologyPainter,
+    },
+    topology::Topology,
 };
-use std::sync::Arc;
+
+use super::grid_painter::GridPainter;
 
 pub struct ScenePainter {
     pub grid_painter: GridPainter,
-    pub tile_painter: TilePainter,
+    pub tile_painter: RectPainter,
     pub line_painter: LinePainter,
+    pub topology_painter: TopologyPainter,
 
     pub i_frame: usize,
 }
@@ -20,8 +25,9 @@ impl ScenePainter {
     pub unsafe fn new(gl: Arc<glow::Context>) -> ScenePainter {
         ScenePainter {
             grid_painter: GridPainter::new(gl.clone()),
-            tile_painter: TilePainter::new(gl.clone()),
+            tile_painter: RectPainter::new(gl.clone()),
             line_painter: LinePainter::new(gl.clone()),
+            topology_painter: TopologyPainter::new(gl, 1024),
             i_frame: 0,
         }
     }
@@ -33,21 +39,16 @@ impl ScenePainter {
         self.grid_painter.draw(origin, spacing, frames);
     }
 
-    // pub unsafe fn draw_regions(&mut self, regions: Vec<(Rc<Interior>, Rgba8)>) {
-    //
-    // }
-
-    pub unsafe fn draw_pixmap(
+    pub unsafe fn draw_topology(
         &mut self,
-        pixmap: &Pixmap,
+        topology: &Topology,
         camera: &Camera,
         frames: &CoordinateFrames,
     ) {
-        let (atlas, draw_tiles) = TilePainter::pixmap_draw_tiles(pixmap);
+        self.topology_painter.update(topology);
 
         let world_to_glwindow = frames.view_to_glwindow() * camera.world_to_view();
-        self.tile_painter
-            .draw(&draw_tiles, &atlas, world_to_glwindow);
+        self.topology_painter.draw(world_to_glwindow);
     }
 
     pub unsafe fn draw_bounds(

@@ -5,3 +5,5 @@ pub mod line_painter;
 pub mod scene_painter;
 pub mod shader;
 pub mod tile_painter;
+pub mod tile_store;
+pub mod topology_painter;

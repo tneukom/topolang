@@ -1,48 +1,57 @@
 use std::{
-    collections::hash_map::DefaultHasher,
+    cell::Cell,
     hash::{Hash, Hasher},
     ops::Deref,
-    sync::atomic::{AtomicUsize, Ordering},
 };
 
 #[derive(Debug, Clone, Copy, Eq)]
 pub struct Frozen<T> {
-    time: usize,
+    modified_time: usize,
     payload: T,
-    hash: u64,
+}
+
+thread_local! {
+    static COUNTER: Cell<usize> = const { Cell::new(0) };
 }
 
 pub fn counter() -> usize {
-    static COUNTER: AtomicUsize = AtomicUsize::new(1);
-    COUNTER.fetch_add(1, Ordering::Relaxed)
+    // static COUNTER: AtomicUsize = AtomicUsize::new(1);
+    // COUNTER.fetch_add(1, Ordering::Relaxed)
+
+    COUNTER.with(|counter| {
+        let value = counter.get() + 1;
+        counter.set(value);
+        value
+    })
 }
 
 impl<T: Eq + Hash> Frozen<T> {
     pub fn new(payload: T) -> Self {
-        let mut hasher = DefaultHasher::default();
-        payload.hash(&mut hasher);
         Self {
-            time: counter(),
+            modified_time: counter(),
             payload,
-            hash: hasher.finish(),
         }
     }
 
     pub fn modify(frozen: &mut Self, f: impl FnOnce(&mut T)) {
         f(&mut frozen.payload);
-        frozen.time = counter();
+        frozen.modified_time = counter();
+    }
+
+    pub fn modified_time(&self) -> usize {
+        self.modified_time
     }
 }
 
 impl<T: PartialEq> PartialEq for Frozen<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.time == other.time || self.payload == other.payload
+        self.modified_time == other.modified_time || self.payload == other.payload
     }
 }
 
 impl<T: Hash> Hash for Frozen<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write_u64(self.hash);
+        self.payload.hash(state)
     }
 }
 

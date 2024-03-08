@@ -1,5 +1,12 @@
-use egui::{epaint, load::SizedTexture, Sense, TextureOptions, Widget};
 use std::{collections::HashMap, fs::File, hash::Hash, path::PathBuf, sync::Arc};
+
+use egui::{epaint, load::SizedTexture, Sense, TextureOptions, Widget};
+use glow::HasContext;
+use image::{
+    codecs::gif::{GifEncoder, Repeat},
+    ColorType,
+};
+use instant::Instant;
 
 use crate::{
     bitmap::Bitmap,
@@ -12,12 +19,6 @@ use crate::{
     view::{EditMode, View, ViewButton, ViewInput, ViewSettings},
     widgets::{system_colors_widget, ColorChooser, FileChooser},
 };
-use glow::HasContext;
-use image::{
-    codecs::gif::{GifEncoder, Repeat},
-    ColorType,
-};
-use instant::Instant;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum MouseButton {
@@ -484,9 +485,8 @@ impl eframe::App for EguiApp {
 
             self.scene_painter.draw_grid(&self.view.camera, &frames);
 
-            let pixmap = self.view.world.to_pixmap_without_transparent();
             self.scene_painter
-                .draw_pixmap(&pixmap, &self.view.camera, &frames);
+                .draw_topology(&self.view.world, &self.view.camera, &frames);
 
             let bounds = self.view.world.bounds();
             self.scene_painter
