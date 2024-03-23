@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+
 use crate::{
-    math::{arrow::Arrow, point::Point, rect::Rect, rgba8::Rgba8},
+    math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect, rgba8::Rgba8},
     pixmap::Pixmap,
     utils::IteratorPlus,
 };
@@ -26,7 +28,7 @@ impl Brush {
             .collect()
     }
 
-    pub fn draw_line(&self, target: &mut Pixmap, line: Arrow<f64>) {
+    pub fn draw_line(&self, line: Arrow<f64>) -> Pixmap {
         // for point in Self::points_within_radius(line, self.radius) {
         //     target.set(point.into(), self.color);
         // }
@@ -38,11 +40,14 @@ impl Brush {
             line.b.floor().cwise_into_lossy(),
         );
 
+        let mut result = HashMap::new();
         for point in pixel_line.draw() {
             for &offset in &stamp {
-                target.set((point + offset).into(), self.color);
+                result.insert(Pixel::from(point + offset), self.color);
             }
         }
+
+        Pixmap::from_hashmap(&result)
     }
 
     /// Slow but flexible line drawing, only use for small lines!

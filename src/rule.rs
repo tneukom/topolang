@@ -44,7 +44,7 @@ impl Rule {
     pub fn fill_color(pixmap: &Pixmap, pixels: &BTreeSet<Pixel>) -> Option<Rgba8> {
         pixels
             .iter()
-            .map(|pixel| pixmap[pixel])
+            .map(|&pixel| pixmap[pixel])
             .all_equal_value()
             .ok()
     }

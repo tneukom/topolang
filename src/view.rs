@@ -3,7 +3,6 @@ use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
     math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect, rgba8::Rgba8},
-    pixmap::Pixmap,
     topology::Topology,
 };
 
@@ -186,15 +185,13 @@ impl View {
             return UiState::Idle;
         }
 
-        let mut change = Pixmap::new();
-        op.brush
-            .draw_line(&mut change, Arrow(op.world_mouse, input.world_mouse));
+        let change = op.brush.draw_line(Arrow(op.world_mouse, input.world_mouse));
         op.world_mouse = input.world_mouse;
         // op.brush.draw_point(&mut change, input.world_mouse);
 
         // Only draw points within bounds of world
-        let bounds = self.world.bounds();
-        change.map.retain(|pixel, _| bounds.contains(pixel.point()));
+        // let bounds = self.world.bounds();
+        // change.map.retain(|pixel, _| bounds.contains(pixel.point()));
         self.world.blit(&change);
 
         UiState::Brushing(op)

@@ -1,9 +1,8 @@
-use std::{collections::hash_map, ops::Index, path::Path};
-
-use ahash::HashMap;
+use std::{collections::HashMap, ops::Index, path::Path};
 
 use crate::{
     bitmap::Bitmap,
+    field::{Field, FieldIndex},
     math::{
         pixel::Pixel,
         point::Point,
@@ -14,31 +13,45 @@ use crate::{
     utils::IteratorPlus,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Eq)]
 pub struct Pixmap {
-    pub map: HashMap<Pixel, Rgba8>,
+    field: Field<Option<Rgba8>>,
 }
 
 impl Pixmap {
-    pub fn new() -> Self {
+    pub fn new(bounds: Rect<i64>) -> Self {
         Self {
-            map: HashMap::default(),
+            field: Field::filled(bounds, None),
         }
     }
 
+    pub fn pixel_bounds<'a>(pixels: impl IntoIterator<Item = &'a Pixel>) -> Rect<i64> {
+        RectBounds::iter_bounds(pixels.into_iter().map(|pixel| pixel.point())).inc_high()
+    }
+
+    pub fn from_hashmap(pixels: &HashMap<Pixel, Rgba8>) -> Self {
+        let bounds = Self::pixel_bounds(pixels.keys());
+        let mut field = Field::filled(bounds, None);
+        for (&pixel, &color) in pixels {
+            field.set(pixel, Some(color));
+        }
+        Self { field }
+    }
+
+    // TODO: Simplify
     pub fn from_bitmap(bitmap: &Bitmap) -> Self {
-        let mut map: HashMap<Pixel, Rgba8> = HashMap::default();
-        for idx in bitmap.indices() {
-            let color = bitmap[idx];
+        let bounds = Rect::low_size([0, 0], [bitmap.width() as i64, bitmap.height() as i64]);
+        let mut field = Field::filled(bounds, None);
+        for index in bitmap.indices() {
+            let color = bitmap[index];
 
             if color.a == 0 && color != Rgba8::TRANSPARENT {
                 println!("Bitmap should not contain colors with alpha = 0 but rgb != 0")
             }
 
-            let pixel: Pixel = idx.cwise_try_into::<i64>().unwrap().into();
-            map.insert(pixel, color);
+            field[index.as_i64()] = Some(color);
         }
-        Self { map }
+        Self { field }
     }
 
     pub fn from_bitmap_path(path: impl AsRef<Path>) -> anyhow::Result<Self> {
@@ -47,9 +60,11 @@ impl Pixmap {
     }
 
     /// Pixels outside the bitmap are ignored.
+    /// TODO: Use Field<Rgba> instead of bitmap
     pub fn paint_to_bitmap(&self, bitmap: &mut Bitmap) {
-        for (&pixel, &color) in &self.map {
-            if let Ok(index) = pixel.point().cwise_try_into::<usize>() {
+        for (point, &color) in self.field.enumerate() {
+            if let Some(color) = color {
+                let index = point.as_usize();
                 if bitmap.contains_index(index) {
                     bitmap[index] = color;
                 }
@@ -57,27 +72,26 @@ impl Pixmap {
         }
     }
 
-    /// Default color is transparent, any pixels outside [0, size.x] x [0, size.y] are ignored.
-    pub fn to_bitmap_with_size(&self, size: Point<usize>) -> Bitmap {
-        let mut bitmap = Bitmap::plain(size.x, size.y, Rgba8::BLACK);
-        self.paint_to_bitmap(&mut bitmap);
-        bitmap
-    }
+    // /// Default color is transparent, any pixels outside [0, size.x] x [0, size.y] are ignored.
+    // pub fn to_bitmap_with_size(&self, size: Point<usize>) -> Bitmap {
+    //     let mut bitmap = Bitmap::plain(size.x, size.y, Rgba8::BLACK);
+    //     self.paint_to_bitmap(&mut bitmap);
+    //     bitmap
+    // }
 
     /// Translate pixmap to positive coordinates, top left pixel will be at (0, 0) and convert
     /// to bitmap.
     pub fn to_bitmap(&self) -> Bitmap {
-        let translated = self.translated(-self.bounds().low());
-        let size = translated
-            .bounds()
-            .size()
-            .cwise_try_into::<usize>()
-            .unwrap();
-        translated.to_bitmap_with_size(size)
+        let rgba = self.field.map(|color| color.unwrap_or(Rgba8::BLACK));
+        rgba.into_array2d()
     }
 
-    pub fn without_color(mut self, color: Rgba8) -> Self {
-        self.map.retain(|_, &mut pixel_color| pixel_color != color);
+    pub fn without_color(mut self, removed: Rgba8) -> Self {
+        for color in self.field.iter_mut() {
+            if *color == Some(removed) {
+                *color = None;
+            }
+        }
         self
     }
 
@@ -85,58 +99,64 @@ impl Pixmap {
         self.without_color(Rgba8::VOID)
     }
 
-    pub fn get(&self, pixel: &Pixel) -> Option<&Rgba8> {
-        self.map.get(pixel)
+    pub fn get(&self, pixel: impl FieldIndex) -> Option<&Rgba8> {
+        match self.field.get(pixel) {
+            Some(color) => color.as_ref(),
+            None => None,
+        }
     }
 
-    pub fn set(&mut self, pixel: Pixel, color: Rgba8) {
-        self.map.insert(pixel, color);
+    pub fn set(&mut self, pixel: Pixel, color: Rgba8) -> Option<Rgba8> {
+        self.field.set(pixel, Some(color))
     }
 
-    pub fn remove(&mut self, pixel: &Pixel) -> Option<Rgba8> {
-        self.map.remove(pixel)
-    }
+    // pub fn remove(&mut self, pixel: &Pixel) -> Option<Rgba8> {
+    //
+    //     self.map.remove(pixel)
+    // }
 
-    pub fn keys(&self) -> impl IteratorPlus<&Pixel> {
-        self.map.keys()
+    pub fn keys<'a>(&'a self) -> impl IteratorPlus<Pixel> + 'a {
+        self.field
+            .indices()
+            .filter_map(|index| match self.field.get(index) {
+                Some(Some(_)) => Some(index.into()),
+                _ => None,
+            })
     }
+    //
+    // // TODO: Is this needed?
+    // pub fn values(&self) -> impl IteratorPlus<&Rgba8> {
+    //     self.map.values()
+    // }
 
-    pub fn values(&self) -> impl IteratorPlus<&Rgba8> {
-        self.map.values()
-    }
+    // pub fn len(&self) -> usize {
+    //     self.map.len()
+    // }
 
-    pub fn len(&self) -> usize {
-        self.map.len()
-    }
-
-    /// If fill is None the entries right of boundary are removed otherwise they are set to the fill color.
-    pub fn extract_right(&mut self, boundary: &Border, fill: Option<Rgba8>) -> Pixmap {
+    /// Entries right of boundary are removed
+    /// TODO: Use border.bounds(), skip BTreeSet
+    pub fn extract_right(&mut self, boundary: &Border) -> Pixmap {
         // Extract pixels left of inner_border
-        let mut right = HashMap::default();
-        for pixel in boundary.right_pixels() {
-            let color = if let Some(fill) = fill {
-                self.map.insert(pixel, fill).unwrap()
-            } else {
-                self.map.remove(&pixel).unwrap()
-            };
-            right.insert(pixel, color);
+        let right_pixels = boundary.right_pixels();
+        let bounds = Self::pixel_bounds(&right_pixels);
+        let mut extracted = Field::filled(bounds, None);
+
+        for pixel in right_pixels {
+            extracted.set(pixel, self.field.set(pixel, None));
         }
 
-        Self { map: right }
+        Self { field: extracted }
     }
 
     /// Upper bounds is exclusive, lower bound is inclusive
     pub fn bounds(&self) -> Rect<i64> {
-        RectBounds::iter_bounds(self.keys().map(|pixel| pixel.point())).inc_high()
+        RectBounds::iter_bounds(self.field.indices()).inc_high()
     }
 
-    pub fn translated(&self, offset: Point<i64>) -> Self {
-        let map = self
-            .map
-            .iter()
-            .map(|(&pixel, &color)| (pixel + offset, color))
-            .collect();
-        Self { map }
+    pub fn translated(self, offset: Point<i64>) -> Self {
+        Self {
+            field: self.field.translated(offset),
+        }
     }
 
     pub fn fill_interior(&mut self, interior: &Interior) {
@@ -146,29 +166,37 @@ impl Pixmap {
     }
 
     pub fn blit(&mut self, other: &Pixmap) {
-        for (&pixel, &color) in other {
-            self.set(pixel, color)
-        }
+        self.field.blit(&other.field);
     }
 
-    pub fn retain(&mut self, f: impl FnMut(&Pixel, &mut Rgba8) -> bool) {
-        self.map.retain(f)
+    // pub fn retain(&mut self, f: impl FnMut(&Pixel, &mut Rgba8) -> bool) {
+    //     self.map.retain(f)
+    // }
+}
+
+impl PartialEq for Pixmap {
+    fn eq(&self, other: &Self) -> bool {
+        // TODO: Could this be done without iterating over lhs and rhs indices?
+        self.field
+            .indices()
+            .chain(other.field.indices())
+            .all(|index| self.get(index) == other.get(index))
     }
 }
 
-impl Index<&Pixel> for Pixmap {
+impl<Idx: FieldIndex> Index<Idx> for Pixmap {
     type Output = Rgba8;
 
-    fn index(&self, pixel: &Pixel) -> &Self::Output {
-        &self.map[pixel]
+    fn index(&self, pixel: Idx) -> &Self::Output {
+        self.get(pixel).unwrap()
     }
 }
 
-impl<'a> IntoIterator for &'a Pixmap {
-    type Item = (&'a Pixel, &'a Rgba8);
-    type IntoIter = hash_map::Iter<'a, Pixel, Rgba8>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.map.iter()
-    }
-}
+// impl<'a> IntoIterator for &'a Pixmap {
+//     type Item = (&'a Pixel, &'a Rgba8);
+//     type IntoIter = hash_map::Iter<'a, Pixel, Rgba8>;
+//
+//     fn into_iter(self) -> Self::IntoIter {
+//         self.map.iter()
+//     }
+// }

@@ -383,7 +383,7 @@ pub fn extract_pattern(pixmap: &mut Pixmap) -> Pixmap {
         .iter()
         .find(|border| !border.is_outer)
         .unwrap();
-    pixmap.extract_right(inner_border, None)
+    pixmap.extract_right(inner_border)
 }
 
 #[cfg(test)]

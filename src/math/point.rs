@@ -134,23 +134,19 @@ impl<T: Ord> Point<T> {
     }
 }
 
-// impl<T: RoundToInt> Point<T> {
-//     pub fn floor_i64(self) -> Point<i64> {
-//         Point::new(self.x.floor_i64(), self.y.floor_i64())
-//     }
-//
-//     pub fn round_i64(self) -> Point<i64> {
-//         Point::new(self.x.round_i64(), self.y.round_i64())
-//     }
-//
-//     pub fn ceil_i64(self) -> Point<i64> {
-//         Point::new(self.x.ceil_i64(), self.y.ceil_i64())
-//     }
-// }
-
 impl Point<usize> {
-    pub fn to_f64(self) -> Point<f64> {
+    pub fn as_f64(self) -> Point<f64> {
         Point::new(self.x as f64, self.y as f64)
+    }
+
+    pub fn as_i64(self) -> Point<i64> {
+        Point::new(self.x as i64, self.y as i64)
+    }
+}
+
+impl Point<i64> {
+    pub fn as_usize(self) -> Point<usize> {
+        Point::new(self.x as usize, self.y as usize)
     }
 }
 

@@ -204,9 +204,13 @@ impl Region {
             .copied()
     }
 
+    pub fn bounds(&self) -> Rect<i64> {
+        self.interior.bounds
+    }
+
     /// Any `pixel` in `pixels` either
     pub fn touches(&self, pixmap: &Pixmap) -> bool {
-        pixmap.keys().any(|&pixel| {
+        pixmap.keys().any(|pixel| {
             pixel
                 .touching()
                 .iter()
@@ -308,7 +312,7 @@ impl Topology {
             let mut boundary = Vec::new();
 
             for (i_border, cycle) in split_into_cycles(&component.sides).into_iter().enumerate() {
-                let seams = split_cycle_into_seams(&cycle, |side| pixmap.get(&side.right_pixel()));
+                let seams = split_cycle_into_seams(&cycle, |side| pixmap.get(side.right_pixel()));
 
                 let border = Border {
                     cycle,
@@ -520,7 +524,7 @@ impl Topology {
     }
 
     pub fn to_pixmap(&self) -> Pixmap {
-        let mut pixmap = Pixmap::new();
+        let mut pixmap = Pixmap::new(self.bounds());
         for region in self.regions.values() {
             for &pixel in &region.interior.pixels {
                 pixmap.set(pixel, region.interior.color);
@@ -531,7 +535,7 @@ impl Topology {
     }
 
     pub fn to_pixmap_without_transparent(&self) -> Pixmap {
-        let mut pixmap = Pixmap::new();
+        let mut pixmap = Pixmap::new(self.bounds());
         for region in self.regions.values() {
             if region.interior.color.a == 0 {
                 continue;
@@ -673,7 +677,15 @@ impl Topology {
             .collect();
 
         // Extract these regions into a Pixmap
-        let mut extracted_pixmap = Pixmap::new();
+        // Bounds of extracted regions and pixmap
+        let bounds = RectBounds::iter_bounds(
+            touched_regions
+                .iter()
+                .map(|region_key| self.regions[region_key].bounds()),
+        )
+        .bounds_with_rect(pixmap.bounds());
+
+        let mut extracted_pixmap = Pixmap::new(bounds);
         for region_key in touched_regions {
             let region = self.remove_region(region_key).unwrap();
             extracted_pixmap.fill_interior(&region.interior);
@@ -1034,6 +1046,7 @@ pub mod test {
         assert_blit("e");
     }
 
+    /// Ensure right side of the red region is as expected.
     fn assert_right_of(name: &str) {
         let folder = "test_resources/topology/right_of";
         let topology = Topology::from_bitmap_path(format!("{folder}/{name}.png")).unwrap();

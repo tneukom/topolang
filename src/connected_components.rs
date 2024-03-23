@@ -82,15 +82,15 @@ pub struct ColorComponent {
 }
 
 pub fn color_components(pixels: &Pixmap) -> Vec<ColorComponent> {
-    let mut rest: BTreeSet<_> = pixels.keys().cloned().collect();
+    let mut rest: BTreeSet<_> = pixels.keys().collect();
     let mut color_components: Vec<ColorComponent> = Vec::new();
 
     while !rest.is_empty() {
         let &seed = rest.iter().next().unwrap();
-        let &seed_color = pixels.get(&seed).unwrap();
+        let &seed_color = pixels.get(seed).unwrap();
 
         let classify = |_: &Side, neighbor: &Pixel| {
-            if let Some(&neighbor_color) = pixels.get(neighbor) {
+            if let Some(&neighbor_color) = pixels.get(*neighbor) {
                 if neighbor_color == seed_color {
                     SideClass::Interior
                 } else {
@@ -181,7 +181,7 @@ mod test {
             assert!(component
                 .interior
                 .iter()
-                .all(|pixel| whole[pixel] == *color));
+                .all(|&pixel| whole[pixel] == *color));
 
             // Make sure the boundary of each component is proper
             assert_proper_sides(component);
@@ -195,7 +195,7 @@ mod test {
             .iter()
             .map(|comp| comp.component.interior.len())
             .sum();
-        assert_eq!(components_pixel_count, whole.len());
+        assert_eq!(components_pixel_count, whole.keys().count());
     }
 
     // Assert that the union of all component interiors is equal to the whole
@@ -204,7 +204,7 @@ mod test {
             .iter()
             .flat_map(|comp| comp.component.interior.iter().cloned())
             .collect();
-        let whole_pixels = whole.keys().cloned().collect();
+        let whole_pixels = whole.keys().collect();
         assert_eq!(union, whole_pixels);
     }
 

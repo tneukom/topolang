@@ -1,4 +1,5 @@
 use crate::{
+    field::Field,
     math::{pixel::Pixel, point::Point, rect::Rect, turn::Turn},
     utils::IteratorPlus,
 };
@@ -140,6 +141,11 @@ impl<T> Array2d<T> {
     pub fn enumerate_pixels(&self) -> impl IteratorPlus<(Pixel, &T)> {
         self.indices()
             .map(|index| (Pixel::from_index(index).unwrap(), self.get(index).unwrap()))
+    }
+
+    pub fn into_field(self) -> Field<T> {
+        let bounds = Rect::low_size([0, 0], [self.width as i64, self.height as i64]);
+        Field::from_linear(bounds, self.elems)
     }
 }
 

@@ -378,9 +378,7 @@ impl EguiApp {
                 if let Some(gif_encoder) = &mut self.gif_encoder {
                     // TODO: Offset world pixmap by bounds.low()
                     // TODO: Paint over white background to remove transparency or use apng instead
-                    let bounds = self.view.world.bounds();
-                    let size: Point<usize> = bounds.high().cwise_try_into().unwrap();
-                    let image = self.view.world.to_pixmap().to_bitmap_with_size(size);
+                    let image = self.view.world.to_pixmap().to_bitmap();
                     gif_encoder
                         .encode(
                             image.as_raw(),
