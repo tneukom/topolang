@@ -5,7 +5,7 @@ use num_traits::{real::Real, Inv};
 use std::{
     cmp::Ordering,
     hash::{Hash, Hasher},
-    ops::{Add, Div, Mul, Neg, Sub},
+    ops::{Add, Div, Mul, Neg, Rem, Sub},
 };
 
 #[derive(Copy, Clone, Debug)]
@@ -309,7 +309,18 @@ where
     type Output = Point<T>;
 
     fn div(self, rhs: T) -> Self::Output {
-        Self::Output::new(self.x / rhs, self.y / rhs)
+        Self::Output::new(self.x.div(rhs), self.y.div(rhs))
+    }
+}
+
+impl<T> Rem<T> for Point<T>
+where
+    T: Rem<Output = T> + Copy,
+{
+    type Output = Point<T>;
+
+    fn rem(self, rhs: T) -> Self::Output {
+        Self::Output::new(self.x.rem(rhs), self.y.rem(rhs))
     }
 }
 

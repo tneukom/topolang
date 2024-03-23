@@ -1,18 +1,20 @@
+use crate::array_2d::Index2d;
 /// See pixel_pattern.jpg, sides_and_corners.jpg
 use crate::math::point::Point;
 use std::{
+    cmp::Ordering,
     fmt::{Debug, Display, Formatter},
     ops::Add,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SideName {
-    Top,
     Left,
     BottomLeft,
     Bottom,
     Right,
     TopRight,
+    Top,
 }
 
 impl SideName {
@@ -61,7 +63,7 @@ impl SideName {
 
 /// Each pixel is connected to its top, left, bottom, right and bottom-left, top-right neighbors,
 /// see docs/pixel_pattern.jpg and
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Pixel {
     pub x: i64,
     pub y: i64,
@@ -72,8 +74,19 @@ impl Pixel {
         Self { x, y }
     }
 
+    pub fn from_index(index: impl Index2d) -> Option<Self> {
+        Some(Self::new(
+            index.x().try_into().ok()?,
+            index.y().try_into().ok()?,
+        ))
+    }
+
     pub const fn point(self) -> Point<i64> {
         Point::new(self.x, self.y)
+    }
+
+    pub fn index(self) -> Option<Point<usize>> {
+        Some(Point::new(self.x.try_into().ok()?, self.y.try_into().ok()?))
     }
 
     pub fn containing(p: Point<f64>) -> Self {
@@ -166,6 +179,10 @@ impl Pixel {
         ]
     }
 
+    pub fn corners(self) -> [Corner; 6] {
+        self.sides_ccw().map(|side| side.start_corner())
+    }
+
     /// self is a neighbor of other lhs.is_neighbor(rhs) <=> rhs.is_neighbor(lhs)
     pub fn is_neighbor(self, other: Self) -> bool {
         self.neighbors().iter().any(|&neighbor| neighbor == other)
@@ -187,6 +204,18 @@ impl Pixel {
             self.right_neighbor(),
             self.top_right_neighbor(),
         ]
+    }
+}
+
+impl PartialOrd for Pixel {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Pixel {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (self.x, self.y).cmp(&(other.x, other.y))
     }
 }
 
@@ -221,8 +250,8 @@ impl Debug for Pixel {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Side {
     /// pixel on the left side of the side
-    left_pixel: Pixel,
-    name: SideName,
+    pub left_pixel: Pixel,
+    pub name: SideName,
 }
 
 impl Side {
@@ -257,6 +286,18 @@ impl Side {
     pub fn right_pixel(self) -> Pixel {
         self.reversed().left_pixel
     }
+
+    pub fn continuing_sides(self) -> [Side; 2] {
+        // FIXME: Use self.next_ccw(), self.next_away()
+        let outgoing = self.stop_corner().out_sides();
+        if self == outgoing[0] {
+            [outgoing[1], outgoing[2]]
+        } else if self == outgoing[1] {
+            [outgoing[0], outgoing[2]]
+        } else {
+            [outgoing[0], outgoing[1]]
+        }
+    }
 }
 
 impl Add<Point<i64>> for Side {
@@ -284,43 +325,58 @@ impl Debug for Side {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum CornerName {
+    /// Start corner of top side
+    TopStart,
+
+    /// Stop corner of top side
+    TopStop,
+}
+
 /// Corner(side: Side) is the stop corner of side
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Corner(Side);
+pub struct Corner {
+    pub pixel: Pixel,
+    pub name: CornerName,
+}
 
 impl Corner {
-    /// Stop corner of right side
-    pub const fn right_side_stop(pixel: Pixel) -> Self {
-        Self(pixel.right_side())
+    pub const fn new(pixel: Pixel, name: CornerName) -> Self {
+        Self { pixel, name }
     }
 
     /// Stop corner of top right side
     pub const fn top_right_side_stop(pixel: Pixel) -> Self {
-        Self(pixel.top_right_side())
+        Self::new(pixel, CornerName::TopStart)
     }
 
     /// Stop corner of top side
     pub const fn top_side_stop(pixel: Pixel) -> Self {
-        Self(pixel.left_neighbor().right_side())
+        Self::new(pixel, CornerName::TopStop)
     }
 
     /// Stop corner of left side
     pub const fn left_side_stop(pixel: Pixel) -> Self {
-        Self(pixel.bottom_left_neighbor().top_right_side())
+        Self::new(pixel.bottom_left_neighbor(), CornerName::TopStart)
     }
 
     /// Stop corner of bottom left side
     pub const fn bottom_left_side_stop(pixel: Pixel) -> Self {
-        Self(pixel.bottom_left_neighbor().right_side())
+        Self::new(pixel.bottom_neighbor(), CornerName::TopStop)
     }
 
     /// Stop corner of bottom side
     pub const fn bottom_side_stop(pixel: Pixel) -> Self {
-        Self(pixel.bottom_neighbor().top_right_side())
+        Self::new(pixel.bottom_neighbor(), CornerName::TopStart)
     }
 
-    /// Multiple (pixel, name) represent the same corner (see docs/corner_normalization.png) so we normalize to make
-    /// the representation unique.
+    /// Stop corner of right side
+    pub const fn right_side_stop(pixel: Pixel) -> Self {
+        Self::new(pixel.right_neighbor(), CornerName::TopStop)
+    }
+
+    /// See docs/corner_normalization.png
     pub const fn side_stop(side: Side) -> Self {
         match side.name {
             SideName::Top => Self::top_side_stop(side.left_pixel),
@@ -331,11 +387,28 @@ impl Corner {
             SideName::TopRight => Self::top_right_side_stop(side.left_pixel),
         }
     }
+
+    /// See corner_out_sides.jpg
+    pub fn out_sides(self) -> [Side; 3] {
+        match self.name {
+            CornerName::TopStart => [
+                self.pixel.top_right_neighbor().bottom_left_side(),
+                self.pixel.top_neighbor().right_side(),
+                self.pixel.top_side(),
+            ],
+            CornerName::TopStop => [
+                self.pixel.left_neighbor().top_right_side(),
+                self.pixel.left_side(),
+                self.pixel.top_neighbor().bottom_side(),
+            ],
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
     use crate::math::pixel::{Pixel, Side, SideName};
+    use std::collections::HashSet;
 
     const PIXELS: [Pixel; 3] = [Pixel::new(0, 0), Pixel::new(-2, 4), Pixel::new(9, 17)];
 
@@ -435,6 +508,20 @@ mod test {
                 pixel.top_right_side().stop_corner(),
                 pixel.top_right_neighbor().left_side().stop_corner()
             );
+        }
+    }
+
+    #[test]
+    fn corner_out_sides() {
+        let pixel = Pixel::new(0, 0);
+        for corner in pixel.corners() {
+            let expected: HashSet<_> = pixel
+                .touching()
+                .iter()
+                .flat_map(|pixel| pixel.sides_ccw())
+                .filter(|side| side.start_corner() == corner)
+                .collect();
+            assert_eq!(expected, HashSet::from(corner.out_sides()));
         }
     }
 }

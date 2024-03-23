@@ -1,8 +1,4 @@
-use std::{
-    ops::Index,
-    path::Path,
-};
-use std::collections::hash_map;
+use std::{collections::hash_map, ops::Index, path::Path};
 
 use ahash::HashMap;
 

@@ -1,5 +1,5 @@
 use crate::{
-    math::{point::Point, rect::Rect, turn::Turn},
+    math::{pixel::Pixel, point::Point, rect::Rect, turn::Turn},
     utils::IteratorPlus,
 };
 use num_traits::Inv;
@@ -65,6 +65,10 @@ impl<T> Array2d<T> {
         Point::new(self.width, self.height)
     }
 
+    pub fn rect(&self) -> Rect<usize> {
+        Rect::low_size([0, 0], self.size())
+    }
+
     pub fn indices_for_size(size: impl Index2d) -> impl IteratorPlus<Point<usize>> {
         Rect::low_size([0, 0], [size.x(), size.y()]).iter_half_open()
     }
@@ -103,10 +107,44 @@ impl<T> Array2d<T> {
     pub fn as_slice(&self) -> &[T] {
         self.elems.as_slice()
     }
+
+    pub fn get(&self, index: impl Index2d) -> Option<&T> {
+        if self.contains_index(index) {
+            Some(&self.elems[self.linear_index_at(index)])
+        } else {
+            None
+        }
+    }
+
+    pub fn get_mut(&mut self, index: impl Index2d) -> Option<&mut T> {
+        if self.contains_index(index) {
+            let linear_index = self.linear_index_at(index);
+            Some(&mut self.elems[linear_index])
+        } else {
+            None
+        }
+    }
+
+    pub fn get_pixel(&self, pixel: Pixel) -> Option<&T> {
+        self.get(pixel.index()?)
+    }
+
+    /// Iterator of indices (0, 0), (1, 0), (2, 0), ..., (0, 1), ...
+    pub fn pixels(&self) -> impl IteratorPlus<Pixel> {
+        // let rect = Rect::low_size([0, 0], [self.width as i64, self.height as i64]);
+        // rect.iter_half_open().map(|point| point.into())
+        self.indices()
+            .map(|index| Pixel::from_index(index).unwrap())
+    }
+
+    pub fn enumerate_pixels(&self) -> impl IteratorPlus<(Pixel, &T)> {
+        self.indices()
+            .map(|index| (Pixel::from_index(index).unwrap(), self.get(index).unwrap()))
+    }
 }
 
 impl<T: Clone> Array2d<T> {
-    pub fn filled(width: usize, height: usize, item: &T) -> Self {
+    pub fn filled(width: usize, height: usize, item: T) -> Self {
         let mut elems = Vec::with_capacity(width * height);
         for _ in 0..(width * height) {
             elems.push(item.clone())

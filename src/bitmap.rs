@@ -7,7 +7,7 @@ pub type Bitmap = Array2d<Rgba8>;
 
 impl Bitmap {
     pub fn plain(width: usize, height: usize, color: Rgba8) -> Self {
-        Self::filled(width, height, &color)
+        Self::filled(width, height, color)
     }
 
     pub fn transparent(width: usize, height: usize) -> Self {
