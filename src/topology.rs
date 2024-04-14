@@ -8,7 +8,7 @@ use crate::{
         rect::{Rect, RectBounds},
         rgba8::Rgba8,
     },
-    pixmap::Pixmap,
+    pixmap::PixmapRgba,
     utils::{IteratorPlus, UndirectedEdge, UndirectedGraph},
 };
 use itertools::Itertools;
@@ -209,7 +209,7 @@ impl Region {
     }
 
     /// Any `pixel` in `pixels` either
-    pub fn touches(&self, pixmap: &Pixmap) -> bool {
+    pub fn touches(&self, pixmap: &PixmapRgba) -> bool {
         pixmap.keys().any(|pixel| {
             pixel
                 .touching()
@@ -302,7 +302,7 @@ pub struct Topology {
 }
 
 impl Topology {
-    pub fn new(pixmap: &Pixmap) -> Self {
+    pub fn new(pixmap: &PixmapRgba) -> Self {
         let color_components = color_components(pixmap);
 
         let mut regions: BTreeMap<RegionKey, Region> = BTreeMap::new();
@@ -359,7 +359,7 @@ impl Topology {
     }
 
     pub fn from_bitmap(bitmap: &Bitmap) -> Topology {
-        let pixmap = Pixmap::from_bitmap(bitmap);
+        let pixmap = PixmapRgba::from_bitmap(bitmap);
         Topology::new(&pixmap)
     }
 
@@ -523,8 +523,8 @@ impl Topology {
         lhs.is_loop() && rhs.is_loop() && self.seam_border(lhs) == self.seam_border(rhs)
     }
 
-    pub fn to_pixmap(&self) -> Pixmap {
-        let mut pixmap = Pixmap::new(self.bounds());
+    pub fn to_pixmap(&self) -> PixmapRgba {
+        let mut pixmap = PixmapRgba::new(self.bounds());
         for region in self.regions.values() {
             for &pixel in &region.interior.pixels {
                 pixmap.set(pixel, region.interior.color);
@@ -534,8 +534,8 @@ impl Topology {
         pixmap
     }
 
-    pub fn to_pixmap_without_transparent(&self) -> Pixmap {
-        let mut pixmap = Pixmap::new(self.bounds());
+    pub fn to_pixmap_without_transparent(&self) -> PixmapRgba {
+        let mut pixmap = PixmapRgba::new(self.bounds());
         for region in self.regions.values() {
             if region.interior.color.a == 0 {
                 continue;
@@ -667,7 +667,7 @@ impl Topology {
         self.sub_topology(regions)
     }
 
-    pub fn blit(&mut self, pixmap: &Pixmap) {
+    pub fn blit(&mut self, pixmap: &PixmapRgba) {
         // Find regions that are touched by `pixels`
         let touched_regions: Vec<_> = self
             .regions
@@ -685,7 +685,7 @@ impl Topology {
         )
         .bounds_with_rect(pixmap.bounds());
 
-        let mut extracted_pixmap = Pixmap::new(bounds);
+        let mut extracted_pixmap = PixmapRgba::new(bounds);
         for region_key in touched_regions {
             let region = self.remove_region(region_key).unwrap();
             extracted_pixmap.fill_interior(&region.interior);
@@ -703,7 +703,7 @@ impl Topology {
         }
     }
 
-    pub fn fallback_blit(&mut self, pixmap: &Pixmap) {
+    pub fn fallback_blit(&mut self, pixmap: &PixmapRgba) {
         let mut self_pixmap = self.to_pixmap();
         self_pixmap.blit(pixmap);
         *self = Topology::new(&self_pixmap);
@@ -876,7 +876,7 @@ pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -
 pub mod test {
     use crate::{
         math::rgba8::Rgba8,
-        pixmap::Pixmap,
+        pixmap::PixmapRgba,
         topology::{Region, Topology},
         utils::{UndirectedEdge, UndirectedGraph},
     };
@@ -1009,9 +1009,9 @@ pub mod test {
 
         let mut base = Topology::from_bitmap_path(format!("{folder}/base.png")).unwrap();
 
-        let blit = Pixmap::from_bitmap_path(format!("{folder}/blit.png"))
+        let blit = PixmapRgba::from_bitmap_path(format!("{folder}/blit.png"))
             .unwrap()
-            .without_color(Rgba8::TRANSPARENT);
+            .without_color(&Rgba8::TRANSPARENT);
 
         let mut expected_result = base.clone();
         expected_result.blit(&blit);
@@ -1073,9 +1073,9 @@ pub mod test {
         //     .unwrap();
 
         // Load expected result from bitmap and strip transparent pixels
-        let expected_pixmap = Pixmap::from_bitmap_path(format!("{folder}/{name}_expected.png"))
+        let expected_pixmap = PixmapRgba::from_bitmap_path(format!("{folder}/{name}_expected.png"))
             .unwrap()
-            .without_color(Rgba8::TRANSPARENT);
+            .without_color(&Rgba8::TRANSPARENT);
         let expected = Topology::new(&expected_pixmap);
 
         assert_eq!(right_of_topology, expected);

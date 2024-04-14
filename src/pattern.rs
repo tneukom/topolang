@@ -1,7 +1,7 @@
 use crate::{
     math::{pixel::Corner, rgba8::Rgba8},
     morphism::Morphism,
-    pixmap::Pixmap,
+    pixmap::PixmapRgba,
     topology::{RegionKey, Seam, SeamColors, Topology},
 };
 use std::{
@@ -368,7 +368,7 @@ impl<'a> Search<'a> {
 const PATTERN_FRAME_COLOR: Rgba8 = Rgba8::MAGENTA;
 
 #[inline(never)]
-pub fn extract_pattern(pixmap: &mut Pixmap) -> Pixmap {
+pub fn extract_pattern(pixmap: &mut PixmapRgba) -> PixmapRgba {
     let topo = Topology::new(&pixmap);
 
     let frame = topo
@@ -391,19 +391,19 @@ mod test {
     use crate::{
         math::rgba8::Rgba8,
         pattern::{extract_pattern, NullTrace, Search},
-        pixmap::Pixmap,
+        pixmap::PixmapRgba,
         topology::Topology,
     };
 
-    fn pixmap_with_void_from_path(path: &str) -> Pixmap {
-        Pixmap::from_bitmap_path(path)
+    fn pixmap_with_void_from_path(path: &str) -> PixmapRgba {
+        PixmapRgba::from_bitmap_path(path)
             .unwrap()
-            .without_color(Rgba8::VOID)
+            .without_color(&Rgba8::VOID)
     }
 
     fn assert_extract_inner_outer(name: &str) {
         let folder = "test_resources/extract_pattern";
-        let mut pixmap = Pixmap::from_bitmap_path(format!("{folder}/{name}.png")).unwrap();
+        let mut pixmap = PixmapRgba::from_bitmap_path(format!("{folder}/{name}.png")).unwrap();
         let inner = extract_pattern(&mut pixmap);
 
         // Load expected inner and outer pixmaps
@@ -431,9 +431,9 @@ mod test {
 
     fn assert_pattern_match(pattern_path: &str, world_path: &str, n_solutions: usize) {
         let folder = "test_resources/patterns";
-        let pixmap = Pixmap::from_bitmap_path(format!("{folder}/{pattern_path}"))
+        let pixmap = PixmapRgba::from_bitmap_path(format!("{folder}/{pattern_path}"))
             .unwrap()
-            .without_void_color();
+            .without_color(&Rgba8::VOID);
         let pattern = Topology::new(&pixmap);
         let world = Topology::from_bitmap_path(format!("{folder}/{world_path}")).unwrap();
 

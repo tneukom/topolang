@@ -2,7 +2,7 @@ use crate::{
     bitmap::Bitmap,
     math::{pixel::Pixel, rgba8::Rgba8},
     pattern::{NullTrace, Search},
-    pixmap::Pixmap,
+    pixmap::PixmapRgba,
     rule::Rule,
     topology::{BorderKey, RegionKey, Topology},
 };
@@ -28,7 +28,7 @@ impl Interpreter {
         // Load rule_frame pattern from file
         let rule_frame_bitmap = Bitmap::load_from_memory(include_bytes!("rule_frame.png")).unwrap();
         let rule_frame_pixmap =
-            Pixmap::from_bitmap(&rule_frame_bitmap).without_color(Self::RULE_FRAME_VOID_COLOR);
+            PixmapRgba::from_bitmap(&rule_frame_bitmap).without_color(&Self::RULE_FRAME_VOID_COLOR);
         let rule_frame = Topology::new(&rule_frame_pixmap);
 
         // Side on the before border (inner border of the frame)
@@ -138,7 +138,7 @@ impl Interpreter {
 
 #[cfg(test)]
 mod test {
-    use crate::{bitmap::Bitmap, interpreter::Interpreter, pixmap::Pixmap, topology::Topology};
+    use crate::{bitmap::Bitmap, interpreter::Interpreter, pixmap::PixmapRgba, topology::Topology};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -149,7 +149,7 @@ mod test {
     fn assert_execute_world(name: &str, expected_steps: usize) {
         let folder = format!("test_resources/compiler/{name}/");
         let world_bitmap = Bitmap::from_path(format!("{folder}/world.png")).unwrap();
-        let world_pixmap = Pixmap::from_bitmap(&world_bitmap);
+        let world_pixmap = PixmapRgba::from_bitmap(&world_bitmap);
         let mut world = Topology::new(&world_pixmap);
 
         let compiler = Interpreter::new();
@@ -195,7 +195,7 @@ mod test {
         let result_pixmap = world.to_pixmap();
 
         let expected_pixmap =
-            Pixmap::from_bitmap_path(format!("{folder}/world_expected.png")).unwrap();
+            PixmapRgba::from_bitmap_path(format!("{folder}/world_expected.png")).unwrap();
         assert_eq!(result_pixmap, expected_pixmap);
 
         // let result_bitmap = result_pixmap.to_bitmap_with_size(world_bitmap.size());

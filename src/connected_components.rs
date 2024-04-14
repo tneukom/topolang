@@ -3,7 +3,7 @@ use crate::{
         pixel::{Pixel, Side, SideName},
         rgba8::Rgba8,
     },
-    pixmap::Pixmap,
+    pixmap::PixmapRgba,
 };
 use std::collections::BTreeSet;
 
@@ -81,7 +81,7 @@ pub struct ColorComponent {
     pub color: Rgba8,
 }
 
-pub fn color_components(pixels: &Pixmap) -> Vec<ColorComponent> {
+pub fn color_components(pixels: &PixmapRgba) -> Vec<ColorComponent> {
     let mut rest: BTreeSet<_> = pixels.keys().collect();
     let mut color_components: Vec<ColorComponent> = Vec::new();
 
@@ -161,7 +161,7 @@ mod test {
     use crate::{
         bitmap::Bitmap,
         connected_components::{color_components, left_of, ColorComponent, ConnectedComponent},
-        pixmap::Pixmap,
+        pixmap::PixmapRgba,
     };
 
     fn assert_proper_components(filename: &str, count: usize) {
@@ -169,7 +169,7 @@ mod test {
         let path = format!("{folder}/{filename}");
 
         let bitmap = Bitmap::from_path(path).unwrap();
-        let whole = Pixmap::from_bitmap(&bitmap);
+        let whole = PixmapRgba::from_bitmap(&bitmap);
         let components = color_components(&whole);
         assert_eq!(components.len(), count, "number of components is correct");
 
@@ -199,7 +199,7 @@ mod test {
     }
 
     // Assert that the union of all component interiors is equal to the whole
-    fn assert_total_union(components: &Vec<ColorComponent>, whole: &Pixmap) {
+    fn assert_total_union(components: &Vec<ColorComponent>, whole: &PixmapRgba) {
         let union: HashSet<_> = components
             .iter()
             .flat_map(|comp| comp.component.interior.iter().cloned())
@@ -291,7 +291,7 @@ mod test {
         for filename in filenames {
             let path = format!("{folder}/{filename}");
             let bitmap = Bitmap::from_path(path).unwrap();
-            let whole = Pixmap::from_bitmap(&bitmap);
+            let whole = PixmapRgba::from_bitmap(&bitmap);
             let components = color_components(&whole);
 
             for ColorComponent { component, color } in components {

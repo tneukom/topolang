@@ -2,7 +2,7 @@ use crate::{
     math::{pixel::Pixel, rgba8::Rgba8},
     morphism::Morphism,
     pattern::{NullTrace, Search},
-    pixmap::Pixmap,
+    pixmap::PixmapRgba,
     topology::{FillRegion, Topology},
 };
 use itertools::Itertools;
@@ -41,7 +41,7 @@ impl Rule {
 
     /// The fill color of a given region or None if the color is not constant on the region
     /// pixels.
-    pub fn fill_color(pixmap: &Pixmap, pixels: &BTreeSet<Pixel>) -> Option<Rgba8> {
+    pub fn fill_color(pixmap: &PixmapRgba, pixels: &BTreeSet<Pixel>) -> Option<Rgba8> {
         pixels
             .iter()
             .map(|&pixel| pixmap[pixel])
@@ -90,7 +90,7 @@ mod test {
         bitmap::Bitmap,
         math::rgba8::Rgba8,
         pattern::{NullTrace, Search},
-        pixmap::Pixmap,
+        pixmap::PixmapRgba,
         rule::Rule,
         topology::Topology,
     };
@@ -127,7 +127,7 @@ mod test {
 
         let result_pixmap = world.to_pixmap();
         let expected_result_pixmap =
-            Pixmap::from_bitmap_path(format!("{folder}/expected_result.png")).unwrap();
+            PixmapRgba::from_bitmap_path(format!("{folder}/expected_result.png")).unwrap();
 
         // result_pixmap
         //     .to_bitmap_with_size(world_bitmap.size())
