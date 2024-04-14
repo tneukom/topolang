@@ -14,7 +14,6 @@ pub struct ConnectedComponent {
 
     /// Cannot be empty
     pub sides: BTreeSet<Side>,
-    pub closed: bool,
 }
 
 impl ConnectedComponent {
@@ -33,7 +32,7 @@ pub enum SideClass {
     Open,
 }
 
-pub fn flood_fill(
+pub fn legacy_flood_fill(
     seed: Pixel,
     classify: impl Fn(&Side, &Pixel) -> SideClass,
 ) -> ConnectedComponent {
@@ -41,7 +40,6 @@ pub fn flood_fill(
     let mut sides: BTreeSet<Side> = BTreeSet::new();
 
     let mut todo: Vec<Pixel> = vec![seed];
-    let mut closed = true;
 
     while !todo.is_empty() {
         let pixel = todo.pop().unwrap();
@@ -64,7 +62,6 @@ pub fn flood_fill(
                 }
                 SideClass::Open => {
                     sides.insert(neighbor_side);
-                    closed = false;
                 }
             }
         }
@@ -73,11 +70,10 @@ pub fn flood_fill(
     ConnectedComponent {
         interior,
         sides,
-        closed,
     }
 }
 
-pub fn flood_fill_new(
+pub fn flood_fill(
     color_map: &PixmapRgba,
     region_map: &mut Pixmap<usize>,
     seed: Pixel,
@@ -85,54 +81,36 @@ pub fn flood_fill_new(
 ) -> ConnectedComponent {
     let mut interior: BTreeSet<Pixel> = BTreeSet::new();
     let mut sides: BTreeSet<Side> = BTreeSet::new();
-    let mut todo: Vec<Pixel> = vec![seed];
-    let mut closed = true;
     let seed_color = color_map[seed];
 
+    let previous = region_map.set(seed, region_id);
+    assert!(previous.is_none());
+    interior.insert(seed);
+    let mut todo: Vec<Pixel> = vec![seed];
+
     while let Some(pixel) = todo.pop() {
-        match region_map.get(pixel) {
-            None => region_map.set(pixel, region_id),
-            Some(&todo_region_id) if region_id == todo_region_id => continue,
-            _ => unreachable!()
-        };
-
-        interior.insert(pixel);
-
         for side_name in SideName::ALL {
             let neighbor_pixel = pixel.neighbor(side_name);
             let neighbor_side = pixel.side_ccw(side_name);
 
-            let class = {
-                if let Some(&neighbor_color) = color_map.get(neighbor_pixel) {
-                    if neighbor_color == seed_color {
-                        SideClass::Interior
-                    } else {
-                        SideClass::Border
-                    }
-                } else {
-                    SideClass::Open
-                }
-            };
-
-            match class {
-                SideClass::Border => {
-                    sides.insert(neighbor_side);
-                }
-                SideClass::Interior => {
+            if color_map.get(neighbor_pixel) == Some(&seed_color) {
+                let previous = region_map.set(neighbor_pixel, region_id);
+                if previous.is_none() {
+                    interior.insert(neighbor_pixel);
                     todo.push(neighbor_pixel);
+                } else if previous != Some(region_id) {
+                    unreachable!();
                 }
-                SideClass::Open => {
-                    sides.insert(neighbor_side);
-                    closed = false;
-                }
+            } else {
+                sides.insert(neighbor_side);
             }
+
         }
     }
 
     ConnectedComponent {
         interior,
         sides,
-        closed,
     }
 }
 
@@ -152,7 +130,7 @@ pub fn color_components(color_map: &PixmapRgba) -> Vec<ColorComponent> {
 
         let seed_color = color_map[seed];
         let component_id = color_components.len();
-        let component = flood_fill_new(color_map, &mut component_map, seed, component_id);
+        let component = flood_fill(color_map, &mut component_map, seed, component_id);
 
         let color_component = ColorComponent {
             component,
@@ -174,7 +152,7 @@ fn flood_fill_border(seed: Pixel, boundary: &BTreeSet<Side>) -> ConnectedCompone
             SideClass::Interior
         }
     };
-    flood_fill(seed, classify)
+    legacy_flood_fill(seed, classify)
 }
 
 /// See flood_fill_border
@@ -246,11 +224,6 @@ mod test {
 
     ///
     fn assert_proper_sides(component: &ConnectedComponent) {
-        if !component.closed {
-            // The boundary has gaps so left_of(sides) is not defined.
-            return;
-        }
-
         let all_sides: HashSet<_> = component
             .interior
             .iter()
