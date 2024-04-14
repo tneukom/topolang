@@ -25,9 +25,16 @@ impl<T> Pixmap<T> {
         RectBounds::iter_bounds(pixels.into_iter().map(|pixel| pixel.point())).inc_high()
     }
 
-    pub fn get(&self, pixel: impl FieldIndex) -> Option<&T> {
-        match self.field.get(pixel) {
+    pub fn get(&self, index: impl FieldIndex) -> Option<&T> {
+        match self.field.get(index) {
             Some(value) => value.as_ref(),
+            None => None,
+        }
+    }
+
+    pub fn get_mut(&mut self, index: impl FieldIndex) -> Option<&mut T> {
+        match self.field.get_mut(index) {
+            Some(value) => value.as_mut(),
             None => None,
         }
     }

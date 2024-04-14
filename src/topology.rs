@@ -1,6 +1,17 @@
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    fmt,
+    fmt::{Display, Formatter},
+    ops::{Index, IndexMut},
+    path::Path,
+    sync::atomic::{AtomicUsize, Ordering},
+};
+
+use itertools::Itertools;
+
 use crate::{
     bitmap::Bitmap,
-    connected_components::{color_components, left_of, right_of, ColorComponent},
+    connected_components::{ColorComponent, left_of, right_of},
     frozen::Frozen,
     math::{
         pixel::{Corner, Pixel, Side},
@@ -11,15 +22,7 @@ use crate::{
     pixmap::PixmapRgba,
     utils::{IteratorPlus, UndirectedEdge, UndirectedGraph},
 };
-use itertools::Itertools;
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    fmt,
-    fmt::{Display, Formatter},
-    ops::{Index, IndexMut},
-    path::Path,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use crate::connected_components::color_components;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Seam {
@@ -874,13 +877,14 @@ pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -
 
 #[cfg(test)]
 pub mod test {
+    use itertools::Itertools;
+
     use crate::{
         math::rgba8::Rgba8,
         pixmap::PixmapRgba,
         topology::{Region, Topology},
         utils::{UndirectedEdge, UndirectedGraph},
     };
-    use itertools::Itertools;
 
     fn load_topology(filename: &str) -> Topology {
         let path = format!("test_resources/topology/{filename}");
