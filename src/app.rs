@@ -341,7 +341,7 @@ impl EguiApp {
         if ui.button("Save").clicked() {
             println!("Saving edit scene to {}", self.file_name);
 
-            let bitmap = self.view.world.to_pixmap().to_bitmap();
+            let bitmap = self.view.world.color_map().to_bitmap();
             match bitmap.save(&path) {
                 Ok(_) => println!("Saved {path:?}"),
                 Err(err) => println!("Failed to save {path:?} with error {err}"),
@@ -378,7 +378,7 @@ impl EguiApp {
                 if let Some(gif_encoder) = &mut self.gif_encoder {
                     // TODO: Offset world pixmap by bounds.low()
                     // TODO: Paint over white background to remove transparency or use apng instead
-                    let image = self.view.world.to_pixmap().to_bitmap();
+                    let image = self.view.world.color_map().to_bitmap();
                     gif_encoder
                         .encode(
                             image.as_raw(),
@@ -486,7 +486,7 @@ impl eframe::App for EguiApp {
             self.scene_painter
                 .draw_topology(&self.view.world, &self.view.camera, &frames);
 
-            let bounds = self.view.world.bounds();
+            let bounds = self.view.world.actual_bounds();
             self.scene_painter
                 .draw_bounds(bounds, &self.view.camera, &frames, time);
         }

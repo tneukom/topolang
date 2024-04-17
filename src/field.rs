@@ -14,19 +14,16 @@ pub struct Field<T> {
 
 impl<T> Field<T> {
     pub fn from_linear(bounds: Rect<i64>, elems: Vec<T>) -> Self {
-        // Meaning bounds.width() > 0 and bounds.height() > 0
-        assert!(!bounds.is_empty());
         assert_eq!(bounds.width() * bounds.height(), elems.len() as i64);
-
         Self { bounds, elems }
     }
 
-    pub fn from_map(bounds: Rect<i64>, f: impl Fn(Pixel) -> T) -> Self {
+    pub fn from_map(bounds: Rect<i64>, f: impl FnMut(Point<i64>) -> T) -> Self {
         // Meaning bounds.width() > 0 and bounds.height() > 0
-        assert!(!bounds.is_empty());
+        // assert!(!bounds.is_empty());
 
         let mut elems = Vec::with_capacity(bounds.width() as usize * bounds.height() as usize);
-        elems.extend(bounds.iter_half_open().map(|point| f(Pixel::from(point))));
+        elems.extend(bounds.iter_half_open().map(f));
         Self::from_linear(bounds, elems)
     }
 
@@ -58,7 +55,12 @@ impl<T> Field<T> {
     }
 
     pub fn enumerate(&self) -> impl IteratorPlus<(Point<i64>, &T)> {
+        // FIXME: Should not require index check
         self.indices().map(|index| (index, &self[index]))
+    }
+
+    pub fn enumerate_mut(&mut self) -> impl Iterator<Item = (Point<i64>, &mut T)> {
+        self.indices().zip(self.iter_mut())
     }
 
     pub fn contains_index(&self, index: impl FieldIndex) -> bool {
@@ -116,11 +118,15 @@ impl<T> Field<T> {
             elems,
         }
     }
+
+    pub fn sub_map<S>(&self, bounds: Rect<i64>, mut f: impl FnMut(&T) -> S) -> Field<S> {
+        assert!(self.bounds.contains_rect(bounds));
+        Field::from_map(bounds, |index| f(&self[index]))
+    }
 }
 
 impl<T: Clone> Field<T> {
     pub fn filled(bounds: Rect<i64>, value: T) -> Self {
-        assert!(!bounds.is_empty());
         let size = bounds.width() as usize * bounds.height() as usize;
         Self {
             bounds,
@@ -132,6 +138,14 @@ impl<T: Clone> Field<T> {
         for (index, value) in other.enumerate() {
             self.set(index, value.clone());
         }
+    }
+
+    pub fn sub(&self, bounds: Rect<i64>) -> Self {
+        self.sub_map(bounds, |value| value.clone())
+    }
+
+    pub fn clipped(&self, bounds: Rect<i64>) -> Self {
+        self.sub(bounds.intersect(self.bounds))
     }
 }
 

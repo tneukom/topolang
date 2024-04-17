@@ -1,12 +1,13 @@
+use std::collections::BTreeSet;
+
 use crate::{
     math::{
         pixel::{Pixel, Side, SideName},
+        rect::{Rect, RectBounds},
         rgba8::Rgba8,
     },
-    pixmap::PixmapRgba,
+    pixmap::{Pixmap, PixmapRgba},
 };
-use std::collections::BTreeSet;
-use crate::pixmap::Pixmap;
 
 pub struct ConnectedComponent {
     /// Cannot be empty
@@ -67,25 +68,20 @@ pub fn legacy_flood_fill(
         }
     }
 
-    ConnectedComponent {
-        interior,
-        sides,
-    }
+    ConnectedComponent { interior, sides }
 }
 
-pub fn flood_fill(
+pub fn flood_fill<Id: Copy + Eq>(
     color_map: &PixmapRgba,
-    region_map: &mut Pixmap<usize>,
+    region_map: &mut Pixmap<Id>,
     seed: Pixel,
-    region_id: usize,
-) -> ConnectedComponent {
-    let mut interior: BTreeSet<Pixel> = BTreeSet::new();
+    region_id: Id,
+) -> BTreeSet<Side> {
     let mut sides: BTreeSet<Side> = BTreeSet::new();
     let seed_color = color_map[seed];
 
     let previous = region_map.set(seed, region_id);
     assert!(previous.is_none());
-    interior.insert(seed);
     let mut todo: Vec<Pixel> = vec![seed];
 
     while let Some(pixel) = todo.pop() {
@@ -96,7 +92,6 @@ pub fn flood_fill(
             if color_map.get(neighbor_pixel) == Some(&seed_color) {
                 let previous = region_map.set(neighbor_pixel, region_id);
                 if previous.is_none() {
-                    interior.insert(neighbor_pixel);
                     todo.push(neighbor_pixel);
                 } else if previous != Some(region_id) {
                     unreachable!();
@@ -104,14 +99,10 @@ pub fn flood_fill(
             } else {
                 sides.insert(neighbor_side);
             }
-
         }
     }
 
-    ConnectedComponent {
-        interior,
-        sides,
-    }
+    sides
 }
 
 pub struct ColorComponent {
@@ -119,28 +110,44 @@ pub struct ColorComponent {
     pub color: Rgba8,
 }
 
-pub fn color_components(color_map: &PixmapRgba) -> Vec<ColorComponent> {
-    let mut color_components: Vec<ColorComponent> = Vec::new();
-    let mut component_map = Pixmap::new(color_map.bounds());
+pub struct ColorRegion<Id> {
+    pub id: Id,
+    pub color: Rgba8,
+    pub sides: BTreeSet<Side>,
+}
+
+impl<Id> ColorRegion<Id> {
+    pub fn bounds(&self) -> Rect<i64> {
+        RectBounds::iter_bounds(self.sides.iter().map(|side| side.left_pixel.point())).inc_high()
+    }
+}
+
+pub fn color_components<Id: Eq + Copy>(
+    color_map: &PixmapRgba,
+    mut free_id: impl FnMut() -> Id,
+) -> (Vec<ColorRegion<Id>>, Pixmap<Id>) {
+    let mut regions: Vec<ColorRegion<Id>> = Vec::new();
+    let mut region_map = Pixmap::new(color_map.bounds());
 
     for seed in color_map.keys() {
-        if component_map.get(seed).is_some() {
+        if region_map.get(seed).is_some() {
             continue;
         }
 
         let seed_color = color_map[seed];
-        let component_id = color_components.len();
-        let component = flood_fill(color_map, &mut component_map, seed, component_id);
+        let id = free_id();
+        let sides = flood_fill(color_map, &mut region_map, seed, id);
 
-        let color_component = ColorComponent {
-            component,
+        let region = ColorRegion {
+            id,
+            sides,
             color: seed_color,
         };
 
-        color_components.push(color_component);
+        regions.push(region);
     }
 
-    color_components
+    (regions, region_map)
 }
 
 /// Works if `boundary` is the boundary of a connected set of pixels, can contain holes.
@@ -169,80 +176,70 @@ pub fn right_of(boundary: &BTreeSet<Side>) -> ConnectedComponent {
 
 #[cfg(test)]
 mod test {
-    use std::collections::{BTreeSet, HashSet};
+    use std::collections::BTreeSet;
+
     // TODO: Make sure color of pixels in components is constant
     use crate::{
-        bitmap::Bitmap,
-        connected_components::{left_of, ColorComponent, ConnectedComponent},
-        pixmap::PixmapRgba,
+        connected_components::{color_components, left_of, ColorRegion},
+        math::pixel::Side,
+        pixmap::{Pixmap, PixmapRgba},
     };
-    use crate::connected_components::color_components;
+
+    fn usize_color_components(color_map: &PixmapRgba) -> (Vec<ColorRegion<usize>>, Pixmap<usize>) {
+        let mut id: usize = 0;
+        let free_id = || {
+            let result = id;
+            id += 1;
+            result
+        };
+        color_components(color_map, free_id)
+    }
+
+    /// Brute force method to find all boundary sides of a region given the region_map
+    fn region_sides(region_map: &Pixmap<usize>, id: usize) -> BTreeSet<Side> {
+        region_map
+            .iter()
+            // iter over entries with given id
+            .filter(|(_, &region_id)| region_id == id)
+            // iter over all sides of pixels of the given id
+            .flat_map(|(pixel, _)| pixel.sides_ccw())
+            // keep only sides with a different region on the right side
+            .filter(|side| region_map.get(side.right_pixel()) != Some(&id))
+            .collect()
+    }
 
     fn assert_proper_components(filename: &str, count: usize) {
+        // Load bitmap
         let folder = "test_resources/connected_components";
         let path = format!("{folder}/{filename}");
+        let color_map = PixmapRgba::from_bitmap_path(path).unwrap();
 
-        let bitmap = Bitmap::from_path(path).unwrap();
-        let whole = PixmapRgba::from_bitmap(&bitmap);
-        let components = color_components(&whole);
-        assert_eq!(components.len(), count, "number of components is correct");
+        // Compute regions
+        let (regions, region_map) = usize_color_components(&color_map);
 
-        for ColorComponent { component, color } in &components {
-            // Components cannot be empty
-            assert_ne!(component.interior.len(), 0);
+        assert_eq!(regions.len(), count, "number of components is correct");
 
-            // Make sure the color of each pixel in the component is the same
-            assert!(component
-                .interior
-                .iter()
-                .all(|&pixel| whole[pixel] == *color));
-
-            // Make sure the boundary of each component is proper
-            assert_proper_sides(component);
+        // Make sure for each pixel, regions[region_map[pixel]].color == color_map[pixel]
+        for (pixel, &color) in color_map.iter() {
+            let &region_id = region_map.get(pixel).unwrap();
+            assert_eq!(regions[region_id].color, color);
         }
 
-        assert_total_union(&components, &whole);
+        // Make sure for each side, if left and right have the same color, they belong to the
+        // same region.
+        for (pixel, color) in color_map.iter() {
+            for side in pixel.sides_ccw() {
+                if Some(color) == color_map.get(side.right_pixel()) {
+                    assert_eq!(region_map.get(pixel), region_map.get(side.right_pixel()));
+                }
+            }
+        }
 
-        // Make sure the total number of pixels in all components is the same as the number of
-        // pixels in the whole. Together with assert_total_union this implies non intersection.
-        let components_pixel_count: usize = components
-            .iter()
-            .map(|comp| comp.component.interior.len())
-            .sum();
-        assert_eq!(components_pixel_count, whole.keys().count());
-    }
-
-    // Assert that the union of all component interiors is equal to the whole
-    fn assert_total_union(components: &Vec<ColorComponent>, whole: &PixmapRgba) {
-        let union: HashSet<_> = components
-            .iter()
-            .flat_map(|comp| comp.component.interior.iter().cloned())
-            .collect();
-        let whole_pixels = whole.keys().collect();
-        assert_eq!(union, whole_pixels);
-    }
-
-    ///
-    fn assert_proper_sides(component: &ConnectedComponent) {
-        let all_sides: HashSet<_> = component
-            .interior
-            .iter()
-            .flat_map(|pixel| pixel.sides_ccw())
-            .collect();
-
-        let boundary_sides: BTreeSet<_> = all_sides
-            .into_iter()
-            .filter(|side| {
-                let left_interior = component.interior.contains(&side.left_pixel());
-                let right_interior = component.interior.contains(&side.right_pixel());
-                left_interior != right_interior
-            })
-            .collect();
-
-        assert_eq!(
-            boundary_sides, component.sides,
-            "component.sides = boundary(interior)"
-        );
+        // Make sure sides of region are correct
+        for region in &regions {
+            let expected_sides = region_sides(&region_map, region.id);
+            assert_eq!(region.sides, expected_sides);
+        }
     }
 
     #[test]
@@ -299,16 +296,22 @@ mod test {
 
         for filename in filenames {
             let path = format!("{folder}/{filename}");
-            let bitmap = Bitmap::from_path(path).unwrap();
-            let whole = PixmapRgba::from_bitmap(&bitmap);
-            let components = color_components(&whole);
+            let color_map = Pixmap::from_bitmap_path(path).unwrap();
+            let (regions, region_map) = usize_color_components(&color_map);
 
-            for ColorComponent { component, color } in components {
-                let connected_component = left_of(&component.sides);
-                assert_eq!(
-                    connected_component.interior, component.interior,
-                    "{filename} failed for component {color}"
-                );
+            for region in regions {
+                let left_of_interior = left_of(&region.sides).interior;
+                let region_map_interior = region_map
+                    .iter()
+                    .filter_map(|(pixel, &region_id)| {
+                        if region_id == region.id {
+                            Some(pixel)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                assert_eq!(left_of_interior, region_map_interior,);
             }
         }
     }

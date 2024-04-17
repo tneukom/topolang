@@ -1,20 +1,19 @@
+use std::sync::Arc;
+
 use crate::{
     bitmap::Bitmap,
     frozen::counter,
-    math::{affine_map::AffineMap, generic::CwiseMul, rect::Rect},
+    math::{affine_map::AffineMap, point::Point, rect::Rect},
     painting::{
         gl_texture::{Filter, GlTexture},
         rect_painter::{DrawRect, RectPainter},
-        tile_store::TileStore,
     },
     topology::Topology,
 };
-use std::sync::Arc;
 
 pub struct TopologyPainter {
     update_time: usize,
     rect_painter: RectPainter,
-    tile_store: TileStore,
     texture: GlTexture,
 }
 
@@ -26,26 +25,19 @@ impl TopologyPainter {
         Self {
             update_time: 0,
             texture,
-            tile_store: TileStore::new(),
             rect_painter: RectPainter::new(gl),
         }
     }
 
     /// Has to be called with same instance of Topology every time
+    /// Currently updates the whole texture
+    /// TODO: Track topology changes somehow, options
+    ///   - Track if there were any changes at all since last update, using an mtime
+    ///   - Track modified rectangle
+    ///   - Track modified time on tiles
     pub unsafe fn update(&mut self, topology: &Topology) {
-        self.tile_store.update(topology);
-
-        // update all texture sub rectangles that have changed since `self.update_time`
-        for (&tile_index, tile) in self.tile_store.iter_modified_after(self.update_time) {
-            let Ok(usize_tile_index) = tile_index.cwise_try_into::<usize>() else {
-                println!("negative tile indices not supported!");
-                continue;
-            };
-            // println!("updating texture tile {}", Frozen::modified_time(tile));
-            let offset = tile.size().cwise_mul(usize_tile_index);
-            self.texture.texture_sub_image(offset, &tile);
-        }
-
+        let color_field = topology.color_field();
+        self.texture.texture_sub_image(Point(0, 0), &color_field);
         self.update_time = counter();
     }
 

@@ -3,6 +3,7 @@ use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
     math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect, rgba8::Rgba8},
+    pixmap::Pixmap,
     topology::Topology,
 };
 
@@ -137,7 +138,7 @@ impl View {
     }
 
     pub fn center_camera(&mut self, view_rect: Rect<f64>) {
-        let mut world_bounds = self.world.bounds();
+        let mut world_bounds = self.world.actual_bounds();
         if world_bounds.is_empty() {
             world_bounds = Rect::low_high([-128, -128], [128, 128])
         }
@@ -147,7 +148,8 @@ impl View {
     }
 
     pub fn empty() -> View {
-        let world = Topology::empty();
+        let empty_color_map = Pixmap::new(Rect::low_size([0, 0], [512, 512]));
+        let world = Topology::new(&empty_color_map);
         Self::new(world)
     }
 
@@ -192,6 +194,8 @@ impl View {
         // Only draw points within bounds of world
         // let bounds = self.world.bounds();
         // change.map.retain(|pixel, _| bounds.contains(pixel.point()));
+
+        let change = change.clipped(self.world.capacity_bounds());
         self.world.blit(&change);
 
         UiState::Brushing(op)
@@ -225,7 +229,7 @@ impl View {
             EditMode::Fill => {
                 if input.left_mouse.is_down {
                     let pixel: Pixel = input.world_mouse.floor().cwise_into_lossy().into();
-                    if let Some((&region_key, _)) = self.world.region_at(pixel) {
+                    if let Some(region_key) = self.world.region_at(pixel) {
                         self.world.fill_region(region_key, settings.brush.color);
                     }
                 }

@@ -11,18 +11,17 @@ use itertools::Itertools;
 
 use crate::{
     bitmap::Bitmap,
-    connected_components::{ColorComponent, left_of, right_of},
-    frozen::Frozen,
+    connected_components::{color_components, left_of, right_of},
+    field::Field,
     math::{
         pixel::{Corner, Pixel, Side},
         point::Point,
         rect::{Rect, RectBounds},
         rgba8::Rgba8,
     },
-    pixmap::PixmapRgba,
+    pixmap::{Pixmap, PixmapRgba},
     utils::{IteratorPlus, UndirectedEdge, UndirectedGraph},
 };
-use crate::connected_components::color_components;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Seam {
@@ -146,53 +145,15 @@ impl Border {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct RegionFlags {
-    /// Regions cannot be matched or overwritten.
-    pub isolated: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Interior {
-    pub pixels: BTreeSet<Pixel>,
-    pub bounds: Rect<i64>,
-    pub color: Rgba8,
-}
-
-impl Interior {
-    pub fn new(pixels: BTreeSet<Pixel>, color: Rgba8) -> Self {
-        // Upper bound is exclusive
-        let interior_points = pixels.iter().map(|pixel| pixel.point());
-        let bounds = RectBounds::iter_bounds(interior_points).inc_high();
-        Self {
-            pixels,
-            color,
-            bounds,
-        }
-    }
-
-    pub fn translated(&self, offset: Point<i64>) -> Self {
-        let pixels = self.pixels.iter().map(|&pixel| pixel + offset).collect();
-        let bounds = self.bounds + offset;
-        Self {
-            pixels,
-            bounds,
-            color: self.color,
-        }
-    }
-}
-
 /// The boundary is counterclockwise. Is mutable so color can be changed.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Region {
     /// First item is outer Border
     pub boundary: Vec<Border>,
 
-    /// Contains at least one pixel
-    pub interior: Frozen<Interior>,
-    // /// If the region is not closed left_of(boundary) is not defined otherwise
-    // /// left_of(boundary) = interior
-    // pub closed: bool,
+    pub bounds: Rect<i64>,
+
+    pub color: Rgba8,
 }
 
 impl Region {
@@ -207,26 +168,10 @@ impl Region {
             .copied()
     }
 
-    pub fn bounds(&self) -> Rect<i64> {
-        self.interior.bounds
-    }
-
-    /// Any `pixel` in `pixels` either
-    pub fn touches(&self, pixmap: &PixmapRgba) -> bool {
-        pixmap.keys().any(|pixel| {
-            pixel
-                .touching()
-                .iter()
-                .any(|touched| self.interior.pixels.contains(touched))
-        })
-    }
-
     pub fn translate(&mut self, offset: Point<i64>) {
         for border in &mut self.boundary {
             border.translate(offset);
         }
-
-        self.interior = Frozen::new(self.interior.translated(offset));
     }
 
     pub fn translated(mut self, offset: Point<i64>) -> Self {
@@ -300,21 +245,23 @@ pub struct FillRegion {
 pub struct Topology {
     pub regions: BTreeMap<RegionKey, Region>,
 
+    pub region_map: Pixmap<RegionKey>,
+
     /// Maps the start side of a seam to (region key, border index, seam index)
     pub seam_indices: BTreeMap<Side, SeamIndex>,
 }
 
 impl Topology {
     pub fn new(pixmap: &PixmapRgba) -> Self {
-        let color_components = color_components(pixmap);
+        let (pre_regions, region_map) = color_components(pixmap, RegionKey::unused);
 
         let mut regions: BTreeMap<RegionKey, Region> = BTreeMap::new();
 
-        for ColorComponent { component, color } in color_components {
+        for pre_region in pre_regions {
             // Each cycle in the sides is a border
             let mut boundary = Vec::new();
 
-            for (i_border, cycle) in split_into_cycles(&component.sides).into_iter().enumerate() {
+            for (i_border, cycle) in split_into_cycles(&pre_region.sides).into_iter().enumerate() {
                 let seams = split_cycle_into_seams(&cycle, |side| pixmap.get(side.right_pixel()));
 
                 let border = Border {
@@ -327,16 +274,19 @@ impl Topology {
 
             let region = Region {
                 boundary,
-                interior: Frozen::new(Interior::new(component.interior, color)),
-                // closed: component.closed,
+                bounds: pre_region.bounds(),
+                color: pre_region.color,
             };
-            regions.insert(RegionKey::unused(), region);
+            regions.insert(pre_region.id, region);
         }
 
-        Self::from_regions(regions)
+        Self::from_regions(regions, region_map)
     }
 
-    pub fn from_regions(regions: BTreeMap<RegionKey, Region>) -> Self {
+    pub fn from_regions(
+        regions: BTreeMap<RegionKey, Region>,
+        region_map: Pixmap<RegionKey>,
+    ) -> Self {
         let mut seam_indices: BTreeMap<Side, SeamIndex> = BTreeMap::new();
 
         for (&region_key, region) in &regions {
@@ -349,15 +299,9 @@ impl Topology {
         }
 
         Topology {
+            region_map,
             regions,
             seam_indices,
-        }
-    }
-
-    pub fn empty() -> Self {
-        Self {
-            regions: BTreeMap::new(),
-            seam_indices: BTreeMap::new(),
         }
     }
 
@@ -393,23 +337,25 @@ impl Topology {
     }
 
     /// Undefined behaviour if region overlaps existing regions
-    pub fn insert_region(&mut self, region: Region) {
-        let region_key = RegionKey::unused();
-
+    fn insert_region(&mut self, key: RegionKey, region: Region) {
         for (i_border, border) in region.boundary.iter().enumerate() {
             for (i_seam, seam) in border.seams.iter().enumerate() {
-                let seam_index = SeamIndex::new(region_key, i_border, i_seam);
+                let seam_index = SeamIndex::new(key, i_border, i_seam);
                 let existing = self.seam_indices.insert(seam.start, seam_index);
                 assert!(existing.is_none());
             }
         }
 
-        self.regions.insert(region_key, region);
+        self.regions.insert(key, region);
     }
 
     /// Upper bound is exclusive, lower bound inclusive
-    pub fn bounds(&self) -> Rect<i64> {
-        RectBounds::iter_bounds(self.regions.values().map(|region| region.interior.bounds))
+    pub fn actual_bounds(&self) -> Rect<i64> {
+        RectBounds::iter_bounds(self.regions.values().map(|region| region.bounds))
+    }
+
+    pub fn capacity_bounds(&self) -> Rect<i64> {
+        self.region_map.bounds()
     }
 
     pub fn translated(self, offset: Point<i64>) -> Self {
@@ -417,7 +363,8 @@ impl Topology {
         for region in regions.values_mut() {
             region.translate(offset);
         }
-        Self::from_regions(regions)
+        let region_map = self.region_map.translated(offset);
+        Self::from_regions(regions, region_map)
     }
 
     pub fn iter_borders(&self) -> impl IteratorPlus<&Border> {
@@ -472,7 +419,7 @@ impl Topology {
 
     pub fn color_left_of(&self, seam: &Seam) -> Rgba8 {
         let left_key = self.left_of(seam);
-        self[left_key].interior.color
+        self[left_key].color
     }
 
     /// Not every seam has a region on the right, it can be empty space
@@ -484,7 +431,7 @@ impl Topology {
 
     pub fn color_right_of(&self, seam: &Seam) -> Option<Rgba8> {
         let right_key = self.right_of(seam)?;
-        Some(self[right_key].interior.color)
+        Some(self[right_key].color)
     }
 
     /// Only fails if seam is not self.contains_seam(seam)
@@ -517,6 +464,14 @@ impl Topology {
             .filter(move |&seam| self.right_of(seam) == Some(right))
     }
 
+    pub fn touched_regions(&self, pixels: impl IntoIterator<Item = Pixel>) -> BTreeSet<RegionKey> {
+        pixels
+            .into_iter()
+            .flat_map(|pixel| pixel.touching())
+            .flat_map(|touched| self.region_map.get(touched).copied())
+            .collect()
+    }
+
     /// Is the right side of the seam void? The left side is always a proper region.
     pub fn touches_void(&self, seam: &Seam) -> bool {
         self.right_of(seam).is_none()
@@ -526,43 +481,41 @@ impl Topology {
         lhs.is_loop() && rhs.is_loop() && self.seam_border(lhs) == self.seam_border(rhs)
     }
 
-    pub fn to_pixmap(&self) -> PixmapRgba {
-        let mut pixmap = PixmapRgba::new(self.bounds());
-        for region in self.regions.values() {
-            for &pixel in &region.interior.pixels {
-                pixmap.set(pixel, region.interior.color);
-            }
-        }
-
-        pixmap
+    pub fn color_map(&self) -> PixmapRgba {
+        self.region_map
+            .map(|region_id| self.regions[region_id].color)
     }
 
-    pub fn to_pixmap_without_transparent(&self) -> PixmapRgba {
-        let mut pixmap = PixmapRgba::new(self.bounds());
-        for region in self.regions.values() {
-            if region.interior.color.a == 0 {
-                continue;
-            }
+    pub fn color_field(&self) -> Field<Rgba8> {
+        self.region_map.field().map(|region_id| match region_id {
+            None => Rgba8::TRANSPARENT,
+            Some(region_id) => self.regions[region_id].color,
+        })
+    }
 
-            for &pixel in &region.interior.pixels {
-                pixmap.set(pixel, region.interior.color);
-            }
-        }
-
-        pixmap
+    pub fn iter_region_interior<'a>(
+        &'a self,
+        region_key: RegionKey,
+    ) -> impl IteratorPlus<Pixel> + 'a {
+        let region = &self.regions[&region_key];
+        region
+            .bounds
+            .iter_half_open()
+            .filter(move |&index| self.region_map.get(index) == Some(&region_key))
+            .map(|index| index.into())
     }
 
     #[inline(never)]
     fn fill_regions_fallback(&mut self, fill_regions: &Vec<FillRegion>) {
-        let mut pixmap = self.to_pixmap();
+        let mut color_map = self.color_map();
 
         for fill_region in fill_regions.into_iter() {
-            for &pixel in &self.regions[&fill_region.region_key].interior.pixels {
-                pixmap.set(pixel, fill_region.color);
+            for pixel in self.iter_region_interior(fill_region.region_key) {
+                color_map.set(pixel, fill_region.color);
             }
         }
 
-        *self = Self::new(&pixmap)
+        *self = Self::new(&color_map)
     }
 
     /// Invalidates all regions keys
@@ -577,7 +530,7 @@ impl Topology {
             // simply replace Region.color
             let region = &self[fill_region.region_key];
 
-            if region.interior.color == fill_region.color {
+            if region.color == fill_region.color {
                 // already has desired color, skip
                 continue;
             }
@@ -588,10 +541,8 @@ impl Topology {
                 .iter_seams()
                 .all(|seam| self.color_right_of(seam) != Some(fill_region.color))
             {
-                let region = &mut self[fill_region.region_key];
-                Frozen::modify(&mut region.interior, |interior| {
-                    interior.color = fill_region.color
-                });
+                let mut_region = &mut self[fill_region.region_key];
+                mut_region.color = fill_region.color;
             } else {
                 remaining.push(fill_region)
             }
@@ -609,10 +560,8 @@ impl Topology {
         self.fill_regions(&fill_regions)
     }
 
-    pub fn region_at(&self, pixel: Pixel) -> Option<(&RegionKey, &Region)> {
-        self.regions
-            .iter()
-            .find(|(_, region)| region.interior.pixels.contains(&pixel))
+    pub fn region_at(&self, pixel: Pixel) -> Option<RegionKey> {
+        self.region_map.get(pixel).copied()
     }
 
     pub fn border_containing_side(&self, side: &Side) -> Option<(BorderKey, &Border)> {
@@ -667,31 +616,31 @@ impl Topology {
     /// Keys of resulting Regions are unchanged
     pub fn topology_right_of_border(&self, border: &Border) -> Self {
         let regions = self.regions_right_of_border(border);
-        self.sub_topology(regions)
+        self.sub_topology(&regions)
     }
 
     pub fn blit(&mut self, pixmap: &PixmapRgba) {
+        assert!(self.region_map.bounds().contains_rect(pixmap.bounds()));
+
         // Find regions that are touched by `pixels`
-        let touched_regions: Vec<_> = self
-            .regions
-            .iter()
-            .filter(|(_, region)| region.touches(pixmap))
-            .map(|(&key, _)| key)
-            .collect();
+        let touched_regions = self.touched_regions(pixmap.keys());
 
         // Extract these regions into a Pixmap
         // Bounds of extracted regions and pixmap
         let bounds = RectBounds::iter_bounds(
             touched_regions
                 .iter()
-                .map(|region_key| self.regions[region_key].bounds()),
+                .map(|region_key| self.regions[region_key].bounds),
         )
         .bounds_with_rect(pixmap.bounds());
 
         let mut extracted_pixmap = PixmapRgba::new(bounds);
         for region_key in touched_regions {
-            let region = self.remove_region(region_key).unwrap();
-            extracted_pixmap.fill_interior(&region.interior);
+            let region_color = self.regions[&region_key].color;
+            for pixel in self.iter_region_interior(region_key) {
+                extracted_pixmap.set(pixel, region_color);
+            }
+            self.remove_region(region_key).unwrap();
         }
 
         // Blit pixels to the Pixmap
@@ -700,14 +649,17 @@ impl Topology {
         // Convert Pixmap back to Topology
         let topology = Topology::new(&extracted_pixmap);
 
+        // Blit topology region_map back to self
+        self.region_map.blit(&topology.region_map);
+
         // Merge topology with self
-        for region in topology.regions.into_values() {
-            self.insert_region(region);
+        for (region_key, region) in topology.regions.into_iter() {
+            self.insert_region(region_key, region);
         }
     }
 
     pub fn fallback_blit(&mut self, pixmap: &PixmapRgba) {
-        let mut self_pixmap = self.to_pixmap();
+        let mut self_pixmap = self.color_map();
         self_pixmap.blit(pixmap);
         *self = Topology::new(&self_pixmap);
     }
@@ -723,27 +675,38 @@ impl Topology {
         edges
     }
 
-    pub fn sub_topology_from_iter(&self, iter: impl Iterator<Item = RegionKey>) -> Self {
-        let regions = iter.map(|key| (key, self[key].clone())).collect();
-        Self::from_regions(regions)
-    }
+    pub fn sub_topology(&self, sub_regions: &BTreeSet<RegionKey>) -> Self {
+        let region_map = self
+            .region_map
+            .filter(|region_key| sub_regions.contains(region_key));
 
-    pub fn sub_topology(&self, into_iter: impl IntoIterator<Item = RegionKey>) -> Self {
-        self.sub_topology_from_iter(into_iter.into_iter())
-    }
-
-    pub fn filter_regions(self, mut predicate: impl FnMut(RegionKey, &Region) -> bool) -> Self {
-        let regions = self
-            .regions
-            .into_iter()
-            .filter(|(key, region)| predicate(*key, region))
+        let regions = sub_regions
+            .iter()
+            .map(|&key| (key, self[key].clone()))
             .collect();
-        Self::from_regions(regions)
+
+        Self::from_regions(regions, region_map)
+    }
+
+    pub fn filter_regions(&self, mut predicate: impl FnMut(RegionKey, &Region) -> bool) -> Self {
+        let sub_regions: BTreeSet<_> = self
+            .regions
+            .iter()
+            .filter_map(|(&key, region)| {
+                if predicate(key, region) {
+                    Some(key)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        self.sub_topology(&sub_regions)
     }
 
     /// Remove all regions of the given color
     pub fn without_color(self, color: Rgba8) -> Self {
-        self.filter_regions(|_, region| region.interior.color != color)
+        self.filter_regions(|_, region| region.color != color)
     }
 }
 
@@ -1004,8 +967,8 @@ pub mod test {
     }
 
     fn print_region(region: &Region, indent: &str) {
-        println!("{indent}color: {}", region.interior.color);
-        println!("{indent}color: {:?}", region.interior.bounds);
+        println!("{indent}color: {}", region.color);
+        println!("{indent}color: {:?}", region.bounds);
     }
 
     fn assert_blit(name: &str) {
@@ -1058,7 +1021,7 @@ pub mod test {
         let (_, red_region) = topology
             .regions
             .iter()
-            .filter(|(_, region)| region.interior.color == Rgba8::RED)
+            .filter(|(_, region)| region.color == Rgba8::RED)
             .exactly_one()
             .unwrap();
 
@@ -1068,7 +1031,7 @@ pub mod test {
         // let border_key = BorderKey::new(red_region_key, 1);
         let red_interior_border = &red_region.boundary[1];
         let regions_right_of = topology.regions_right_of_border(red_interior_border);
-        let right_of_topology = topology.sub_topology(regions_right_of);
+        let right_of_topology = topology.sub_topology(&regions_right_of);
 
         // right_of_topology
         //     .to_pixmap()

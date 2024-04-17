@@ -367,6 +367,9 @@ impl<T: Num> Rect<T> {
     }
 
     pub fn contains_rect(self, rect: Self) -> bool {
+        if rect.is_empty() {
+            return true;
+        }
         self.x.contains_interval(rect.x) && self.y.contains_interval(rect.y)
     }
 

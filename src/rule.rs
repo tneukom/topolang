@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use crate::{
     math::{pixel::Pixel, rgba8::Rgba8},
     morphism::Morphism,
@@ -5,8 +7,6 @@ use crate::{
     pixmap::PixmapRgba,
     topology::{FillRegion, Topology},
 };
-use itertools::Itertools;
-use std::collections::BTreeSet;
 
 pub struct Rule {
     pub pattern: Topology,
@@ -17,17 +17,20 @@ impl Rule {
     pub fn new(before: Topology, after: Topology) -> anyhow::Result<Self> {
         let mut fill_regions: Vec<FillRegion> = Vec::new();
 
-        let after_pixmap = after.to_pixmap();
+        let after_pixmap = after.color_map();
 
-        for (&region_key, region) in &before.regions {
-            let Some(fill_color) = Self::fill_color(&after_pixmap, &region.interior.pixels) else {
-                anyhow::bail!("Region {region_key} color not constant.")
+        for (&before_region_key, before_region) in &before.regions {
+            let Some(after_fill_color) = Self::fill_color(
+                &after_pixmap,
+                before.iter_region_interior(before_region_key),
+            ) else {
+                anyhow::bail!("Region {before_region_key} color not constant.")
             };
 
-            if fill_color != region.interior.color {
+            if after_fill_color != before_region.color {
                 let fill_region = FillRegion {
-                    region_key,
-                    color: fill_color,
+                    region_key: before_region_key,
+                    color: after_fill_color,
                 };
                 fill_regions.push(fill_region);
             }
@@ -41,10 +44,13 @@ impl Rule {
 
     /// The fill color of a given region or None if the color is not constant on the region
     /// pixels.
-    pub fn fill_color(pixmap: &PixmapRgba, pixels: &BTreeSet<Pixel>) -> Option<Rgba8> {
+    pub fn fill_color(
+        pixmap: &PixmapRgba,
+        pixels: impl IntoIterator<Item = Pixel>,
+    ) -> Option<Rgba8> {
         pixels
-            .iter()
-            .map(|&pixel| pixmap[pixel])
+            .into_iter()
+            .map(|pixel| pixmap[pixel])
             .all_equal_value()
             .ok()
     }
@@ -125,7 +131,7 @@ mod test {
 
         assert_eq!(application_count, expected_application_count);
 
-        let result_pixmap = world.to_pixmap();
+        let result_pixmap = world.color_map();
         let expected_result_pixmap =
             PixmapRgba::from_bitmap_path(format!("{folder}/expected_result.png")).unwrap();
 

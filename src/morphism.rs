@@ -94,9 +94,9 @@ impl Morphism {
     /// Maps regions to regions of the same color
     #[inline(never)]
     pub fn preserves_colors(&self, dom: &Topology, codom: &Topology) -> bool {
-        self.region_map.iter().all(|(&region, &phi_region)| {
-            dom[region].interior.color == codom[phi_region].interior.color
-        })
+        self.region_map
+            .iter()
+            .all(|(&region, &phi_region)| dom[region].color == codom[phi_region].color)
     }
 
     /// Check if phi : A → B preserves structure, (neighbor and next_neighbor), i.e.

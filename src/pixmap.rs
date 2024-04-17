@@ -9,7 +9,7 @@ use crate::{
         rect::{Rect, RectBounds},
         rgba8::Rgba8,
     },
-    topology::{Border, Interior},
+    topology::Border,
     utils::IteratorPlus,
 };
 
@@ -43,18 +43,48 @@ impl<T> Pixmap<T> {
         self.field.set(pixel, Some(value))
     }
 
+    pub fn map<S>(&self, mut f: impl FnMut(&T) -> S) -> Pixmap<S> {
+        let field = self.field.map(|value| match value {
+            Some(value) => Some(f(value)),
+            None => None,
+        });
+        Pixmap { field }
+    }
+
+    pub fn filter_map<S>(&self, mut f: impl FnMut(&T) -> Option<S>) -> Pixmap<S> {
+        let field = self.field.map(|value| match value {
+            Some(value) => f(value),
+            None => None,
+        });
+        Pixmap { field }
+    }
+
     pub fn keys<'a>(&'a self) -> impl IteratorPlus<Pixel> + 'a {
         self.field
-            .indices()
-            .filter_map(|index| match self.field.get(index) {
-                Some(Some(_)) => Some(index.into()),
-                _ => None,
+            .enumerate()
+            .filter_map(|(index, value)| match value {
+                Some(_) => Some(index.into()),
+                None => None,
+            })
+    }
+
+    pub fn iter<'a>(&'a self) -> impl IteratorPlus<(Pixel, &T)> + 'a {
+        self.field
+            .enumerate()
+            .filter_map(|(index, value)| match value {
+                Some(value) => Some((index.into(), value)),
+                None => None,
             })
     }
 
     /// Upper bounds is exclusive, lower bound is inclusive
-    pub fn bounds(&self) -> Rect<i64> {
+    /// Returns actual bounds
+    pub fn actual_bounds(&self) -> Rect<i64> {
         RectBounds::iter_bounds(self.field.indices()).inc_high()
+    }
+
+    pub fn bounds(&self) -> Rect<i64> {
+        self.field.bounds()
     }
 
     pub fn translated(self, offset: Point<i64>) -> Self {
@@ -63,9 +93,23 @@ impl<T> Pixmap<T> {
         }
     }
 
-    // pub fn retain(&mut self, f: impl FnMut(&Pixel, &mut Rgba8) -> bool) {
-    //     self.map.retain(f)
-    // }
+    pub fn field(&self) -> &Field<Option<T>> {
+        &self.field
+    }
+
+    pub fn retain(&mut self, mut f: impl FnMut(Pixel, &mut T) -> bool) {
+        for (index, opt_value) in self.field.enumerate_mut() {
+            let keep = if let Some(value) = opt_value {
+                f(index.into(), value)
+            } else {
+                false
+            };
+
+            if !keep {
+                *opt_value = None;
+            }
+        }
+    }
 }
 
 impl<T: Clone> Pixmap<T> {
@@ -100,7 +144,35 @@ impl<T: Clone> Pixmap<T> {
     }
 
     pub fn blit(&mut self, other: &Pixmap<T>) {
-        self.field.blit(&other.field);
+        // Only overwrite when other[index] is Some
+        for (index, value) in other.field.enumerate() {
+            if value.is_some() {
+                self.field.set(index, value.clone());
+            }
+        }
+    }
+
+    pub fn filter(&self, mut pred: impl FnMut(&T) -> bool) -> Self {
+        self.filter_map(|value| {
+            if pred(value) {
+                Some(value.clone())
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn shrink(&self) -> Self {
+        let bounds = self.actual_bounds();
+        Pixmap {
+            field: self.field.sub(bounds),
+        }
+    }
+
+    pub fn clipped(&self, bounds: Rect<i64>) -> Self {
+        Self {
+            field: self.field.clipped(bounds),
+        }
     }
 }
 
@@ -124,6 +196,11 @@ impl Pixmap<Rgba8> {
     pub fn from_bitmap_path(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let bitmap = Bitmap::from_path(path)?;
         Ok(Self::from_bitmap(&bitmap))
+    }
+
+    pub fn save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+        let bitmap = self.to_bitmap();
+        bitmap.save(path)
     }
 
     /// Pixels outside the bitmap are ignored.
@@ -151,12 +228,6 @@ impl Pixmap<Rgba8> {
     pub fn to_bitmap(&self) -> Bitmap {
         let rgba = self.field.map(|color| color.unwrap_or(Rgba8::BLACK));
         rgba.into_array2d()
-    }
-
-    pub fn fill_interior(&mut self, interior: &Interior) {
-        for &pixel in &interior.pixels {
-            self.set(pixel, interior.color);
-        }
     }
 }
 

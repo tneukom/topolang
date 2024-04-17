@@ -1,6 +1,7 @@
 use crate::{
     bitmap::Bitmap,
-    math::{affine_map::AffineMap, point::Point},
+    field::Field,
+    math::{affine_map::AffineMap, point::Point, rgba8::Rgba8},
 };
 use glow::{HasContext, PixelUnpackData};
 use std::sync::Arc;
@@ -85,8 +86,8 @@ impl GlTexture {
         );
     }
 
-    pub unsafe fn texture_sub_image(&mut self, offset: Point<usize>, bitmap: &Bitmap) {
-        let bitmap_bytes = bitmap.linear_slice().align_to::<u8>().1;
+    pub unsafe fn texture_sub_image(&mut self, offset: Point<usize>, field: &Field<Rgba8>) {
+        let bitmap_bytes = field.linear_slice().align_to::<u8>().1;
 
         self.context.active_texture(glow::TEXTURE0);
         self.context.bind_texture(glow::TEXTURE_2D, Some(self.id));
@@ -95,8 +96,8 @@ impl GlTexture {
             0,
             offset.x as i32,
             offset.y as i32,
-            bitmap.width() as i32,
-            bitmap.height() as i32,
+            field.width() as i32,
+            field.height() as i32,
             glow::RGBA,
             glow::UNSIGNED_BYTE,
             PixelUnpackData::Slice(bitmap_bytes),

@@ -145,7 +145,11 @@ impl<T: Num> Interval<T> {
     }
 
     pub fn length(self) -> T {
-        self.high - self.low
+        if self.is_empty() {
+            T::ZERO
+        } else {
+            self.high - self.low
+        }
     }
 
     pub fn padded(self, padding: T) -> Self {
@@ -168,14 +172,21 @@ impl<T: Num> Interval<T> {
     }
 
     pub fn contains_interval(self, other: Self) -> bool {
+        if other.is_empty() {
+            return true;
+        }
         self.low <= other.low && other.high <= self.high
     }
 
     pub fn interior_contains_interval(self, other: Self) -> bool {
+        if other.is_empty() {
+            return true;
+        }
         self.low < other.low && other.high < self.high
     }
 
     pub fn center(self) -> T {
+        assert!(!self.is_empty());
         (self.high + self.low) / T::TWO
     }
 }

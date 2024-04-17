@@ -79,8 +79,8 @@ impl Interpreter {
             let after = after.without_color(Rgba8::VOID);
 
             // Find translation from after to before
-            let before_bounds = before.bounds();
-            let after_bounds = after.bounds();
+            let before_bounds = before.actual_bounds();
+            let after_bounds = after.actual_bounds();
             assert_eq!(before_bounds.size(), after_bounds.size());
 
             let offset = before_bounds.low() - after_bounds.low();
@@ -192,7 +192,7 @@ mod test {
         println!("Number of steps: {steps}");
         assert_eq!(steps, expected_steps);
 
-        let result_pixmap = world.to_pixmap();
+        let result_pixmap = world.color_map();
 
         let expected_pixmap =
             PixmapRgba::from_bitmap_path(format!("{folder}/world_expected.png")).unwrap();
