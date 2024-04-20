@@ -1,6 +1,7 @@
 // #![allow(dead_code)]
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
+use log::warn;
 use seamlang::app::EguiApp;
 
 // pub fn main_benchmark() {
@@ -32,7 +33,10 @@ use seamlang::app::EguiApp;
 #[cfg(not(target_arch = "wasm32"))]
 pub fn main_editor() {
     unsafe {
-        let native_options = eframe::NativeOptions::default();
+        let native_options = eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default().with_drag_and_drop(true),
+            ..eframe::NativeOptions::default()
+        };
         let result = eframe::run_native(
             "SeamLang",
             native_options,
@@ -47,7 +51,11 @@ pub fn main_editor() {
 
 pub fn main() {
     #[cfg(not(target_arch = "wasm32"))]
-    main_editor()
+    {
+        env_logger::init();
+        warn!("Logging!");
+        main_editor()
+    }
 
     // main_benchmark();
 }

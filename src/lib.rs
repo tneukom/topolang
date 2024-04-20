@@ -30,6 +30,7 @@ pub mod widgets;
 pub fn main() {
     use crate::app::EguiApp;
     use eframe::WebGlContextOption;
+    use log::info;
 
     // Redirect `log` message to `console.log` and friends:
     eframe::WebLogger::init(log::LevelFilter::Debug).ok();

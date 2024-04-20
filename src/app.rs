@@ -1,4 +1,11 @@
-use std::{collections::HashMap, fs::File, hash::Hash, path::PathBuf, sync::Arc};
+use std::{
+    collections::HashMap,
+    fs,
+    fs::File,
+    hash::Hash,
+    path::{Path, PathBuf},
+    sync::{mpsc, Arc},
+};
 
 use egui::{epaint, load::SizedTexture, Sense, TextureOptions, Widget};
 use glow::HasContext;
@@ -7,6 +14,7 @@ use image::{
     ColorType,
 };
 use instant::Instant;
+use log::{info, warn};
 
 use crate::{
     bitmap::Bitmap,
@@ -15,6 +23,7 @@ use crate::{
     interpreter::Interpreter,
     math::{point::Point, rect::Rect},
     painting::scene_painter::ScenePainter,
+    pixmap::PixmapRgba,
     topology::Topology,
     view::{EditMode, View, ViewButton, ViewInput, ViewSettings},
     widgets::{system_colors_widget, ColorChooser, FileChooser},
@@ -92,6 +101,9 @@ pub struct EguiApp {
     color_chooser: ColorChooser,
 
     gif_encoder: Option<GifEncoder<File>>,
+
+    channel_receiver: mpsc::Receiver<Vec<u8>>,
+    channel_sender: mpsc::SyncSender<Vec<u8>>,
 }
 
 impl EguiApp {
@@ -183,6 +195,8 @@ impl EguiApp {
             brush: Brush::default(),
         };
 
+        let (channel_sender, channel_receiver) = mpsc::sync_channel(1);
+
         Self {
             scene_painter,
             start_time,
@@ -202,6 +216,8 @@ impl EguiApp {
             color_chooser: ColorChooser::default(),
             interpreter: Interpreter::new(),
             gif_encoder: None,
+            channel_sender,
+            channel_receiver,
         }
     }
 
@@ -317,6 +333,39 @@ impl EguiApp {
         });
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub fn open_save_ui(&mut self, ui: &mut egui::Ui) {
+        if ui.button("Open File").clicked() {
+            // Spawn dialog on main thread
+            let task = rfd::AsyncFileDialog::new().pick_file();
+
+            // Await somewhere else
+            let channel_sender = self.channel_sender.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let file = task.await;
+
+                if let Some(file) = file {
+                    // If you are on native platform you can just get the path
+                    #[cfg(not(target_arch = "wasm32"))]
+                    println!("{:?}", file.path());
+
+                    // If you care about wasm support you just read() the file
+                    let content = file.read().await;
+                    channel_sender.send(content).unwrap();
+                }
+            });
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn open_save_ui(&mut self, ui: &mut egui::Ui) {
+        if ui.button("Open File").clicked() {
+            if let Some(path) = rfd::FileDialog::new().pick_file() {
+                self.load_from_path(path);
+            }
+        }
+    }
+
     pub fn load_save_ui(&mut self, ui: &mut egui::Ui) {
         if ui.button("New").clicked() {
             self.view = View::empty();
@@ -425,7 +474,34 @@ impl EguiApp {
             ui.menu_button("File", |ui| {
                 self.load_save_ui(ui);
             });
+            ui.menu_button("File2", |ui| {
+                self.open_save_ui(ui);
+            })
         });
+    }
+
+    fn load_file(&mut self, content: &[u8]) {
+        info!("Loading a file!");
+        let Ok(bitmap) = Bitmap::load_from_memory(content) else {
+            warn!("Failed to load png file!");
+            return;
+        };
+        let pixmap = PixmapRgba::from_bitmap(&bitmap);
+
+        let world = Topology::new(&pixmap);
+        self.view = View::new(world);
+    }
+
+    fn load_from_path(&mut self, path: impl AsRef<Path>) {
+        warn!("Loading from path {:?}", path.as_ref().to_str());
+        let content = match fs::read(path) {
+            Ok(content) => content,
+            Err(err) => {
+                warn!("Failed to load file with error {}", err);
+                return;
+            }
+        };
+        self.load_file(&content);
     }
 }
 
@@ -434,6 +510,24 @@ impl eframe::App for EguiApp {
         // let mut style = ctx.style().deref().clone();
         // style.visuals.dark_mode = false;
         // ctx.set_style(style);
+
+        // Check if any files have finished loading
+        #[cfg(target_arch = "wasm32")]
+        if let Ok(content) = self.channel_receiver.try_recv() {
+            self.load_file(&content);
+        }
+
+        ctx.input(|input| {
+            if let Some(file) = input.raw.dropped_files.last().cloned() {
+                warn!(
+                    "File dropped with name {} and path {:?}",
+                    file.name, file.path
+                );
+                if let Some(path) = file.path {
+                    self.load_from_path(path);
+                }
+            }
+        });
 
         let mut visual = egui::Visuals::light();
         visual.window_shadow = epaint::Shadow::small_light();
