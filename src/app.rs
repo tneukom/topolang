@@ -336,32 +336,67 @@ impl EguiApp {
     #[cfg(target_arch = "wasm32")]
     pub fn open_save_ui(&mut self, ui: &mut egui::Ui) {
         if ui.button("Open File").clicked() {
-            // Spawn dialog on main thread
-            let task = rfd::AsyncFileDialog::new().pick_file();
-
-            // Await somewhere else
             let channel_sender = self.channel_sender.clone();
             wasm_bindgen_futures::spawn_local(async move {
-                let file = task.await;
-
-                if let Some(file) = file {
-                    // If you are on native platform you can just get the path
-                    #[cfg(not(target_arch = "wasm32"))]
-                    println!("{:?}", file.path());
-
-                    // If you care about wasm support you just read() the file
+                if let Some(file) = rfd::AsyncFileDialog::new()
+                    .add_filter("png", &["png"])
+                    .pick_file()
+                    .await
+                {
                     let content = file.read().await;
                     channel_sender.send(content).unwrap();
                 }
             });
+        }
+
+        if ui.button("Save File").clicked() {
+            let task = rfd::AsyncFileDialog::new().save_file();
+            let color_map = self.view.world.color_map();
+            let bitmap = color_map.to_bitmap();
+            match bitmap.to_png() {
+                Ok(file_content) => {
+                    wasm_bindgen_futures::spawn_local(async move {
+                        if let Some(file) = rfd::AsyncFileDialog::new()
+                            .set_file_name("world.png")
+                            .add_filter("png", &["png"])
+                            .save_file()
+                            .await
+                        {
+                            if let Err(result) = file.write(&file_content).await {
+                                warn!("Failed to save png");
+                            }
+                        }
+                    });
+                }
+                Err(err) => {
+                    warn!("Failed to convert bitmap to png with error {err}");
+                }
+            }
         }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn open_save_ui(&mut self, ui: &mut egui::Ui) {
         if ui.button("Open File").clicked() {
-            if let Some(path) = rfd::FileDialog::new().pick_file() {
+            if let Some(path) = rfd::FileDialog::new()
+                .add_filter("png", &["png"])
+                .pick_file()
+            {
                 self.load_from_path(path);
+            }
+        }
+
+        if ui.button("Save File").clicked() {
+            if let Some(path) = rfd::FileDialog::new()
+                .add_filter("png", &["png"])
+                .save_file()
+            {
+                warn!("Saving to path {:?}", path.to_str());
+                let color_map = self.view.world.color_map();
+                let bitmap = color_map.to_bitmap();
+                if let Err(err) = bitmap.save(path) {
+                    warn!("Failed to save with error {err}");
+                }
             }
         }
     }

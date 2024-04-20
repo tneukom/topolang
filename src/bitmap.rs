@@ -1,7 +1,7 @@
 use crate::{array_2d::Array2d, math::rgba8::Rgba8};
 // use arboard::ImageData;
 use image::{Rgba, RgbaImage};
-use std::{path::Path, usize};
+use std::{io::Cursor, path::Path, usize};
 
 pub type Bitmap = Array2d<Rgba8>;
 
@@ -41,7 +41,7 @@ impl Bitmap {
         Ok(Self::from_imageio_bitmap(&imageio_bitmap))
     }
 
-    pub fn save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+    pub fn to_imageio(&self) -> image::RgbaImage {
         let mut imageio_bitmap = image::RgbaImage::new(self.width() as u32, self.height() as u32);
 
         for y in 0..self.height() {
@@ -51,8 +51,19 @@ impl Bitmap {
             }
         }
 
-        imageio_bitmap.save(path)?;
+        imageio_bitmap
+    }
+
+    pub fn save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+        self.to_imageio().save(path)?;
         Ok(())
+    }
+
+    pub fn to_png(&self) -> anyhow::Result<Vec<u8>> {
+        let mut cursor = Cursor::new(Vec::new());
+        self.to_imageio()
+            .write_to(&mut cursor, image::ImageFormat::Png)?;
+        Ok(cursor.into_inner())
     }
 
     pub fn is_plain(&self, color: Rgba8) -> bool {
