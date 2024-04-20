@@ -11,7 +11,7 @@ use egui::{epaint, load::SizedTexture, Sense, TextureOptions, Widget};
 use glow::HasContext;
 use image::{
     codecs::gif::{GifEncoder, Repeat},
-    ColorType,
+    ExtendedColorType,
 };
 use instant::Instant;
 use log::{info, warn};
@@ -266,7 +266,7 @@ impl EguiApp {
         let scroll_delta = if ctx.wants_pointer_input() {
             0.0
         } else {
-            ctx.input(|input| input.scroll_delta.y as f64 / 50.0)
+            ctx.input(|input| input.smooth_scroll_delta.y as f64 / 50.0)
         };
 
         let input = ViewInput {
@@ -325,7 +325,7 @@ impl EguiApp {
                         .sense(Sense::click_and_drag());
                 let response = ui.add(button);
 
-                if response.clicked() || response.drag_released() && response.hover_pos().is_some()
+                if response.clicked() || response.drag_stopped() && response.hover_pos().is_some()
                 {
                     self.view_settings.edit_mode = mode;
                 }
@@ -468,7 +468,7 @@ impl EguiApp {
                             image.as_raw(),
                             image.width() as u32,
                             image.height() as u32,
-                            ColorType::Rgba8,
+                            ExtendedColorType::Rgba8,
                         )
                         .unwrap();
                 }
@@ -565,7 +565,7 @@ impl eframe::App for EguiApp {
         });
 
         let mut visual = egui::Visuals::light();
-        visual.window_shadow = epaint::Shadow::small_light();
+        // visual.window_shadow = epaint::Shadow::NONE;
         ctx.set_visuals(visual);
 
         let side_panel_rect = egui::SidePanel::left("left_panel")
