@@ -2,6 +2,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     fmt,
     fmt::{Display, Formatter},
+    hash::{Hash, Hasher},
     ops::{Index, IndexMut},
     path::Path,
     sync::atomic::{AtomicUsize, Ordering},
@@ -10,13 +11,14 @@ use std::{
 use itertools::Itertools;
 
 use crate::{
+    area_bounds::AreaBounds,
     bitmap::Bitmap,
     connected_components::{color_components, left_of, right_of},
     field::Field,
     math::{
         pixel::{Corner, Pixel, Side},
         point::Point,
-        rect::{Rect, RectBounds},
+        rect::Rect,
         rgba8::Rgba8,
     },
     pixmap::{Pixmap, PixmapRgba},
@@ -146,12 +148,12 @@ impl Border {
 }
 
 /// The boundary is counterclockwise. Is mutable so color can be changed.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct Region {
     /// First item is outer Border
     pub boundary: Vec<Border>,
 
-    pub bounds: Rect<i64>,
+    pub area_bounds: AreaBounds,
 
     pub color: Rgba8,
 }
@@ -182,6 +184,24 @@ impl Region {
     /// Pixels touching border on the left side, each pixel might appear more than once.
     pub fn interior_padding<'a>(&'a self) -> impl IteratorPlus<Pixel> + 'a {
         self.iter_boundary_sides().map(|side| side.left_pixel())
+    }
+}
+
+/// Ignores `area_bounds` field
+impl PartialEq for Region {
+    fn eq(&self, other: &Self) -> bool {
+        self.color == other.color && self.boundary == other.boundary
+    }
+}
+
+/// Ignores `area_bounds` field
+impl Eq for Region {}
+
+/// Ignores `area_bounds` field
+impl Hash for Region {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.color.hash(state);
+        self.boundary.hash(state);
     }
 }
 
@@ -241,6 +261,11 @@ pub struct FillRegion {
     pub color: Rgba8,
 }
 
+// pub struct Change {
+//     pub time: u64,
+//     pub bounds: AreaBounds,
+// }
+
 #[derive(Debug, Clone)]
 pub struct Topology {
     pub regions: BTreeMap<RegionKey, Region>,
@@ -249,6 +274,7 @@ pub struct Topology {
 
     /// Maps the start side of a seam to (region key, border index, seam index)
     pub seam_indices: BTreeMap<Side, SeamIndex>,
+    // pub change_log: Vec<Change>
 }
 
 impl Topology {
@@ -274,7 +300,7 @@ impl Topology {
 
             let region = Region {
                 boundary,
-                bounds: pre_region.bounds(),
+                area_bounds: pre_region.bounds(),
                 color: pre_region.color,
             };
             regions.insert(pre_region.id, region);
@@ -350,8 +376,12 @@ impl Topology {
     }
 
     /// Upper bound is exclusive, lower bound inclusive
-    pub fn actual_bounds(&self) -> Rect<i64> {
-        RectBounds::iter_bounds(self.regions.values().map(|region| region.bounds))
+    pub fn area_bounds(&self) -> AreaBounds {
+        let mut area_bounds = AreaBounds::new();
+        for region in self.regions.values() {
+            area_bounds.add_bounds(&region.area_bounds);
+        }
+        area_bounds
     }
 
     pub fn capacity_bounds(&self) -> Rect<i64> {
@@ -499,9 +529,9 @@ impl Topology {
     ) -> impl IteratorPlus<Pixel> + 'a {
         let region = &self.regions[&region_key];
         region
-            .bounds
-            .iter_half_open()
-            .filter(move |&index| self.region_map.get(index) == Some(&region_key))
+            .area_bounds
+            .iter()
+            .filter(move |&pixel| self.region_map.get(pixel) == Some(&region_key))
             .map(|index| index.into())
     }
 
@@ -627,14 +657,13 @@ impl Topology {
 
         // Extract these regions into a Pixmap
         // Bounds of extracted regions and pixmap
-        let bounds = RectBounds::iter_bounds(
-            touched_regions
-                .iter()
-                .map(|region_key| self.regions[region_key].bounds),
-        )
-        .bounds_with_rect(pixmap.bounds());
+        let mut area_bounds = AreaBounds::new();
+        for touched_region in &touched_regions {
+            area_bounds.add_bounds(&self.regions[touched_region].area_bounds);
+        }
+        area_bounds.add_pixmap(&pixmap);
 
-        let mut extracted_pixmap = PixmapRgba::new(bounds);
+        let mut extracted_pixmap = PixmapRgba::new(area_bounds.bounding_rect());
         for region_key in touched_regions {
             let region_color = self.regions[&region_key].color;
             for pixel in self.iter_region_interior(region_key) {
@@ -968,7 +997,7 @@ pub mod test {
 
     fn print_region(region: &Region, indent: &str) {
         println!("{indent}color: {}", region.color);
-        println!("{indent}color: {:?}", region.bounds);
+        println!("{indent}color: {:?}", region.area_bounds);
     }
 
     fn assert_blit(name: &str) {

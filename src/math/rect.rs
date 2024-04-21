@@ -196,8 +196,8 @@ where
 }
 
 impl<T: Num> Rect<T> {
-    const EMPTY: Self = Self::new(Interval::<T>::EMPTY, Interval::<T>::EMPTY);
-    const UNIT: Self = Self::new(Interval::<T>::UNIT, Interval::<T>::UNIT);
+    pub const EMPTY: Self = Self::new(Interval::<T>::EMPTY, Interval::<T>::EMPTY);
+    pub const UNIT: Self = Self::new(Interval::<T>::UNIT, Interval::<T>::UNIT);
 
     pub fn cell_rect(index: Point<T>) -> Rect<T> {
         Rect::low_size(index, Point::ONE)
@@ -507,7 +507,7 @@ where
 
 impl<T: Num> PartialEq for Rect<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.x == other.x && self.y == other.y
+        (self.is_empty() && other.is_empty()) || (self.x == other.x && self.y == other.y)
     }
 }
 
@@ -515,8 +515,14 @@ impl<T: Num> Eq for Rect<T> {}
 
 impl<T: Num + Hash> Hash for Rect<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.x.hash(state);
-        self.y.hash(state);
+        // Don't forget the case where one interval is empty but the other isn't!
+        if self.is_empty() {
+            // hash some random number
+            943923891.hash(state)
+        } else {
+            // Both x and y interval are not empty
+            (self.x, self.y).hash(state)
+        }
     }
 }
 

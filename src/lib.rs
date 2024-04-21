@@ -4,6 +4,7 @@
 use wasm_bindgen::prelude::wasm_bindgen;
 
 pub mod app;
+pub mod area_bounds;
 pub mod array_2d;
 pub mod bitmap;
 pub mod brush;

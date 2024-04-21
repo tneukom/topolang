@@ -1,4 +1,5 @@
 use crate::{
+    area_bounds::AreaBounds,
     bitmap::Bitmap,
     math::{pixel::Pixel, rgba8::Rgba8},
     pattern::{NullTrace, Search},
@@ -6,6 +7,7 @@ use crate::{
     rule::Rule,
     topology::{BorderKey, RegionKey, Topology},
 };
+use static_assertions::const_assert;
 use std::collections::BTreeSet;
 
 pub struct CompiledRule {
@@ -79,11 +81,16 @@ impl Interpreter {
             let after = after.without_color(Rgba8::VOID);
 
             // Find translation from after to before
-            let before_bounds = before.actual_bounds();
-            let after_bounds = after.actual_bounds();
-            assert_eq!(before_bounds.size(), after_bounds.size());
+            // FIXME: This might not work depending of the AreaBounds implementation
+            let before_bounds = before.area_bounds();
+            let after_bounds = after.area_bounds();
+            const_assert!(AreaBounds::EXACT_BOUNDING_RECT);
+            assert_eq!(
+                before_bounds.bounding_rect().size(),
+                after_bounds.bounding_rect().size()
+            );
 
-            let offset = before_bounds.low() - after_bounds.low();
+            let offset = before_bounds.bounding_rect().low() - after_bounds.bounding_rect().low();
             let after = after.translated(offset);
 
             let rule = Rule::new(before, after)?;

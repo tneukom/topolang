@@ -2164,6 +2164,7 @@ dependencies = [
  "pretty_assertions",
  "rfd",
  "smallvec",
+ "static_assertions",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]

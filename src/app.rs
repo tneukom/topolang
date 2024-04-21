@@ -7,7 +7,7 @@ use std::{
     sync::{mpsc, Arc},
 };
 
-use egui::{epaint, load::SizedTexture, Sense, TextureOptions, Widget};
+use egui::{load::SizedTexture, Sense, TextureOptions, Widget};
 use glow::HasContext;
 use image::{
     codecs::gif::{GifEncoder, Repeat},
@@ -325,8 +325,7 @@ impl EguiApp {
                         .sense(Sense::click_and_drag());
                 let response = ui.add(button);
 
-                if response.clicked() || response.drag_stopped() && response.hover_pos().is_some()
-                {
+                if response.clicked() || response.drag_stopped() && response.hover_pos().is_some() {
                     self.view_settings.edit_mode = mode;
                 }
             }
@@ -564,7 +563,7 @@ impl eframe::App for EguiApp {
             }
         });
 
-        let mut visual = egui::Visuals::light();
+        let visual = egui::Visuals::light();
         // visual.window_shadow = epaint::Shadow::NONE;
         ctx.set_visuals(visual);
 
@@ -615,9 +614,13 @@ impl eframe::App for EguiApp {
             self.scene_painter
                 .draw_topology(&self.view.world, &self.view.camera, &frames);
 
-            let bounds = self.view.world.actual_bounds();
-            self.scene_painter
-                .draw_bounds(bounds, &self.view.camera, &frames, time);
+            let bounds = self.view.world.area_bounds();
+            self.scene_painter.draw_bounds(
+                bounds.bounding_rect(),
+                &self.view.camera,
+                &frames,
+                time,
+            );
         }
 
         self.scene_painter.i_frame += 1;

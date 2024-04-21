@@ -138,7 +138,7 @@ impl View {
     }
 
     pub fn center_camera(&mut self, view_rect: Rect<f64>) {
-        let mut world_bounds = self.world.actual_bounds();
+        let mut world_bounds = self.world.area_bounds().bounding_rect();
         if world_bounds.is_empty() {
             world_bounds = Rect::low_high([-128, -128], [128, 128])
         }

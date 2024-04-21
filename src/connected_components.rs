@@ -1,9 +1,9 @@
 use std::collections::BTreeSet;
 
 use crate::{
+    area_bounds::AreaBounds,
     math::{
         pixel::{Pixel, Side, SideName},
-        rect::{Rect, RectBounds},
         rgba8::Rgba8,
     },
     pixmap::{Pixmap, PixmapRgba},
@@ -117,8 +117,12 @@ pub struct ColorRegion<Id> {
 }
 
 impl<Id> ColorRegion<Id> {
-    pub fn bounds(&self) -> Rect<i64> {
-        RectBounds::iter_bounds(self.sides.iter().map(|side| side.left_pixel.point())).inc_high()
+    pub fn bounds(&self) -> AreaBounds {
+        let mut area_bounds = AreaBounds::new();
+        for side in &self.sides {
+            area_bounds.add_pixel(side.left_pixel);
+        }
+        area_bounds
     }
 }
 
