@@ -86,7 +86,7 @@ impl GlTexture {
         );
     }
 
-    pub unsafe fn texture_sub_image(&mut self, offset: Point<usize>, field: &Field<Rgba8>) {
+    pub unsafe fn texture_sub_image(&mut self, offset: Point<i64>, field: &Field<Rgba8>) {
         let bitmap_bytes = field.linear_slice().align_to::<u8>().1;
 
         self.context.active_texture(glow::TEXTURE0);

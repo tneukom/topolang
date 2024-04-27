@@ -5,9 +5,9 @@ use crate::{
     coordinate_frame::CoordinateFrames,
     math::{point::Point, rect::Rect},
     painting::{
-        line_painter::LinePainter, rect_painter::RectPainter, topology_painter::TopologyPainter,
+        line_painter::LinePainter, rect_painter::RectPainter, topology_painter::ColorMapPainter,
     },
-    topology::Topology,
+    pixmap::PixmapRgba,
 };
 
 use super::grid_painter::GridPainter;
@@ -16,7 +16,7 @@ pub struct ScenePainter {
     pub grid_painter: GridPainter,
     pub tile_painter: RectPainter,
     pub line_painter: LinePainter,
-    pub topology_painter: TopologyPainter,
+    pub color_map_painter: ColorMapPainter,
 
     pub i_frame: usize,
 }
@@ -27,7 +27,7 @@ impl ScenePainter {
             grid_painter: GridPainter::new(gl.clone()),
             tile_painter: RectPainter::new(gl.clone()),
             line_painter: LinePainter::new(gl.clone()),
-            topology_painter: TopologyPainter::new(gl, 1024),
+            color_map_painter: ColorMapPainter::new(gl, 1024),
             i_frame: 0,
         }
     }
@@ -39,16 +39,16 @@ impl ScenePainter {
         self.grid_painter.draw(origin, spacing, frames);
     }
 
-    pub unsafe fn draw_topology(
+    pub unsafe fn draw_color_map(
         &mut self,
-        topology: &Topology,
+        color_map: PixmapRgba,
         camera: &Camera,
         frames: &CoordinateFrames,
     ) {
-        self.topology_painter.update(topology);
+        self.color_map_painter.update(color_map);
 
         let world_to_glwindow = frames.view_to_glwindow() * camera.world_to_view();
-        self.topology_painter.draw(world_to_glwindow);
+        self.color_map_painter.draw(world_to_glwindow);
     }
 
     pub unsafe fn draw_bounds(

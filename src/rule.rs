@@ -6,6 +6,7 @@ use crate::{
     pattern::{NullTrace, Search},
     pixmap::PixmapRgba,
     topology::{FillRegion, Topology},
+    world::World,
 };
 
 pub struct Rule {
@@ -56,7 +57,7 @@ impl Rule {
     }
 
     /// Returns true if there were any changes to the world
-    pub fn apply_ops(&self, phi: &Morphism, world: &mut Topology) -> bool {
+    pub fn apply_ops(&self, phi: &Morphism, world: &mut World) -> bool {
         let phi_fill_regions = self
             .fill_regions
             .iter()
@@ -71,12 +72,13 @@ impl Rule {
     }
 }
 
-pub fn stabilize(world: &mut Topology, rules: &Vec<Rule>) -> usize {
+pub fn stabilize(world: &mut World, rules: &Vec<Rule>) -> usize {
     let mut steps: usize = 0;
     loop {
         let mut applied = false;
         for rule in rules {
-            if let Some(phi) = Search::new(world, &rule.pattern).find_first_match(NullTrace::new())
+            if let Some(phi) =
+                Search::new(world.topology(), &rule.pattern).find_first_match(NullTrace::new())
             {
                 rule.apply_ops(&phi, world);
                 steps += 1;
@@ -93,12 +95,12 @@ pub fn stabilize(world: &mut Topology, rules: &Vec<Rule>) -> usize {
 #[cfg(test)]
 mod test {
     use crate::{
-        bitmap::Bitmap,
         math::rgba8::Rgba8,
         pattern::{NullTrace, Search},
         pixmap::PixmapRgba,
         rule::Rule,
         topology::Topology,
+        world::World,
     };
 
     fn assert_rule_application(folder: &str, expected_application_count: usize) {
@@ -119,11 +121,11 @@ mod test {
 
         let rule = Rule::new(before, after).unwrap();
 
-        let world_bitmap = Bitmap::from_path(format!("{folder}/world.png")).unwrap();
-        let mut world = Topology::from_bitmap(&world_bitmap);
+        let mut world = World::from_bitmap_path(format!("{folder}/world.png")).unwrap();
 
         let mut application_count: usize = 0;
-        while let Some(phi) = Search::new(&world, &rule.pattern).find_first_match(NullTrace::new())
+        while let Some(phi) =
+            Search::new(world.topology(), &rule.pattern).find_first_match(NullTrace::new())
         {
             rule.apply_ops(&phi, &mut world);
             application_count += 1;
@@ -140,7 +142,7 @@ mod test {
         //     .save(format!("{folder}/world_result.png"))
         //     .unwrap();
 
-        assert_eq!(result_pixmap, expected_result_pixmap);
+        assert_eq!(result_pixmap, &expected_result_pixmap);
     }
 
     #[test]

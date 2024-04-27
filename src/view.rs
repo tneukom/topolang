@@ -2,9 +2,10 @@ use crate::{
     brush::Brush,
     camera::Camera,
     coordinate_frame::CoordinateFrames,
+    field::Field,
     math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect, rgba8::Rgba8},
     pixmap::Pixmap,
-    topology::Topology,
+    world::World,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -122,14 +123,14 @@ pub enum UiState {
 }
 
 pub struct View {
-    pub world: Topology,
+    pub world: World,
     pub camera: Camera,
 
     pub ui_state: UiState,
 }
 
 impl View {
-    pub fn new(world: Topology) -> View {
+    pub fn new(world: World) -> View {
         View {
             world,
             camera: Camera::default(),
@@ -138,7 +139,7 @@ impl View {
     }
 
     pub fn center_camera(&mut self, view_rect: Rect<f64>) {
-        let mut world_bounds = self.world.area_bounds().bounding_rect();
+        let mut world_bounds = self.world.bounding_rect();
         if world_bounds.is_empty() {
             world_bounds = Rect::low_high([-128, -128], [128, 128])
         }
@@ -148,8 +149,9 @@ impl View {
     }
 
     pub fn empty() -> View {
-        let empty_color_map = Pixmap::new(Rect::low_size([0, 0], [512, 512]));
-        let world = Topology::new(&empty_color_map);
+        let field = Field::filled(Rect::low_size([0, 0], [512, 512]), Rgba8::TRANSPARENT);
+        let color_map = Pixmap::from_field(&field);
+        let world = World::from_pixmap(color_map);
         Self::new(world)
     }
 
@@ -189,14 +191,7 @@ impl View {
 
         let change = op.brush.draw_line(Arrow(op.world_mouse, input.world_mouse));
         op.world_mouse = input.world_mouse;
-        // op.brush.draw_point(&mut change, input.world_mouse);
-
-        // Only draw points within bounds of world
-        // let bounds = self.world.bounds();
-        // change.map.retain(|pixel, _| bounds.contains(pixel.point()));
-
-        let change = change.clipped(self.world.capacity_bounds());
-        self.world.blit(&change);
+        self.world.blit_over(&change);
 
         UiState::Brushing(op)
     }
@@ -229,7 +224,7 @@ impl View {
             EditMode::Fill => {
                 if input.left_mouse.is_down {
                     let pixel: Pixel = input.world_mouse.floor().cwise_into_lossy().into();
-                    if let Some(region_key) = self.world.region_at(pixel) {
+                    if let Some(region_key) = self.world.topology().region_at(pixel) {
                         self.world.fill_region(region_key, settings.brush.color);
                     }
                 }

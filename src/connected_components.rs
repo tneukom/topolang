@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use crate::{
-    area_bounds::AreaBounds,
+    area_cover::AreaCover,
     math::{
         pixel::{Pixel, Side, SideName},
         rgba8::Rgba8,
@@ -74,6 +74,7 @@ pub fn legacy_flood_fill(
 pub fn flood_fill<Id: Copy + Eq>(
     color_map: &PixmapRgba,
     region_map: &mut Pixmap<Id>,
+    cover: &mut AreaCover,
     seed: Pixel,
     region_id: Id,
 ) -> BTreeSet<Side> {
@@ -91,6 +92,7 @@ pub fn flood_fill<Id: Copy + Eq>(
 
             if color_map.get(neighbor_pixel) == Some(&seed_color) {
                 let previous = region_map.set(neighbor_pixel, region_id);
+                cover.add(neighbor_pixel.into());
                 if previous.is_none() {
                     todo.push(neighbor_pixel);
                 } else if previous != Some(region_id) {
@@ -114,37 +116,32 @@ pub struct ColorRegion<Id> {
     pub id: Id,
     pub color: Rgba8,
     pub sides: BTreeSet<Side>,
+    pub cover: AreaCover,
 }
 
-impl<Id> ColorRegion<Id> {
-    pub fn bounds(&self) -> AreaBounds {
-        let mut area_bounds = AreaBounds::new();
-        for side in &self.sides {
-            area_bounds.add_pixel(side.left_pixel);
-        }
-        area_bounds
-    }
-}
-
-pub fn color_components<Id: Eq + Copy>(
+/// `subset` must contain whole regions only
+pub fn color_components_subset<Id: Eq + Copy>(
     color_map: &PixmapRgba,
+    subset: impl IntoIterator<Item = Pixel>,
     mut free_id: impl FnMut() -> Id,
 ) -> (Vec<ColorRegion<Id>>, Pixmap<Id>) {
     let mut regions: Vec<ColorRegion<Id>> = Vec::new();
-    let mut region_map = Pixmap::new(color_map.bounds());
+    let mut region_map = Pixmap::new();
 
-    for seed in color_map.keys() {
+    for seed in subset.into_iter() {
         if region_map.get(seed).is_some() {
             continue;
         }
 
         let seed_color = color_map[seed];
         let id = free_id();
-        let sides = flood_fill(color_map, &mut region_map, seed, id);
+        let mut cover = AreaCover::new();
+        let sides = flood_fill(color_map, &mut region_map, &mut cover, seed.into(), id);
 
         let region = ColorRegion {
             id,
             sides,
+            cover,
             color: seed_color,
         };
 
@@ -152,6 +149,13 @@ pub fn color_components<Id: Eq + Copy>(
     }
 
     (regions, region_map)
+}
+
+pub fn color_components<Id: Eq + Copy>(
+    color_map: &PixmapRgba,
+    free_id: impl FnMut() -> Id,
+) -> (Vec<ColorRegion<Id>>, Pixmap<Id>) {
+    color_components_subset(color_map, color_map.keys(), free_id)
 }
 
 /// Works if `boundary` is the boundary of a connected set of pixels, can contain holes.

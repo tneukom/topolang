@@ -1,8 +1,6 @@
-use crate::array_2d::Index2d;
 /// See pixel_pattern.jpg, sides_and_corners.jpg
 use crate::math::point::Point;
 use std::{
-    cmp::Ordering,
     fmt::{Debug, Display, Formatter},
     ops::Add,
 };
@@ -63,32 +61,7 @@ impl SideName {
 
 /// Each pixel is connected to its top, left, bottom, right and bottom-left, top-right neighbors,
 /// see docs/pixel_pattern.jpg and
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Pixel {
-    pub x: i64,
-    pub y: i64,
-}
-
-impl Pixel {
-    pub const fn new(x: i64, y: i64) -> Self {
-        Self { x, y }
-    }
-
-    pub fn from_index(index: impl Index2d) -> Option<Self> {
-        Some(Self::new(
-            index.x().try_into().ok()?,
-            index.y().try_into().ok()?,
-        ))
-    }
-
-    pub const fn point(self) -> Point<i64> {
-        Point::new(self.x, self.y)
-    }
-
-    pub fn index(self) -> Option<Point<usize>> {
-        Some(Point::new(self.x.try_into().ok()?, self.y.try_into().ok()?))
-    }
-
+impl Point<i64> {
     pub fn containing(p: Point<f64>) -> Self {
         let i64_p = p.floor().cwise_into_lossy::<i64>();
         Self::new(i64_p.x, i64_p.y)
@@ -207,43 +180,7 @@ impl Pixel {
     }
 }
 
-impl PartialOrd for Pixel {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Pixel {
-    fn cmp(&self, other: &Self) -> Ordering {
-        (self.x, self.y).cmp(&(other.x, other.y))
-    }
-}
-
-impl From<Point<i64>> for Pixel {
-    fn from(value: Point<i64>) -> Self {
-        Pixel::new(value.x, value.y)
-    }
-}
-
-impl Add<Point<i64>> for Pixel {
-    type Output = Pixel;
-
-    fn add(self, rhs: Point<i64>) -> Self::Output {
-        Pixel::new(self.x + rhs.x, self.y + rhs.y)
-    }
-}
-
-impl Display for Pixel {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Pixel({}, {})", self.x, self.y)
-    }
-}
-
-impl Debug for Pixel {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(self, f)
-    }
-}
+pub type Pixel = Point<i64>;
 
 /// Side(pixel, side) is the counterclockwise side around pixel
 /// Each pixel has therefore 6 sides, see docs/sides_and_corners.jpg

@@ -1,9 +1,12 @@
-use std::{collections::HashMap, ops::Index, path::Path};
+use std::{collections::HashMap, ops::Index, path::Path, rc::Rc};
 
 use crate::{
+    area_cover::AreaCover,
     bitmap::Bitmap,
     field::{Field, FieldIndex},
     math::{
+        generic::EuclidDivRem,
+        interval::Interval,
         pixel::Pixel,
         point::Point,
         rect::{Rect, RectBounds},
@@ -13,143 +16,244 @@ use crate::{
     utils::IteratorPlus,
 };
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Tile<T> {
+    field: Field<Option<T>>,
+}
+
+impl<T> Tile<T> {
+    const SIZE: i64 = 64;
+    const BOUNDS: Rect<i64> = Rect::new(Interval::new(0, Self::SIZE), Interval::new(0, Self::SIZE));
+
+    pub fn iter<'a>(&'a self) -> impl IteratorPlus<(Point<i64>, &T)> + 'a {
+        self.field
+            .enumerate()
+            .filter_map(|(index, opt_value)| opt_value.as_ref().map(|value| (index, value)))
+    }
+
+    pub fn set(&mut self, index: impl FieldIndex, value: T) -> Option<T> {
+        self.field.set(index, Some(value))
+    }
+
+    pub fn remove(&mut self, index: impl FieldIndex) -> Option<T> {
+        self.field.set(index, None)
+    }
+
+    pub fn get(&self, index: impl FieldIndex) -> Option<&T> {
+        self.field.get(index).unwrap().as_ref()
+    }
+}
+
+impl<T: Clone> Tile<T> {
+    pub fn new() -> Self {
+        let field = Field::filled(Self::BOUNDS, None);
+        Self { field }
+    }
+
+    pub fn filled(value: T) -> Self {
+        let field = Field::filled(Self::BOUNDS, Some(value));
+        Self { field }
+    }
+
+    pub fn map<S>(&self, mut f: impl FnMut(&T) -> S) -> Tile<S> {
+        let field = self.field.map(|value| value.as_ref().map(&mut f));
+        Tile { field }
+    }
+
+    /// Does not drop tiles that become all None
+    pub fn filter_map<S>(&self, mut f: impl FnMut(&T) -> Option<S>) -> Tile<S> {
+        let field = self.field.map(|value| value.as_ref().and_then(&mut f));
+        Tile { field }
+    }
+
+    pub fn keys<'a>(&'a self) -> impl IteratorPlus<Point<i64>> + 'a {
+        self.field
+            .enumerate()
+            .filter_map(|(index, opt_value)| opt_value.as_ref().map(|_| index))
+    }
+
+    pub fn blit_if(&mut self, other: &Self, mut pred: impl FnMut(&Option<T>) -> bool) {
+        for (self_value, other_value) in self.field.iter_mut().zip(other.field.iter()) {
+            if other_value.is_some() && pred(self_value) {
+                *self_value = other_value.clone();
+            }
+        }
+    }
+
+    pub fn blit_op<S>(&mut self, other: &Tile<S>, mut op: impl FnMut(&mut Option<T>, &S)) {
+        for (self_value, other_value) in self.field.iter_mut().zip(other.field.iter()) {
+            if let Some(other_value) = other_value {
+                op(self_value, other_value)
+            }
+        }
+    }
+
+    pub fn fill_none(&self, fill: T) -> Field<T> {
+        self.field
+            .map(|opt_value| opt_value.clone().unwrap_or_else(|| fill.clone()))
+    }
+}
+
 #[derive(Debug, Clone, Eq)]
 pub struct Pixmap<T> {
-    field: Field<Option<T>>,
+    tiles: Field<Option<Rc<Tile<T>>>>,
 }
 
 pub type PixmapRgba = Pixmap<Rgba8>;
 
 impl<T> Pixmap<T> {
-    pub fn pixel_bounds<'a>(pixels: impl IntoIterator<Item = &'a Pixel>) -> Rect<i64> {
-        RectBounds::iter_bounds(pixels.into_iter().map(|pixel| pixel.point())).inc_high()
+    const ROWS: i64 = 64;
+    const COLUMNS: i64 = 64;
+    const BOUNDS: Rect<i64> = Rect::new(
+        Interval::new(0, Self::COLUMNS),
+        Interval::new(0, Self::ROWS),
+    );
+
+    /// Pixel rectangle of the given tile index
+    pub fn tile_rect(tile_index: Point<i64>) -> Rect<i64> {
+        Tile::<T>::BOUNDS + tile_index * Tile::<T>::SIZE
+    }
+
+    /// Split pixel index into tile and pixel index
+    pub fn split_index(index: Point<i64>) -> (Point<i64>, Point<i64>) {
+        let tile_index = index.euclid_div(Tile::<T>::SIZE);
+        let pixel_index = index.euclid_rem(Tile::<T>::SIZE);
+        (tile_index, pixel_index)
+    }
+
+    pub fn combine_indices(tile_index: Point<i64>, pixel_index: Point<i64>) -> Point<i64> {
+        tile_index * Tile::<T>::SIZE + pixel_index
+    }
+
+    /// Iterate over the valid tile indices
+    pub fn tile_indices() -> impl IteratorPlus<Point<i64>> {
+        Self::BOUNDS.iter_half_open()
+    }
+
+    pub fn get_tile(&self, tile_index: Point<i64>) -> Option<&Tile<T>> {
+        let rc_tile = self.tiles.get(tile_index).unwrap().as_ref()?;
+        Some(rc_tile.as_ref())
+    }
+
+    pub fn get_rc_tile(&self, tile_index: Point<i64>) -> &Option<Rc<Tile<T>>> {
+        self.tiles.get(tile_index).unwrap()
     }
 
     pub fn get(&self, index: impl FieldIndex) -> Option<&T> {
-        match self.field.get(index) {
-            Some(value) => value.as_ref(),
-            None => None,
-        }
+        let (tile_index, pixel_index) = Self::split_index(index.point());
+        let tile = self.tiles.get(tile_index)?.as_ref()?;
+        tile.get(pixel_index)
     }
 
-    pub fn get_mut(&mut self, index: impl FieldIndex) -> Option<&mut T> {
-        match self.field.get_mut(index) {
-            Some(value) => value.as_mut(),
-            None => None,
-        }
+    fn enumerate_tiles<'a>(&'a self) -> impl IteratorPlus<(Point<i64>, &Tile<T>)> + 'a {
+        self.tiles.enumerate().flat_map(|(tile_index, opt_tile)| {
+            opt_tile.as_ref().map(|tile| (tile_index, tile.as_ref()))
+        })
     }
 
-    pub fn set(&mut self, pixel: Pixel, value: T) -> Option<T> {
-        self.field.set(pixel, Some(value))
-    }
-
-    pub fn map<S>(&self, mut f: impl FnMut(&T) -> S) -> Pixmap<S> {
-        let field = self.field.map(|value| match value {
-            Some(value) => Some(f(value)),
-            None => None,
-        });
-        Pixmap { field }
-    }
-
-    pub fn filter_map<S>(&self, mut f: impl FnMut(&T) -> Option<S>) -> Pixmap<S> {
-        let field = self.field.map(|value| match value {
-            Some(value) => f(value),
-            None => None,
-        });
-        Pixmap { field }
-    }
-
-    pub fn keys<'a>(&'a self) -> impl IteratorPlus<Pixel> + 'a {
-        self.field
-            .enumerate()
-            .filter_map(|(index, value)| match value {
-                Some(_) => Some(index.into()),
-                None => None,
+    fn iter_from_tiles<'a>(
+        &'a self,
+        tiles: impl IteratorPlus<(Point<i64>, &'a Tile<T>)> + 'a,
+    ) -> impl IteratorPlus<(Point<i64>, &T)> + 'a {
+        tiles.flat_map(|(tile_index, tile)| {
+            tile.iter().map(move |(pixel_index, value)| {
+                (Self::combine_indices(tile_index, pixel_index), value)
             })
+        })
     }
 
-    pub fn iter<'a>(&'a self) -> impl IteratorPlus<(Pixel, &T)> + 'a {
-        self.field
-            .enumerate()
-            .filter_map(|(index, value)| match value {
-                Some(value) => Some((index.into(), value)),
-                None => None,
-            })
+    pub fn iter<'a>(&'a self) -> impl IteratorPlus<(Point<i64>, &T)> + 'a {
+        self.iter_from_tiles(self.enumerate_tiles())
     }
 
-    /// Upper bounds is exclusive, lower bound is inclusive
-    /// Returns actual bounds
-    pub fn actual_bounds(&self) -> Rect<i64> {
-        RectBounds::iter_bounds(self.field.indices()).inc_high()
+    pub fn iter_cover<'a>(
+        &'a self,
+        cover: &'a AreaCover,
+    ) -> impl IteratorPlus<(Point<i64>, &T)> + 'a {
+        self.iter_from_tiles(self.enumerate_cover_tiles(cover))
     }
 
-    pub fn bounds(&self) -> Rect<i64> {
-        self.field.bounds()
+    pub fn enumerate_cover_tiles<'a>(
+        &'a self,
+        cover: &'a AreaCover,
+    ) -> impl IteratorPlus<(Point<i64>, &Tile<T>)> + 'a {
+        cover
+            .iter_tiles()
+            .filter_map(|tile_index| self.get_tile(tile_index).map(|tile| (tile_index, tile)))
     }
 
-    pub fn translated(self, offset: Point<i64>) -> Self {
-        Self {
-            field: self.field.translated(offset),
-        }
+    pub fn keys<'a>(&'a self) -> impl IteratorPlus<Point<i64>> + 'a {
+        self.iter().map(|kv| kv.0)
     }
 
-    pub fn field(&self) -> &Field<Option<T>> {
-        &self.field
+    pub fn values<'a>(&'a self) -> impl IteratorPlus<&T> + 'a {
+        self.iter().map(|kv| kv.1)
     }
 
-    pub fn retain(&mut self, mut f: impl FnMut(Pixel, &mut T) -> bool) {
-        for (index, opt_value) in self.field.enumerate_mut() {
-            let keep = if let Some(value) = opt_value {
-                f(index.into(), value)
-            } else {
-                false
-            };
-
-            if !keep {
-                *opt_value = None;
-            }
-        }
+    pub fn bounding_rect(&self) -> Rect<i64> {
+        // TODO: In many cases returning the bounding rectangle of the tiles would be enough
+        // TODO:SPEEDUP: Should be cached!
+        RectBounds::iter_bounds(self.keys()).inc_high()
     }
 }
 
 impl<T: Clone> Pixmap<T> {
-    pub fn new(bounds: Rect<i64>) -> Self {
-        Self {
-            field: Field::filled(bounds, None),
-        }
+    pub fn new() -> Self {
+        let tiles = Field::filled(Self::BOUNDS, None);
+        Self { tiles }
     }
 
-    pub fn from_hashmap(pixels: &HashMap<Pixel, T>) -> Self {
-        let bounds = Self::pixel_bounds(pixels.keys());
-        let mut field = Field::filled(bounds, None);
-        for (&pixel, value) in pixels {
-            field.set(pixel, Some(value.clone()));
-        }
-        Self { field }
+    pub fn from_field(field: &Field<T>) -> Self {
+        let mut pixmap = Self::new();
+        pixmap.blit_field(field);
+        pixmap
     }
 
-    /// Entries right of boundary are removed
-    /// TODO: Use border.bounds(), skip BTreeSet
-    pub fn extract_right(&mut self, boundary: &Border) -> Pixmap<T> {
-        // Extract pixels left of inner_border
-        let right_pixels = boundary.right_pixels();
-        let bounds = Self::pixel_bounds(&right_pixels);
-        let mut extracted = Field::filled(bounds, None);
-
-        for pixel in right_pixels {
-            extracted.set(pixel, self.field.set(pixel, None));
-        }
-
-        Self { field: extracted }
+    pub fn filled(value: T) -> Self {
+        let tile = Rc::new(Tile::filled(value));
+        let tiles = Field::filled(Self::BOUNDS, Some(tile));
+        Self { tiles }
     }
 
-    pub fn blit(&mut self, other: &Pixmap<T>) {
-        // Only overwrite when other[index] is Some
-        for (index, value) in other.field.enumerate() {
-            if value.is_some() {
-                self.field.set(index, value.clone());
-            }
-        }
+    // pub fn get_mut(&mut self, index: impl FieldIndex) -> Option<&mut T> {
+    //     let (tile_index, pixel_index) = Self::split_index(index.point());
+    //     let tile = self.tiles.get_mut(tile_index)?.as_ref()?;
+    //     tile.pixels.get_mut(pixel_index).unwrap()
+    // }
+
+    /// Panics if tile_index is outside of tile_index_bounds
+    fn get_tile_mut(&mut self, tile_index: Point<i64>) -> &mut Tile<T> {
+        let opt_rc_tile = self.tiles.get_mut(tile_index).unwrap();
+        let rc_tile = opt_rc_tile.get_or_insert_with(|| Rc::new(Tile::new()));
+        Rc::make_mut(rc_tile)
+    }
+
+    /// Has to clone the tile that contains the given pixel if other Pixmap reference the tile
+    pub fn set(&mut self, index: impl FieldIndex, value: T) -> Option<T> {
+        let (tile_index, pixel_index) = Self::split_index(index.point());
+        self.get_tile_mut(tile_index).set(pixel_index, value)
+    }
+
+    pub fn remove(&mut self, index: impl FieldIndex) -> Option<T> {
+        let (tile_index, pixel_index) = Self::split_index(index.point());
+        self.get_tile_mut(tile_index).remove(pixel_index)
+    }
+
+    pub fn map<S>(&self, mut f: impl FnMut(&T) -> S) -> Pixmap<S> {
+        let tiles = self
+            .tiles
+            .map(|opt_tile| opt_tile.as_ref().map(|tile| Rc::new(tile.map(&mut f))));
+        Pixmap { tiles }
+    }
+
+    /// Does not drop tiles that become all None
+    pub fn filter_map<S>(&self, mut f: impl FnMut(&T) -> Option<S>) -> Pixmap<S> {
+        let tiles = self.tiles.map(|opt_tile| {
+            opt_tile
+                .as_ref()
+                .map(|tile| Rc::new(tile.filter_map(&mut f)))
+        });
+        Pixmap { tiles }
     }
 
     pub fn filter(&self, mut pred: impl FnMut(&T) -> bool) -> Self {
@@ -162,35 +266,102 @@ impl<T: Clone> Pixmap<T> {
         })
     }
 
-    pub fn shrink(&self) -> Self {
-        let bounds = self.actual_bounds();
-        Pixmap {
-            field: self.field.sub(bounds),
+    /// SPEEDUP: Could be done better tile by tile
+    pub fn translated(self, offset: Point<i64>) -> Self {
+        let mut result = Self::new();
+        for (index, value) in self.iter() {
+            result.set(index + offset, value.clone());
+        }
+        result
+    }
+
+    pub fn from_hashmap(pixels: &HashMap<Pixel, T>) -> Self {
+        let mut result = Self::new();
+        for (&pixel, value) in pixels {
+            result.set(pixel, value.clone());
+        }
+        result
+    }
+
+    /// Entries right of boundary are removed
+    /// TODO: Use border.bounds(), skip BTreeSet
+    pub fn extract_right(&mut self, boundary: &Border) -> Pixmap<T> {
+        // Extract pixels left of inner_border
+        let right_pixels = boundary.right_pixels();
+        let mut result = Self::new();
+        for pixel in right_pixels {
+            if let Some(removed) = self.remove(pixel) {
+                result.set(pixel, removed);
+            }
+        }
+        result
+    }
+
+    pub fn blit_if(&mut self, other: &Self, mut pred: impl FnMut(&Option<T>) -> bool) {
+        for (other_tile_index, other_tile) in other.enumerate_tiles() {
+            self.get_tile_mut(other_tile_index)
+                .blit_if(other_tile, &mut pred);
         }
     }
 
-    pub fn clipped(&self, bounds: Rect<i64>) -> Self {
-        Self {
-            field: self.field.clipped(bounds),
+    /// Blit if there is already an existing entry.
+    pub fn blit_over(&mut self, other: &Self) {
+        self.blit_if(other, |current| current.is_some());
+    }
+
+    pub fn blit_op<S>(
+        &mut self,
+        other: &Pixmap<S>,
+        cover: &AreaCover,
+        mut op: impl FnMut(&mut Option<T>, &S),
+    ) {
+        for tile_index in cover.iter_tiles() {
+            if let Some(other_tile) = other.get_tile(tile_index) {
+                self.get_tile_mut(tile_index).blit_op(other_tile, &mut op);
+            }
         }
     }
+
+    /// TODO:SPEEDUP: Tile by tile
+    pub fn blit_field(&mut self, other: &Field<T>) {
+        for (index, value) in other.enumerate() {
+            self.set(index, value.clone());
+        }
+    }
+
+    pub fn blit_to_field(&self, field: &mut Field<T>) {
+        for (index, value) in self.iter() {
+            field[index] = value.clone();
+        }
+    }
+
+    pub fn tile_ptr_eq(lhs: &Option<Rc<Tile<T>>>, rhs: &Option<Rc<Tile<T>>>) -> bool {
+        match (lhs, rhs) {
+            (None, None) => true,
+            (Some(rc_lhs), Some(rc_rhs)) => Rc::ptr_eq(rc_lhs, rc_rhs),
+            _ => false,
+        }
+    }
+
+    // pub fn shrink(&self) -> Self {
+    //     let bounds = self.actual_bounds();
+    //     Pixmap {
+    //         field: self.field.sub(bounds),
+    //     }
+    // }
 }
 
 impl Pixmap<Rgba8> {
     // TODO: Simplify
     pub fn from_bitmap(bitmap: &Bitmap) -> Self {
-        let bounds = Rect::low_size([0, 0], [bitmap.width() as i64, bitmap.height() as i64]);
-        let mut field = Field::filled(bounds, None);
-        for index in bitmap.indices() {
-            let color = bitmap[index];
-
+        let mut result = Pixmap::new();
+        for (index, &color) in bitmap.enumerate() {
             if color.a == 0 && color != Rgba8::TRANSPARENT {
                 println!("Bitmap should not contain colors with alpha = 0 but rgb != 0")
             }
-
-            field[index.as_i64()] = Some(color);
+            result.set(index.as_i64(), color);
         }
-        Self { field }
+        result
     }
 
     pub fn from_bitmap_path(path: impl AsRef<Path>) -> anyhow::Result<Self> {
@@ -203,52 +374,27 @@ impl Pixmap<Rgba8> {
         bitmap.save(path)
     }
 
-    /// Pixels outside the bitmap are ignored.
-    /// TODO: Use Field<Rgba> instead of bitmap
-    pub fn paint_to_bitmap(&self, bitmap: &mut Bitmap) {
-        for (point, &color) in self.field.enumerate() {
-            if let Some(color) = color {
-                let index = point.as_usize();
-                if bitmap.contains_index(index) {
-                    bitmap[index] = color;
-                }
-            }
-        }
-    }
-
-    // /// Default color is transparent, any pixels outside [0, size.x] x [0, size.y] are ignored.
-    // pub fn to_bitmap_with_size(&self, size: Point<usize>) -> Bitmap {
-    //     let mut bitmap = Bitmap::plain(size.x, size.y, Rgba8::BLACK);
-    //     self.paint_to_bitmap(&mut bitmap);
-    //     bitmap
-    // }
-
     /// Translate pixmap to positive coordinates, top left pixel will be at (0, 0) and convert
     /// to bitmap.
     pub fn to_bitmap(&self) -> Bitmap {
-        let rgba = self.field.map(|color| color.unwrap_or(Rgba8::BLACK));
-        rgba.into_array2d()
+        let bounds = self.bounding_rect();
+        let mut field = Field::filled(bounds, Rgba8::BLACK);
+        self.blit_to_field(&mut field);
+        field.into_array2d()
     }
 }
 
-impl<T: Eq> Pixmap<T> {
-    pub fn without_color(mut self, removed: &T) -> Self {
-        for color in self.field.iter_mut() {
-            if color.as_ref() == Some(removed) {
-                *color = None;
-            }
-        }
-        self
+impl<T: Eq + Clone> Pixmap<T> {
+    /// TODO: Rename to something more generic, like without_value, drop_value, reject_value
+    pub fn without_color(&self, removed: &T) -> Self {
+        self.filter(|color| color != removed)
     }
 }
 
 impl<T: PartialEq> PartialEq for Pixmap<T> {
+    /// SPEEDUP: Implement tile by tile
     fn eq(&self, other: &Self) -> bool {
-        // TODO: Could this be done without iterating over lhs and rhs indices?
-        self.field
-            .indices()
-            .chain(other.field.indices())
-            .all(|index| self.get(index) == other.get(index))
+        self.values().eq(other.values())
     }
 }
 
@@ -259,12 +405,3 @@ impl<Idx: FieldIndex, T> Index<Idx> for Pixmap<T> {
         self.get(pixel).unwrap()
     }
 }
-
-// impl<'a> IntoIterator for &'a Pixmap {
-//     type Item = (&'a Pixel, &'a Rgba8);
-//     type IntoIter = hash_map::Iter<'a, Pixel, Rgba8>;
-//
-//     fn into_iter(self) -> Self::IntoIter {
-//         self.map.iter()
-//     }
-// }

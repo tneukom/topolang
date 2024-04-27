@@ -2,7 +2,7 @@ use std::ops::{Index, IndexMut};
 
 use crate::{
     array_2d::Array2d,
-    math::{pixel::Pixel, point::Point, rect::Rect},
+    math::{point::Point, rect::Rect},
     utils::IteratorPlus,
 };
 
@@ -64,11 +64,11 @@ impl<T> Field<T> {
     }
 
     pub fn contains_index(&self, index: impl FieldIndex) -> bool {
-        self.bounds.contains(index.into_point())
+        self.bounds.contains(index.point())
     }
 
     fn valid_linear_index_at(&self, index: impl FieldIndex) -> Option<usize> {
-        if !self.bounds().half_open_contains(index.into_point()) {
+        if !self.bounds().half_open_contains(index.point()) {
             None
         } else {
             let i = (index.x() - self.bounds.x.low)
@@ -153,7 +153,7 @@ pub trait FieldIndex: Copy {
     fn x(&self) -> i64;
     fn y(&self) -> i64;
 
-    fn into_point(self) -> Point<i64> {
+    fn point(self) -> Point<i64> {
         Point::new(self.x(), self.y())
     }
 }
@@ -199,15 +199,5 @@ impl FieldIndex for (i64, i64) {
 
     fn y(&self) -> i64 {
         self.1
-    }
-}
-
-impl FieldIndex for Pixel {
-    fn x(&self) -> i64 {
-        self.x
-    }
-
-    fn y(&self) -> i64 {
-        self.y
     }
 }

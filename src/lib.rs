@@ -4,7 +4,7 @@
 use wasm_bindgen::prelude::wasm_bindgen;
 
 pub mod app;
-pub mod area_bounds;
+pub mod area_cover;
 pub mod array_2d;
 pub mod bitmap;
 pub mod brush;
@@ -25,6 +25,7 @@ pub mod topology;
 pub mod utils;
 pub mod view;
 pub mod widgets;
+pub mod world;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]

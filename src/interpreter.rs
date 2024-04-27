@@ -1,13 +1,12 @@
 use crate::{
-    area_bounds::AreaBounds,
     bitmap::Bitmap,
     math::{pixel::Pixel, rgba8::Rgba8},
     pattern::{NullTrace, Search},
     pixmap::PixmapRgba,
     rule::Rule,
     topology::{BorderKey, RegionKey, Topology},
+    world::World,
 };
-use static_assertions::const_assert;
 use std::collections::BTreeSet;
 
 pub struct CompiledRule {
@@ -53,10 +52,11 @@ impl Interpreter {
         }
     }
 
-    pub fn compile(&self, world: &mut Topology) -> anyhow::Result<Vec<CompiledRule>> {
+    pub fn compile(&self, world: &mut World) -> anyhow::Result<Vec<CompiledRule>> {
         // Find all matches for rule_frame in world
-        let search = Search::new(world, &self.rule_frame);
+        let search = Search::new(world.topology(), &self.rule_frame);
         let matches = search.find_matches(NullTrace::new());
+        let topology = world.topology();
 
         // Extract all matches and creates rules from them
         let mut compiled_rules: Vec<CompiledRule> = Vec::new();
@@ -64,10 +64,10 @@ impl Interpreter {
         for phi in matches {
             // Extract before and after from rule
             let phi_before_border = phi[self.before_border];
-            let before = world.topology_right_of_border(&world[phi_before_border]);
+            let before = topology.topology_right_of_border(&topology[phi_before_border]);
 
             let phi_after_border = phi[self.after_border];
-            let after = world.topology_right_of_border(&world[phi_after_border]);
+            let after = topology.topology_right_of_border(&topology[phi_after_border]);
 
             // Collect regions that are part of the source for this Rule
             let mut source: Vec<_> = Vec::new();
@@ -82,15 +82,11 @@ impl Interpreter {
 
             // Find translation from after to before
             // FIXME: This might not work depending of the AreaBounds implementation
-            let before_bounds = before.area_bounds();
-            let after_bounds = after.area_bounds();
-            const_assert!(AreaBounds::EXACT_BOUNDING_RECT);
-            assert_eq!(
-                before_bounds.bounding_rect().size(),
-                after_bounds.bounding_rect().size()
-            );
+            let before_bounds = before.bounding_rect();
+            let after_bounds = after.bounding_rect();
+            assert_eq!(before_bounds.size(), after_bounds.size());
 
-            let offset = before_bounds.bounding_rect().low() - after_bounds.bounding_rect().low();
+            let offset = before_bounds.low() - after_bounds.low();
             let after = after.translated(offset);
 
             let rule = Rule::new(before, after)?;
@@ -102,7 +98,7 @@ impl Interpreter {
     }
 
     /// Returns if a Rule was applied
-    pub fn step(&self, world: &mut Topology) -> bool {
+    pub fn step(&self, world: &mut World) -> bool {
         let compiled_rules = self.compile(world).unwrap();
 
         let hidden: BTreeSet<_> = compiled_rules
@@ -112,7 +108,7 @@ impl Interpreter {
             .collect();
 
         for CompiledRule { rule, .. } in &compiled_rules {
-            let mut search = Search::new(&world, &rule.pattern);
+            let mut search = Search::new(world.topology(), &rule.pattern);
             search.hidden = Some(&hidden);
 
             let solutions = search.find_matches(NullTrace::new());
@@ -145,7 +141,7 @@ impl Interpreter {
 
 #[cfg(test)]
 mod test {
-    use crate::{bitmap::Bitmap, interpreter::Interpreter, pixmap::PixmapRgba, topology::Topology};
+    use crate::{interpreter::Interpreter, pixmap::PixmapRgba, world::World};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -155,9 +151,7 @@ mod test {
 
     fn assert_execute_world(name: &str, expected_steps: usize) {
         let folder = format!("test_resources/compiler/{name}/");
-        let world_bitmap = Bitmap::from_path(format!("{folder}/world.png")).unwrap();
-        let world_pixmap = PixmapRgba::from_bitmap(&world_bitmap);
-        let mut world = Topology::new(&world_pixmap);
+        let mut world = World::from_bitmap_path(format!("{folder}/world.png")).unwrap();
 
         let compiler = Interpreter::new();
 
@@ -171,30 +165,6 @@ mod test {
             assert!(steps <= expected_steps);
         }
 
-        // Apply a rule
-        // let mut steps: usize = 0;
-        // loop {
-        //     let mut applied = false;
-        //     for rule in &rules {
-        //         if let Some(phi) =
-        //             Search::new(&world, &rule.pattern).find_first_match(NullTrace::new())
-        //         {
-        //             rule.apply_ops(&phi, &mut world);
-        //             steps += 1;
-        //             applied = true;
-        //             world
-        //                 .to_pixmap()
-        //                 .to_bitmap_with_size(world_bitmap.size())
-        //                 .save(format!("{folder}/stabilize_{steps}.png"))
-        //                 .unwrap();
-        //         }
-        //     }
-        //
-        //     if !applied {
-        //         return break;
-        //     }
-        // }
-
         // let steps = stabilize(&mut world, &rules);
         println!("Number of steps: {steps}");
         assert_eq!(steps, expected_steps);
@@ -203,12 +173,7 @@ mod test {
 
         let expected_pixmap =
             PixmapRgba::from_bitmap_path(format!("{folder}/world_expected.png")).unwrap();
-        assert_eq!(result_pixmap, expected_pixmap);
-
-        // let result_bitmap = result_pixmap.to_bitmap_with_size(world_bitmap.size());
-        // result_bitmap
-        //     .save(format!("{folder}/world_result.png"))
-        //     .unwrap();
+        assert_eq!(result_pixmap, &expected_pixmap);
     }
 
     #[test]

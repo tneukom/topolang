@@ -127,20 +127,19 @@ impl<T> Array2d<T> {
     }
 
     pub fn get_pixel(&self, pixel: Pixel) -> Option<&T> {
-        self.get(pixel.index()?)
+        self.get(pixel.as_usize())
     }
 
     /// Iterator of indices (0, 0), (1, 0), (2, 0), ..., (0, 1), ...
     pub fn pixels(&self) -> impl IteratorPlus<Pixel> {
         // let rect = Rect::low_size([0, 0], [self.width as i64, self.height as i64]);
         // rect.iter_half_open().map(|point| point.into())
-        self.indices()
-            .map(|index| Pixel::from_index(index).unwrap())
+        self.indices().map(|index| index.as_i64())
     }
 
     pub fn enumerate_pixels(&self) -> impl IteratorPlus<(Pixel, &T)> {
         self.indices()
-            .map(|index| (Pixel::from_index(index).unwrap(), self.get(index).unwrap()))
+            .map(|index| (index.as_i64(), self.get(index).unwrap()))
     }
 
     pub fn into_field(self) -> Field<T> {
@@ -258,7 +257,7 @@ pub trait Index2d: Sized + Copy + Eq {
         self.y()
     }
 
-    fn into_point(self) -> Point<usize> {
+    fn point(self) -> Point<usize> {
         Point::new(self.x(), self.y())
     }
 }

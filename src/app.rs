@@ -23,10 +23,9 @@ use crate::{
     interpreter::Interpreter,
     math::{point::Point, rect::Rect},
     painting::scene_painter::ScenePainter,
-    pixmap::PixmapRgba,
-    topology::Topology,
     view::{EditMode, View, ViewButton, ViewInput, ViewSettings},
     widgets::{system_colors_widget, ColorChooser, FileChooser},
+    world::World,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -154,7 +153,7 @@ impl EguiApp {
         let world_image_bytes = include_bytes!("../resources/saves/turing.png");
         let world_bitmap = Bitmap::load_from_memory(world_image_bytes).unwrap();
         // let world_bitmap = Bitmap::transparent(512, 512);
-        let world = Topology::from_bitmap(&world_bitmap);
+        let world = World::from_bitmap(&world_bitmap);
         // let world = Topology::from_bitmap_path("test_resources/compiler/gate/world.png").unwrap();
         let view = View::new(world);
 
@@ -410,7 +409,7 @@ impl EguiApp {
         if ui.button("Load").clicked() {
             println!("Loading file {:?} in folder", &path);
 
-            match Topology::from_bitmap_path(&path) {
+            match World::from_bitmap_path(&path) {
                 Ok(world) => {
                     self.view = View::new(world);
                     self.reset_camera();
@@ -520,9 +519,7 @@ impl EguiApp {
             warn!("Failed to load png file!");
             return;
         };
-        let pixmap = PixmapRgba::from_bitmap(&bitmap);
-
-        let world = Topology::new(&pixmap);
+        let world = World::from_bitmap(&bitmap);
         self.view = View::new(world);
     }
 
@@ -611,16 +608,17 @@ impl eframe::App for EguiApp {
 
             self.scene_painter.draw_grid(&self.view.camera, &frames);
 
-            self.scene_painter
-                .draw_topology(&self.view.world, &self.view.camera, &frames);
-
-            let bounds = self.view.world.area_bounds();
-            self.scene_painter.draw_bounds(
-                bounds.bounding_rect(),
+            self.scene_painter.draw_color_map(
+                self.view.world.color_map().clone(),
                 &self.view.camera,
                 &frames,
-                time,
             );
+
+            // TODO:SPEEDUP: Use world.bounding_rect() instead, we don't want to call topology(),
+            //   might be expensive.
+            let bounding_rect = self.view.world.topology().bounding_rect();
+            self.scene_painter
+                .draw_bounds(bounding_rect, &self.view.camera, &frames, time);
         }
 
         self.scene_painter.i_frame += 1;

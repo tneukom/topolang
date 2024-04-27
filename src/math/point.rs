@@ -4,6 +4,7 @@ use crate::math::generic::{
 use num_traits::{real::Real, Inv};
 use std::{
     cmp::Ordering,
+    fmt::{Display, Formatter},
     hash::{Hash, Hasher},
     ops::{Add, Div, Mul, Neg, Rem, Sub},
 };
@@ -172,6 +173,12 @@ impl<T: Real + Num> Point<T> {
     }
 }
 
+impl<T: Display> Display for Point<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Point({}, {})", self.x, self.y)
+    }
+}
+
 impl<T> From<(T, T)> for Point<T> {
     fn from(value: (T, T)) -> Self {
         Self::new(value.0, value.1)
@@ -285,18 +292,6 @@ where
         Self::Output::new(self.x * rhs, self.y * rhs)
     }
 }
-
-// impl<Lhs, Rhs> Div<Rhs> for Point<Lhs>
-// where
-//     Lhs: Div<Rhs>,
-//     Rhs: Copy,
-// {
-//     type Output = Point<<Lhs as Div<Rhs>>::Output>;
-//
-//     fn div(self, rhs: Rhs) -> Self::Output {
-//         Self::Output::new(self.x / rhs, self.y / rhs)
-//     }
-// }
 
 impl<T> Div<T> for Point<T>
 where

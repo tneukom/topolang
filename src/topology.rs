@@ -11,10 +11,9 @@ use std::{
 use itertools::Itertools;
 
 use crate::{
-    area_bounds::AreaBounds,
+    area_cover::AreaCover,
     bitmap::Bitmap,
-    connected_components::{color_components, left_of, right_of},
-    field::Field,
+    connected_components::{color_components_subset, left_of, right_of},
     math::{
         pixel::{Corner, Pixel, Side},
         point::Point,
@@ -153,7 +152,7 @@ pub struct Region {
     /// First item is outer Border
     pub boundary: Vec<Border>,
 
-    pub area_bounds: AreaBounds,
+    pub cover: AreaCover,
 
     pub color: Rgba8,
 }
@@ -275,11 +274,21 @@ pub struct Topology {
     /// Maps the start side of a seam to (region key, border index, seam index)
     pub seam_indices: BTreeMap<Side, SeamIndex>,
     // pub change_log: Vec<Change>
+    bounding_rect: Rect<i64>,
 }
 
 impl Topology {
-    pub fn new(pixmap: &PixmapRgba) -> Self {
-        let (pre_regions, region_map) = color_components(pixmap, RegionKey::unused);
+    pub fn bounding_rect(&self) -> Rect<i64> {
+        self.bounding_rect
+    }
+
+    pub fn new(color_map: &PixmapRgba) -> Self {
+        Self::new_subset(color_map, color_map.keys())
+    }
+
+    pub fn new_subset(color_map: &PixmapRgba, subset: impl IntoIterator<Item = Pixel>) -> Self {
+        let (pre_regions, region_map) =
+            color_components_subset(color_map, subset, RegionKey::unused);
 
         let mut regions: BTreeMap<RegionKey, Region> = BTreeMap::new();
 
@@ -288,7 +297,8 @@ impl Topology {
             let mut boundary = Vec::new();
 
             for (i_border, cycle) in split_into_cycles(&pre_region.sides).into_iter().enumerate() {
-                let seams = split_cycle_into_seams(&cycle, |side| pixmap.get(side.right_pixel()));
+                let seams =
+                    split_cycle_into_seams(&cycle, |side| color_map.get(side.right_pixel()));
 
                 let border = Border {
                     cycle,
@@ -300,7 +310,7 @@ impl Topology {
 
             let region = Region {
                 boundary,
-                area_bounds: pre_region.bounds(),
+                cover: pre_region.cover,
                 color: pre_region.color,
             };
             regions.insert(pre_region.id, region);
@@ -324,10 +334,13 @@ impl Topology {
             }
         }
 
+        let bounding_rect = region_map.bounding_rect();
+
         Topology {
             region_map,
             regions,
             seam_indices,
+            bounding_rect,
         }
     }
 
@@ -373,19 +386,6 @@ impl Topology {
         }
 
         self.regions.insert(key, region);
-    }
-
-    /// Upper bound is exclusive, lower bound inclusive
-    pub fn area_bounds(&self) -> AreaBounds {
-        let mut area_bounds = AreaBounds::new();
-        for region in self.regions.values() {
-            area_bounds.add_bounds(&region.area_bounds);
-        }
-        area_bounds
-    }
-
-    pub fn capacity_bounds(&self) -> Rect<i64> {
-        self.region_map.bounds()
     }
 
     pub fn translated(self, offset: Point<i64>) -> Self {
@@ -516,78 +516,15 @@ impl Topology {
             .map(|region_id| self.regions[region_id].color)
     }
 
-    pub fn color_field(&self) -> Field<Rgba8> {
-        self.region_map.field().map(|region_id| match region_id {
-            None => Rgba8::TRANSPARENT,
-            Some(region_id) => self.regions[region_id].color,
-        })
-    }
-
     pub fn iter_region_interior<'a>(
         &'a self,
         region_key: RegionKey,
     ) -> impl IteratorPlus<Pixel> + 'a {
         let region = &self.regions[&region_key];
-        region
-            .area_bounds
-            .iter()
-            .filter(move |&pixel| self.region_map.get(pixel) == Some(&region_key))
-            .map(|index| index.into())
-    }
-
-    #[inline(never)]
-    fn fill_regions_fallback(&mut self, fill_regions: &Vec<FillRegion>) {
-        let mut color_map = self.color_map();
-
-        for fill_region in fill_regions.into_iter() {
-            for pixel in self.iter_region_interior(fill_region.region_key) {
-                color_map.set(pixel, fill_region.color);
-            }
-        }
-
-        *self = Self::new(&color_map)
-    }
-
-    /// Invalidates all regions keys
-    /// Returns true if any regions were changed
-    #[inline(never)]
-    pub fn fill_regions(&mut self, fill_regions: &Vec<FillRegion>) -> bool {
-        let mut modified = false;
-        let mut remaining = Vec::new();
-
-        for &fill_region in fill_regions {
-            // If all neighboring regions have a different color than fill_region.color we can
-            // simply replace Region.color
-            let region = &self[fill_region.region_key];
-
-            if region.color == fill_region.color {
-                // already has desired color, skip
-                continue;
-            }
-
-            modified = true;
-
-            if region
-                .iter_seams()
-                .all(|seam| self.color_right_of(seam) != Some(fill_region.color))
-            {
-                let mut_region = &mut self[fill_region.region_key];
-                mut_region.color = fill_region.color;
-            } else {
-                remaining.push(fill_region)
-            }
-        }
-
-        if !remaining.is_empty() {
-            self.fill_regions_fallback(&remaining);
-        }
-
-        modified
-    }
-
-    pub fn fill_region(&mut self, region_key: RegionKey, color: Rgba8) -> bool {
-        let fill_regions = vec![FillRegion { region_key, color }];
-        self.fill_regions(&fill_regions)
+        self.region_map
+            .iter_cover(&region.cover)
+            .filter(move |(_, &iter_region_key)| iter_region_key == region_key)
+            .map(|kv| kv.0)
     }
 
     pub fn region_at(&self, pixel: Pixel) -> Option<RegionKey> {
@@ -649,50 +586,6 @@ impl Topology {
         self.sub_topology(&regions)
     }
 
-    pub fn blit(&mut self, pixmap: &PixmapRgba) {
-        assert!(self.region_map.bounds().contains_rect(pixmap.bounds()));
-
-        // Find regions that are touched by `pixels`
-        let touched_regions = self.touched_regions(pixmap.keys());
-
-        // Extract these regions into a Pixmap
-        // Bounds of extracted regions and pixmap
-        let mut area_bounds = AreaBounds::new();
-        for touched_region in &touched_regions {
-            area_bounds.add_bounds(&self.regions[touched_region].area_bounds);
-        }
-        area_bounds.add_pixmap(&pixmap);
-
-        let mut extracted_pixmap = PixmapRgba::new(area_bounds.bounding_rect());
-        for region_key in touched_regions {
-            let region_color = self.regions[&region_key].color;
-            for pixel in self.iter_region_interior(region_key) {
-                extracted_pixmap.set(pixel, region_color);
-            }
-            self.remove_region(region_key).unwrap();
-        }
-
-        // Blit pixels to the Pixmap
-        extracted_pixmap.blit(pixmap);
-
-        // Convert Pixmap back to Topology
-        let topology = Topology::new(&extracted_pixmap);
-
-        // Blit topology region_map back to self
-        self.region_map.blit(&topology.region_map);
-
-        // Merge topology with self
-        for (region_key, region) in topology.regions.into_iter() {
-            self.insert_region(region_key, region);
-        }
-    }
-
-    pub fn fallback_blit(&mut self, pixmap: &PixmapRgba) {
-        let mut self_pixmap = self.color_map();
-        self_pixmap.blit(pixmap);
-        *self = Topology::new(&self_pixmap);
-    }
-
     pub fn rgb_seam_graph(&self) -> UndirectedGraph<Option<Rgba8>> {
         let mut edges = BTreeSet::new();
         for seam in self.iter_seams() {
@@ -736,6 +629,20 @@ impl Topology {
     /// Remove all regions of the given color
     pub fn without_color(self, color: Rgba8) -> Self {
         self.filter_regions(|_, region| region.color != color)
+    }
+
+    /// Blit the given region to the color_map with the given color.
+    pub fn fill_region(&self, region_key: RegionKey, color: Rgba8, color_map: &mut PixmapRgba) {
+        let region = &self[region_key];
+        color_map.blit_op(
+            &self.region_map,
+            &region.cover,
+            |blit_color, &blit_region| {
+                if blit_region == region_key {
+                    *blit_color = Some(color);
+                }
+            },
+        );
     }
 }
 
@@ -874,7 +781,7 @@ pub mod test {
     use crate::{
         math::rgba8::Rgba8,
         pixmap::PixmapRgba,
-        topology::{Region, Topology},
+        topology::Topology,
         utils::{UndirectedEdge, UndirectedGraph},
     };
 
@@ -993,58 +900,6 @@ pub mod test {
             (Rgba8::RED, Rgba8::TRANSPARENT),
         ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
-    }
-
-    fn print_region(region: &Region, indent: &str) {
-        println!("{indent}color: {}", region.color);
-        println!("{indent}color: {:?}", region.area_bounds);
-    }
-
-    fn assert_blit(name: &str) {
-        let folder = format!("test_resources/topology/blit/{name}");
-
-        let mut base = Topology::from_bitmap_path(format!("{folder}/base.png")).unwrap();
-
-        let blit = PixmapRgba::from_bitmap_path(format!("{folder}/blit.png"))
-            .unwrap()
-            .without_color(&Rgba8::TRANSPARENT);
-
-        let mut expected_result = base.clone();
-        expected_result.fallback_blit(&blit);
-
-        base.blit(&blit);
-
-        assert_eq!(base, expected_result);
-    }
-
-    #[test]
-    fn blit_a() {
-        assert_blit("a");
-    }
-
-    #[test]
-    fn blit_b() {
-        assert_blit("b");
-    }
-
-    #[test]
-    fn blit_c() {
-        assert_blit("c");
-    }
-
-    #[test]
-    fn blit_d() {
-        assert_blit("d");
-    }
-
-    #[test]
-    fn blit_e() {
-        assert_blit("e");
-    }
-
-    #[test]
-    fn blit_f() {
-        assert_blit("f");
     }
 
     /// Ensure right side of the red region is as expected.
