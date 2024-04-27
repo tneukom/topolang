@@ -1010,7 +1010,7 @@ pub mod test {
             .without_color(&Rgba8::TRANSPARENT);
 
         let mut expected_result = base.clone();
-        expected_result.blit(&blit);
+        expected_result.fallback_blit(&blit);
 
         base.blit(&blit);
 
@@ -1040,6 +1040,11 @@ pub mod test {
     #[test]
     fn blit_e() {
         assert_blit("e");
+    }
+
+    #[test]
+    fn blit_f() {
+        assert_blit("f");
     }
 
     /// Ensure right side of the red region is as expected.
