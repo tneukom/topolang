@@ -282,10 +282,12 @@ impl Topology {
         self.bounding_rect
     }
 
+    #[inline(never)]
     pub fn new(color_map: &PixmapRgba) -> Self {
         Self::new_subset(color_map, color_map.keys())
     }
 
+    #[inline(never)]
     pub fn new_subset(color_map: &PixmapRgba, subset: impl IntoIterator<Item = Pixel>) -> Self {
         let (pre_regions, region_map) =
             color_components_subset(color_map, subset, RegionKey::unused);
@@ -319,6 +321,7 @@ impl Topology {
         Self::from_regions(regions, region_map)
     }
 
+    #[inline(never)]
     pub fn from_regions(
         regions: BTreeMap<RegionKey, Region>,
         region_map: Pixmap<RegionKey>,
@@ -550,6 +553,7 @@ impl Topology {
     /// Returns the set of all regions that are right of `border`. Only returns regions that are connected to the passed
     /// border.
     /// If there is a region on the right side of the passed border inside a hole it is not returned!
+    #[inline(never)]
     pub fn regions_right_of_border(&self, border: &Border) -> BTreeSet<RegionKey> {
         // flood fill regions over seams
         let mut right_of: BTreeSet<RegionKey> = BTreeSet::new();
@@ -581,9 +585,18 @@ impl Topology {
     }
 
     /// Keys of resulting Regions are unchanged
+    #[inline(never)]
     pub fn topology_right_of_border(&self, border: &Border) -> Self {
-        let regions = self.regions_right_of_border(border);
-        self.sub_topology(&regions)
+        let region_map = self.region_map.right_of_border(border);
+        // TODO:SPEEDUP: Should be possible to do this faster some way
+        let region_keys: BTreeSet<_> = region_map.values().copied().collect();
+
+        let mut regions = BTreeMap::new();
+        for region_key in region_keys {
+            regions.insert(region_key, self.regions[&region_key].clone());
+        }
+
+        Self::from_regions(regions, region_map)
     }
 
     pub fn rgb_seam_graph(&self) -> UndirectedGraph<Option<Rgba8>> {
@@ -597,6 +610,7 @@ impl Topology {
         edges
     }
 
+    #[inline(never)]
     pub fn sub_topology(&self, sub_regions: &BTreeSet<RegionKey>) -> Self {
         let region_map = self
             .region_map

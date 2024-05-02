@@ -283,8 +283,21 @@ impl<T: Clone> Pixmap<T> {
         result
     }
 
+    pub fn right_of_border(&self, border: &Border) -> Pixmap<T> {
+        // Extract pixels left of inner_border
+        let right_pixels = border.right_pixels();
+        let mut result = Self::new();
+        for pixel in right_pixels {
+            if let Some(value) = self.get(pixel) {
+                result.set(pixel, value.clone());
+            }
+        }
+        result
+    }
+
     /// Entries right of boundary are removed
     /// TODO: Use border.bounds(), skip BTreeSet
+    /// TODO:REMOVE should use right_of_border
     pub fn extract_right(&mut self, boundary: &Border) -> Pixmap<T> {
         // Extract pixels left of inner_border
         let right_pixels = boundary.right_pixels();
