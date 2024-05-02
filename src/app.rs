@@ -616,7 +616,7 @@ impl eframe::App for EguiApp {
 
             // TODO:SPEEDUP: Use world.bounding_rect() instead, we don't want to call topology(),
             //   might be expensive.
-            let bounding_rect = self.view.world.topology().bounding_rect();
+            let bounding_rect = self.view.world.bounding_rect();
             self.scene_painter
                 .draw_bounds(bounding_rect, &self.view.camera, &frames, time);
         }

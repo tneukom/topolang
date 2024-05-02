@@ -82,6 +82,7 @@ pub fn flood_fill<Id: Copy + Eq>(
     let seed_color = color_map[seed];
 
     let previous = region_map.set(seed, region_id);
+    cover.add(seed);
     assert!(previous.is_none());
     let mut todo: Vec<Pixel> = vec![seed];
 
@@ -92,7 +93,7 @@ pub fn flood_fill<Id: Copy + Eq>(
 
             if color_map.get(neighbor_pixel) == Some(&seed_color) {
                 let previous = region_map.set(neighbor_pixel, region_id);
-                cover.add(neighbor_pixel.into());
+                cover.add(neighbor_pixel);
                 if previous.is_none() {
                     todo.push(neighbor_pixel);
                 } else if previous != Some(region_id) {

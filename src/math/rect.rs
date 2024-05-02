@@ -344,6 +344,10 @@ impl<T: Num> Rect<T> {
         self.y.length()
     }
 
+    pub fn area(self) -> T {
+        self.x.length() * self.y.length()
+    }
+
     pub fn padded(self, padding: T) -> Self {
         Self::new(self.x.padded(padding), self.y.padded(padding))
     }

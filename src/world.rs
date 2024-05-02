@@ -24,8 +24,19 @@ impl CachedTopology {
         }
     }
 
-    pub fn get(&self, color_map: &PixmapRgba) -> &Topology {
-        self.topology.get_or_init(|| Topology::new(color_map))
+    pub fn get_or_init(&self, color_map: &PixmapRgba) -> &Topology {
+        self.topology.get_or_init(|| {
+            println!("Recomputing topology!");
+            Topology::new(color_map)
+        })
+    }
+
+    pub fn get(&self) -> Option<&Topology> {
+        self.topology.get()
+    }
+
+    pub fn get_mut(&mut self) -> Option<&mut Topology> {
+        self.topology.get_mut()
     }
 }
 
@@ -56,7 +67,7 @@ impl World {
     }
 
     pub fn topology(&self) -> &Topology {
-        self.topology.get(&self.color_map)
+        self.topology.get_or_init(&self.color_map)
     }
 
     pub fn color_map(&self) -> &PixmapRgba {
@@ -144,14 +155,14 @@ impl World {
     #[inline(never)]
     pub fn fill_regions(&mut self, fill_regions: &Vec<FillRegion>) -> bool {
         let mut modified = false;
-        let topology = self.topology.get(&self.color_map);
+        let mut topology_invalidated = false;
+        let topology = self
+            .topology
+            .get_mut()
+            .expect("Requires topology, otherwise region ids will be invalid.");
 
         for &fill_region in fill_regions {
-            // If all neighboring regions have a different color than fill_region.color we can
-            // simply replace Region.color
-            let region = &topology[fill_region.region_key];
-
-            if region.color == fill_region.color {
+            if topology[fill_region.region_key].color == fill_region.color {
                 // already has desired color, skip
                 continue;
             }
@@ -163,20 +174,27 @@ impl World {
                 &mut self.color_map,
             );
 
-            // SPEEDUP: If the new color doesn't cause any Regions to merge we can update the
-            //   Topology without completely recomputing it.
-            // if region
-            //     .iter_seams()
-            //     .all(|seam| self.color_right_of(seam) != Some(fill_region.color))
-            // {
-            //     let mut_region = &mut self[fill_region.region_key];
-            //     mut_region.color = fill_region.color;
-            // } else {
-            //     remaining.push(fill_region)
-            // }
+            if topology_invalidated {
+                continue;
+            }
+
+            // Try to update the topology to the changed color map
+            let can_update_color = topology[fill_region.region_key]
+                .iter_seams()
+                .all(|seam| topology.color_right_of(seam) != Some(fill_region.color));
+
+            if can_update_color {
+                // If all neighboring regions have a different color than fill_region.color we can
+                // update the topology by
+                let mut_region = &mut topology[fill_region.region_key];
+                mut_region.color = fill_region.color;
+            } else {
+                // Otherwise we have to recompute the topology
+                topology_invalidated = true;
+            }
         }
 
-        if modified {
+        if topology_invalidated {
             self.topology = CachedTopology::empty();
         }
         modified
