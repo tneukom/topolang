@@ -1,5 +1,6 @@
-use itertools::Itertools;
 use std::collections::BTreeSet;
+
+use itertools::Itertools;
 
 use crate::{
     area_cover::AreaCover,
@@ -32,44 +33,6 @@ pub enum SideClass {
     Interior,
     Border,
     Open,
-}
-
-pub fn legacy_flood_fill(
-    seed: Pixel,
-    classify: impl Fn(&Side, &Pixel) -> SideClass,
-) -> ConnectedComponent {
-    let mut interior: BTreeSet<Pixel> = BTreeSet::new();
-    let mut sides: BTreeSet<Side> = BTreeSet::new();
-
-    let mut todo: Vec<Pixel> = vec![seed];
-
-    while !todo.is_empty() {
-        let pixel = todo.pop().unwrap();
-
-        if !interior.insert(pixel) {
-            // was already contained in interior
-            continue;
-        }
-
-        for side_name in SideName::ALL {
-            let neighbor_pixel = pixel.neighbor(side_name);
-            let neighbor_side = pixel.side_ccw(side_name);
-
-            match classify(&neighbor_side, &neighbor_pixel) {
-                SideClass::Border => {
-                    sides.insert(neighbor_side);
-                }
-                SideClass::Interior => {
-                    todo.push(neighbor_pixel);
-                }
-                SideClass::Open => {
-                    sides.insert(neighbor_side);
-                }
-            }
-        }
-    }
-
-    ConnectedComponent { interior, sides }
 }
 
 pub fn flood_fill<Id: Copy + Eq>(
@@ -160,24 +123,6 @@ pub fn color_components<Id: Eq + Copy>(
     color_components_subset(color_map, color_map.keys(), free_id)
 }
 
-/// Works if `boundary` is the boundary of a connected set of pixels, can contain holes.
-fn flood_fill_border(seed: Pixel, boundary: &BTreeSet<Side>) -> ConnectedComponent {
-    let classify = |side: &Side, _: &Pixel| {
-        if boundary.contains(side) || boundary.contains(&side.reversed()) {
-            SideClass::Border
-        } else {
-            SideClass::Interior
-        }
-    };
-    legacy_flood_fill(seed, classify)
-}
-
-/// See flood_fill_border
-pub fn left_of_boundary(boundary: &BTreeSet<Side>) -> ConnectedComponent {
-    let seed = boundary.first().unwrap().left_pixel();
-    flood_fill_border(seed, boundary)
-}
-
 // TODO: Use iterator instead of Vec<Side>
 /// Requires border to be ccw, starting with left side and stopping with top side
 pub fn left_of_border(border: &Vec<Side>) -> Vec<Pixel> {
@@ -252,8 +197,8 @@ mod test {
     // TODO: Make sure color of pixels in components is constant
     use crate::{
         connected_components::{
-            color_components, left_of_border, left_of_boundary, right_of_border, split_into_cycles,
-            ColorRegion,
+            color_components, ColorRegion, left_of_border, right_of_border,
+            split_into_cycles,
         },
         math::{
             pixel::{Pixel, Side},
@@ -447,32 +392,4 @@ mod test {
         assert_proper_components("7a.png", 6);
     }
 
-    #[test]
-    fn left_of_component() {
-        let folder = "test_resources/connected_components";
-        let filenames = [
-            "2a.png", "3a.png", "3b.png", "3c.png", "3d.png", "4a.png", "5a.png", "7a.png",
-        ];
-
-        for filename in filenames {
-            let path = format!("{folder}/{filename}");
-            let color_map = Pixmap::from_bitmap_path(path).unwrap();
-            let (regions, region_map) = usize_color_components(&color_map);
-
-            for region in regions {
-                let left_of_interior = left_of_boundary(&region.sides).interior;
-                let region_map_interior = region_map
-                    .iter()
-                    .filter_map(|(pixel, &region_id)| {
-                        if region_id == region.id {
-                            Some(pixel)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                assert_eq!(left_of_interior, region_map_interior,);
-            }
-        }
-    }
 }
