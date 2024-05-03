@@ -3,6 +3,7 @@ use std::{collections::HashMap, ops::Index, path::Path, rc::Rc};
 use crate::{
     area_cover::AreaCover,
     bitmap::Bitmap,
+    connected_components::right_of_border,
     field::{Field, FieldIndex},
     math::{
         generic::EuclidDivRem,
@@ -285,7 +286,7 @@ impl<T: Clone> Pixmap<T> {
 
     pub fn right_of_border(&self, border: &Border) -> Pixmap<T> {
         // Extract pixels left of inner_border
-        let right_pixels = border.right_pixels();
+        let right_pixels = right_of_border(&border.cycle);
         let mut result = Self::new();
         for pixel in right_pixels {
             if let Some(value) = self.get(pixel) {

@@ -1,9 +1,10 @@
-/// See pixel_pattern.jpg, sides_and_corners.jpg
-use crate::math::point::Point;
 use std::{
     fmt::{Debug, Display, Formatter},
     ops::Add,
 };
+
+/// See pixel_pattern.jpg, sides_and_corners.jpg
+use crate::math::point::Point;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SideName {
@@ -38,14 +39,25 @@ impl SideName {
         }
     }
 
+    pub const fn previous_ccw(self) -> Self {
+        match self {
+            Self::Top => Self::TopRight,
+            Self::Left => Self::Top,
+            Self::BottomLeft => Self::Left,
+            Self::Bottom => Self::BottomLeft,
+            Self::Right => Self::Bottom,
+            Self::TopRight => Self::Right,
+        }
+    }
+
     pub fn unicode_symbol(self) -> char {
         match self {
-            SideName::Top => '↑',
-            SideName::Left => '←',
-            SideName::BottomLeft => '↙',
-            SideName::Bottom => '↓',
-            SideName::Right => '→',
-            SideName::TopRight => '↗',
+            SideName::Top => '←',
+            SideName::Left => '↓',
+            SideName::BottomLeft => '↘',
+            SideName::Bottom => '→',
+            SideName::Right => '↑',
+            SideName::TopRight => '↖',
         }
     }
 
@@ -152,6 +164,10 @@ impl Point<i64> {
         ]
     }
 
+    pub fn sides_cw(self) -> [Side; 6] {
+        self.sides_ccw().map(|side| side.reversed())
+    }
+
     pub fn corners(self) -> [Corner; 6] {
         self.sides_ccw().map(|side| side.start_corner())
     }
@@ -208,6 +224,10 @@ impl Side {
         Self::new(self.left_pixel, self.name.next_ccw())
     }
 
+    pub const fn previous_ccw(self) -> Self {
+        Self::new(self.left_pixel, self.name.previous_ccw())
+    }
+
     pub const fn start_corner(self) -> Corner {
         self.reversed().stop_corner()
     }
@@ -225,15 +245,7 @@ impl Side {
     }
 
     pub fn continuing_sides(self) -> [Side; 2] {
-        // FIXME: Use self.next_ccw(), self.next_away()
-        let outgoing = self.stop_corner().out_sides();
-        if self == outgoing[0] {
-            [outgoing[1], outgoing[2]]
-        } else if self == outgoing[1] {
-            [outgoing[0], outgoing[2]]
-        } else {
-            [outgoing[0], outgoing[1]]
-        }
+        [self.next_ccw(), self.reversed().previous_ccw().reversed()]
     }
 }
 
@@ -324,28 +336,11 @@ impl Corner {
             SideName::TopRight => Self::top_right_side_stop(side.left_pixel),
         }
     }
-
-    /// See corner_out_sides.jpg
-    pub fn out_sides(self) -> [Side; 3] {
-        match self.name {
-            CornerName::TopStart => [
-                self.pixel.top_right_neighbor().bottom_left_side(),
-                self.pixel.top_neighbor().right_side(),
-                self.pixel.top_side(),
-            ],
-            CornerName::TopStop => [
-                self.pixel.left_neighbor().top_right_side(),
-                self.pixel.left_side(),
-                self.pixel.top_neighbor().bottom_side(),
-            ],
-        }
-    }
 }
 
 #[cfg(test)]
 mod test {
     use crate::math::pixel::{Pixel, Side, SideName};
-    use std::collections::HashSet;
 
     const PIXELS: [Pixel; 3] = [Pixel::new(0, 0), Pixel::new(-2, 4), Pixel::new(9, 17)];
 
@@ -360,6 +355,14 @@ mod test {
     fn opposite_of_opposite() {
         for side_name in SideName::ALL {
             assert_eq!(side_name.opposite().opposite(), side_name);
+        }
+    }
+
+    #[test]
+    fn previous_of_next() {
+        for side in example_sides() {
+            assert_eq!(side, side.next_ccw().previous_ccw());
+            assert_eq!(side, side.previous_ccw().next_ccw());
         }
     }
 
@@ -448,17 +451,17 @@ mod test {
         }
     }
 
+    // TODO: Make static assert if possible
     #[test]
-    fn corner_out_sides() {
+    fn side_ordering() {
         let pixel = Pixel::new(0, 0);
-        for corner in pixel.corners() {
-            let expected: HashSet<_> = pixel
-                .touching()
-                .iter()
-                .flat_map(|pixel| pixel.sides_ccw())
-                .filter(|side| side.start_corner() == corner)
-                .collect();
-            assert_eq!(expected, HashSet::from(corner.out_sides()));
-        }
+
+        let ccw_sides = pixel.sides_ccw();
+        assert!(ccw_sides.iter().all(|&side| pixel.left_side() <= side));
+
+        let cw_sides = pixel.sides_cw();
+        assert!(cw_sides
+            .iter()
+            .all(|&side| pixel.top_side().reversed() <= side));
     }
 }

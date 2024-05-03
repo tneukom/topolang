@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use std::collections::BTreeSet;
 
 use crate::{
@@ -172,15 +173,76 @@ fn flood_fill_border(seed: Pixel, boundary: &BTreeSet<Side>) -> ConnectedCompone
 }
 
 /// See flood_fill_border
-pub fn left_of(boundary: &BTreeSet<Side>) -> ConnectedComponent {
+pub fn left_of_boundary(boundary: &BTreeSet<Side>) -> ConnectedComponent {
     let seed = boundary.first().unwrap().left_pixel();
     flood_fill_border(seed, boundary)
 }
 
-/// See flood_fill_border
-pub fn right_of(boundary: &BTreeSet<Side>) -> ConnectedComponent {
-    let seed = boundary.first().unwrap().right_pixel();
-    flood_fill_border(seed, boundary)
+// TODO: Use iterator instead of Vec<Side>
+/// Requires border to be ccw, starting with left side and stopping with top side
+pub fn left_of_border(border: &Vec<Side>) -> Vec<Pixel> {
+    assert!(!border.is_empty());
+    assert_eq!(border.first().unwrap().name, SideName::Left);
+    assert_eq!(border.last().unwrap().name, SideName::Top);
+
+    let mut left_right_sides: Vec<_> = border
+        .iter()
+        .copied()
+        .filter(|side| side.name == SideName::Left || side.name == SideName::Right)
+        .collect();
+    left_right_sides.sort();
+
+    let mut area = Vec::new();
+    for (left_side, right_side) in left_right_sides.into_iter().tuples() {
+        assert_eq!(left_side.left_pixel.y, right_side.left_pixel.y);
+        for x in left_side.left_pixel.x..=right_side.left_pixel.x {
+            let pixel = Pixel::new(x, left_side.left_pixel.y);
+            area.push(pixel);
+        }
+    }
+
+    area
+}
+
+/// Split a set of sides into cycles. If a cycle is ccw it starts with a left side, if it is
+/// cw it starts with a bottom side.
+/// `[cycle.first() | cycle in cycles]` is ordered from small to large. This means the
+/// first cycle is the outer cycle.
+pub fn split_into_cycles<'a>(mut sides: BTreeSet<Side>) -> Vec<Vec<Side>> {
+    let mut cycles = Vec::new();
+
+    while let Some(mut side) = sides.pop_first() {
+        // Extract cycle
+        let mut cycle = vec![side];
+        'outer: loop {
+            for next_side in side.continuing_sides() {
+                // There is always exactly one continuing side
+                if sides.remove(&next_side) {
+                    cycle.push(next_side);
+                    side = next_side;
+                    continue 'outer;
+                }
+            }
+            // See side_ordering test in pixel.rs
+            assert!([SideName::Left, SideName::Bottom].contains(&cycle.first().unwrap().name));
+            // No continuing side still in sides, so the cycle is finished.
+            break;
+        }
+
+        cycles.push(cycle);
+    }
+
+    cycles
+}
+
+pub fn right_of_border(border: &Vec<Side>) -> Vec<Pixel> where
+{
+    let reversed_border = border
+        .into_iter()
+        .rev()
+        .map(|side| side.reversed())
+        .collect();
+    left_of_border(&reversed_border)
 }
 
 #[cfg(test)]
@@ -189,8 +251,14 @@ mod test {
 
     // TODO: Make sure color of pixels in components is constant
     use crate::{
-        connected_components::{color_components, left_of, ColorRegion},
-        math::pixel::Side,
+        connected_components::{
+            color_components, left_of_border, left_of_boundary, right_of_border, split_into_cycles,
+            ColorRegion,
+        },
+        math::{
+            pixel::{Pixel, Side},
+            rgba8::Rgba8,
+        },
         pixmap::{Pixmap, PixmapRgba},
     };
 
@@ -204,17 +272,100 @@ mod test {
         color_components(color_map, free_id)
     }
 
-    /// Brute force method to find all boundary sides of a region given the region_map
-    fn region_sides(region_map: &Pixmap<usize>, id: usize) -> BTreeSet<Side> {
-        region_map
-            .iter()
-            // iter over entries with given id
-            .filter(|(_, &region_id)| region_id == id)
-            // iter over all sides of pixels of the given id
-            .flat_map(|(pixel, _)| pixel.sides_ccw())
+    fn area_boundary(area: &BTreeSet<Pixel>) -> BTreeSet<Side> {
+        area.iter()
+            // iter over all sides of each pixel in area
+            .flat_map(|pixel| pixel.sides_ccw())
             // keep only sides with a different region on the right side
-            .filter(|side| region_map.get(side.right_pixel()) != Some(&id))
+            .filter(|side| !area.contains(&side.right_pixel()))
             .collect()
+    }
+
+    fn pixmap_color_area<T: Eq>(pixmap: &Pixmap<T>, area_color: &T) -> BTreeSet<Pixel> {
+        pixmap
+            .iter()
+            .filter(|(_, pixel_color)| pixel_color == &area_color)
+            .map(|kv| kv.0)
+            .collect()
+    }
+
+    /// Brute force method to find all boundary sides of a region given the region_map
+    fn region_boundary(region_map: &Pixmap<usize>, id: usize) -> BTreeSet<Side> {
+        let area = pixmap_color_area(region_map, &id);
+        area_boundary(&area)
+    }
+
+    fn test_left_of_border(area: BTreeSet<Pixel>, n_sides: usize) {
+        let boundary = area_boundary(&area);
+        assert_eq!(boundary.len(), n_sides);
+
+        let borders = split_into_cycles(boundary.into());
+        assert_eq!(borders.len(), 1);
+
+        let border = &borders[0];
+        let left_of_border = left_of_border(border);
+        assert_eq!(area, left_of_border.into_iter().collect());
+    }
+
+    #[test]
+    fn simple_left_of_border_a() {
+        let area: BTreeSet<_> = [Pixel::new(0, 0)].into();
+        test_left_of_border(area, 6);
+    }
+
+    #[test]
+    fn simple_left_of_border_b() {
+        let area: BTreeSet<_> = [Pixel::new(0, 0), Pixel::new(1, 0)].into();
+        test_left_of_border(area, 10);
+    }
+
+    #[test]
+    fn simple_left_of_border_c() {
+        let area: BTreeSet<_> = [
+            Pixel::new(0, 0),
+            Pixel::new(1, 0),
+            Pixel::new(0, 1),
+            Pixel::new(1, 1),
+        ]
+        .into();
+        test_left_of_border(area, 14);
+    }
+
+    fn test_right_of_border(filename: &str) {
+        let folder = "test_resources/connected_components/right_of_border";
+        let path = format!("{folder}/{filename}");
+        let color_map = PixmapRgba::from_bitmap_path(path).unwrap();
+        let red_area = pixmap_color_area(&color_map, &Rgba8::RED);
+        let blue_area = pixmap_color_area(&color_map, &Rgba8::BLUE);
+
+        let red_boundary = area_boundary(&red_area);
+        let red_borders = split_into_cycles(red_boundary.into());
+        assert_eq!(red_borders.len(), 2); // inner and outer border
+
+        let inner_border = &red_borders[1];
+        let right_of_inner_border = right_of_border(&inner_border);
+        let right_of_inner_border_set: BTreeSet<_> = right_of_inner_border.into_iter().collect();
+        assert_eq!(right_of_inner_border_set, blue_area);
+    }
+
+    #[test]
+    fn right_of_border_1() {
+        test_right_of_border("1.png")
+    }
+
+    #[test]
+    fn right_of_border_2() {
+        test_right_of_border("2.png")
+    }
+
+    #[test]
+    fn right_of_border_3() {
+        test_right_of_border("3.png")
+    }
+
+    #[test]
+    fn right_of_border_4() {
+        test_right_of_border("4.png")
     }
 
     fn assert_proper_components(filename: &str, count: usize) {
@@ -246,7 +397,7 @@ mod test {
 
         // Make sure sides of region are correct
         for region in &regions {
-            let expected_sides = region_sides(&region_map, region.id);
+            let expected_sides = region_boundary(&region_map, region.id);
             assert_eq!(region.sides, expected_sides);
         }
     }
@@ -309,7 +460,7 @@ mod test {
             let (regions, region_map) = usize_color_components(&color_map);
 
             for region in regions {
-                let left_of_interior = left_of(&region.sides).interior;
+                let left_of_interior = left_of_boundary(&region.sides).interior;
                 let region_map_interior = region_map
                     .iter()
                     .filter_map(|(pixel, &region_id)| {

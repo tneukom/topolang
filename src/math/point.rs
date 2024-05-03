@@ -121,20 +121,6 @@ impl<T: SignedNum> Point<T> {
     }
 }
 
-impl<T: Ord> Point<T> {
-    pub fn cmp_lexical(&self, rhs: &Self) -> Ordering {
-        match self.x.cmp(&rhs.x) {
-            Ordering::Equal => self.y.cmp(&rhs.y),
-            other => other,
-        }
-    }
-
-    // Is this < q in lexicographical order, meaning first compare real than imag.
-    pub fn less_lexical(&self, rhs: &Self) -> bool {
-        self.cmp_lexical(rhs).is_lt()
-    }
-}
-
 impl Point<usize> {
     pub fn as_f64(self) -> Point<f64> {
         Point::new(self.x as f64, self.y as f64)
@@ -375,15 +361,17 @@ impl<T: PartialEq> PartialEq for Point<T> {
 
 impl<T: Eq> Eq for Point<T> {}
 
+/// Top to bottom, left to right
 impl<T: PartialOrd> PartialOrd for Point<T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        (&self.x, &self.y).partial_cmp(&(&other.x, &other.y))
+        (&self.y, &self.x).partial_cmp(&(&other.y, &other.x))
     }
 }
 
+/// Top to bottom, left to right
 impl<T: Ord> Ord for Point<T> {
     fn cmp(&self, other: &Self) -> Ordering {
-        (&self.x, &self.y).cmp(&(&other.x, &other.y))
+        (&self.y, &self.x).cmp(&(&other.y, &other.x))
     }
 }
 

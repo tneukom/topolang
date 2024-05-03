@@ -13,7 +13,9 @@ use itertools::Itertools;
 use crate::{
     area_cover::AreaCover,
     bitmap::Bitmap,
-    connected_components::{color_components_subset, left_of, right_of},
+    connected_components::{
+        color_components_subset, left_of_border, right_of_border, split_into_cycles,
+    },
     math::{
         pixel::{Corner, Pixel, Side},
         point::Point,
@@ -119,15 +121,13 @@ pub struct Border {
 
 impl Border {
     /// All pixels that are left of `self`
-    pub fn left_pixels(&self) -> BTreeSet<Pixel> {
-        let sides: BTreeSet<_> = self.cycle.iter().copied().collect();
-        left_of(&sides).interior
+    pub fn left_pixels(&self) -> Vec<Pixel> {
+        left_of_border(&self.cycle)
     }
 
     /// All pixels that are right of `self`
-    pub fn right_pixels(&self) -> BTreeSet<Pixel> {
-        let sides: BTreeSet<_> = self.cycle.iter().copied().collect();
-        right_of(&sides).interior
+    pub fn right_pixels(&self) -> Vec<Pixel> {
+        right_of_border(&self.cycle)
     }
 
     pub fn translate(&mut self, offset: Point<i64>) {
@@ -298,7 +298,7 @@ impl Topology {
             // Each cycle in the sides is a border
             let mut boundary = Vec::new();
 
-            for (i_border, cycle) in split_into_cycles(&pre_region.sides).into_iter().enumerate() {
+            for (i_border, cycle) in split_into_cycles(pre_region.sides).into_iter().enumerate() {
                 let seams =
                     split_cycle_into_seams(&cycle, |side| color_map.get(side.right_pixel()));
 
@@ -709,59 +709,6 @@ impl Display for Topology {
     }
 }
 
-// pub fn split_boundary_into_seams(
-//     boundary: &Vec<Side>,
-//     component_map: BTreeMap<Pixel, usize>,
-// ) -> Vec<Vec<Side>> {
-//     // Each group of sides has a constant right side
-//     let groups: HashMap<_, _> = boundary
-//         .into_iter()
-//         .into_group_map_by(|side| component_map.get(&side.right_pixel()));
-//
-//     // We still need to split each seam into connected paths
-//     for (_, group) in groups {
-//
-//     }
-// }
-
-/// Extract the side cycle that starts (and stops) at start_corner
-pub fn extract_cycle(side_graph: &mut BTreeMap<Corner, Side>, mut corner: Corner) -> Vec<Side> {
-    let mut cycle = Vec::new();
-    while let Some(side) = side_graph.remove(&corner) {
-        cycle.push(side);
-        corner = side.stop_corner();
-    }
-    assert_eq!(
-        cycle.first().unwrap().start_corner(),
-        cycle.last().unwrap().stop_corner(),
-        "borders with gaps are not allowed"
-    );
-    cycle
-}
-
-/// Split a set of sides into cycles. The start point of every cycle is its minimum
-/// (lexicographic order x, y). `sides` must be an iterable of Side.
-/// `[cycle.first() | cycle in cycles]` is ordered from small to large. This means the
-/// first cycle is the outer cycle.
-pub fn split_into_cycles<'a>(sides: impl IntoIterator<Item = &'a Side>) -> Vec<Vec<Side>> {
-    // Maps corner to side that starts at the corner
-    let mut side_graph: BTreeMap<Corner, Side> = BTreeMap::new();
-    for &side in sides {
-        let previous = side_graph.insert(side.start_corner(), side);
-        // Should never happen
-        assert_eq!(previous, None);
-    }
-
-    let mut cycles = Vec::new();
-
-    while let Some((&corner, _)) = side_graph.first_key_value() {
-        let cycle = extract_cycle(&mut side_graph, corner);
-        cycles.push(cycle);
-    }
-
-    cycles
-}
-
 /// Split a side cycle into segments based on a function f: Side -> T
 /// Each segment has constant f
 pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -> Vec<Seam> {
@@ -827,7 +774,7 @@ pub mod test {
     }
 
     #[test]
-    fn image_1a() {
+    fn seam_graph_1a() {
         let rgb_edges = load_rgb_seam_graph("1a.png");
         let expected_rgb_edges = rgb_edges_from([
             (Rgba8::TRANSPARENT, Rgba8::VOID),
@@ -837,7 +784,7 @@ pub mod test {
     }
 
     #[test]
-    fn image_2a() {
+    fn seam_graph_2a() {
         let rgb_edges = load_rgb_seam_graph("2a.png");
         let expected_rgb_edges = rgb_edges_from([
             (Rgba8::TRANSPARENT, Rgba8::VOID),
@@ -849,7 +796,7 @@ pub mod test {
     }
 
     #[test]
-    fn image_2b() {
+    fn seam_graph_2b() {
         let rgb_edges = load_rgb_seam_graph("2b.png");
         let expected_rgb_edges = rgb_edges_from([
             (Rgba8::TRANSPARENT, Rgba8::VOID),
@@ -866,7 +813,7 @@ pub mod test {
     }
 
     #[test]
-    fn image_3a() {
+    fn seam_graph_3a() {
         let rgb_edges = load_rgb_seam_graph("3a.png");
         let expected_rgb_edges = rgb_edges_from([
             (Rgba8::TRANSPARENT, Rgba8::VOID),
@@ -878,7 +825,7 @@ pub mod test {
     }
 
     #[test]
-    fn image_3b() {
+    fn seam_graph_3b() {
         let rgb_edges = load_rgb_seam_graph("3b.png");
         let expected_rgb_edges = rgb_edges_from([
             (Rgba8::RED, Rgba8::VOID),
@@ -889,7 +836,7 @@ pub mod test {
     }
 
     #[test]
-    fn image_3c() {
+    fn seam_graph_3c() {
         let rgb_edges = load_rgb_seam_graph("3c.png");
         let expected_rgb_edges = rgb_edges_from([
             (Rgba8::TRANSPARENT, Rgba8::VOID),
@@ -902,7 +849,7 @@ pub mod test {
     }
 
     #[test]
-    fn image_4a() {
+    fn seam_graph_4a() {
         let rgb_edges = load_rgb_seam_graph("4a.png");
         let expected_rgb_edges = rgb_edges_from([
             (Rgba8::TRANSPARENT, Rgba8::VOID),
