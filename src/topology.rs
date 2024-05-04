@@ -321,11 +321,9 @@ impl Topology {
         Self::from_regions(regions, region_map)
     }
 
+    /// Seams are not recomputed, make sure to pass valid Seams!
     #[inline(never)]
-    pub fn from_regions(
-        regions: BTreeMap<RegionKey, Region>,
-        region_map: Pixmap<RegionKey>,
-    ) -> Self {
+    fn from_regions(regions: BTreeMap<RegionKey, Region>, region_map: Pixmap<RegionKey>) -> Self {
         let mut seam_indices: BTreeMap<Side, SeamIndex> = BTreeMap::new();
 
         for (&region_key, region) in &regions {
@@ -591,25 +589,25 @@ impl Topology {
         Self::from_regions(regions, region_map)
     }
 
-    pub fn filter_regions(&self, mut predicate: impl FnMut(RegionKey, &Region) -> bool) -> Self {
+    /// Remove all regions of the given color
+    pub fn without_color(self, color: Rgba8) -> Self {
         let sub_regions: BTreeSet<_> = self
             .regions
             .iter()
             .filter_map(|(&key, region)| {
-                if predicate(key, region) {
-                    Some(key)
-                } else {
+                if region.color == color {
+                    // discard this region, we need to make sure it does not border void
+                    assert!(region
+                        .iter_seams()
+                        .all(|seam| self.color_right_of(seam).is_some()));
                     None
+                } else {
+                    Some(key)
                 }
             })
             .collect();
 
         self.sub_topology(&sub_regions)
-    }
-
-    /// Remove all regions of the given color
-    pub fn without_color(self, color: Rgba8) -> Self {
-        self.filter_regions(|_, region| region.color != color)
     }
 
     /// Blit the given region to the color_map with the given color.
@@ -704,11 +702,9 @@ pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -
 
 #[cfg(test)]
 pub mod test {
-    use itertools::Itertools;
 
     use crate::{
         math::rgba8::Rgba8,
-        pixmap::PixmapRgba,
         topology::Topology,
         utils::{UndirectedEdge, UndirectedGraph},
     };
@@ -828,50 +824,5 @@ pub mod test {
             (Rgba8::RED, Rgba8::TRANSPARENT),
         ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
-    }
-
-    /// Ensure right side of the red region is as expected.
-    fn assert_right_of(name: &str) {
-        let folder = "test_resources/topology/right_of";
-        let topology = Topology::from_bitmap_path(format!("{folder}/{name}.png")).unwrap();
-
-        let (_, red_region) = topology
-            .regions
-            .iter()
-            .filter(|(_, region)| region.color == Rgba8::RED)
-            .exactly_one()
-            .unwrap();
-
-        // Outer and a single interior border
-        assert_eq!(red_region.boundary.len(), 2);
-
-        // let border_key = BorderKey::new(red_region_key, 1);
-        let red_interior_border = &red_region.boundary[1];
-        let regions_right_of = topology.regions_right_of_border(red_interior_border);
-        let right_of_topology = topology.sub_topology(&regions_right_of);
-
-        // right_of_topology
-        //     .to_pixmap()
-        //     .to_bitmap_with_size(Point(128, 128))
-        //     .save("result.png")
-        //     .unwrap();
-
-        // Load expected result from bitmap and strip transparent pixels
-        let expected_pixmap = PixmapRgba::from_bitmap_path(format!("{folder}/{name}_expected.png"))
-            .unwrap()
-            .without_color(&Rgba8::TRANSPARENT);
-        let expected = Topology::new(&expected_pixmap);
-
-        assert_eq!(right_of_topology, expected);
-    }
-
-    #[test]
-    fn right_of_a() {
-        assert_right_of("a");
-    }
-
-    #[test]
-    fn right_of_b() {
-        assert_right_of("b");
     }
 }

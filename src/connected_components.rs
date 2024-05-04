@@ -197,8 +197,7 @@ mod test {
     // TODO: Make sure color of pixels in components is constant
     use crate::{
         connected_components::{
-            color_components, ColorRegion, left_of_border, right_of_border,
-            split_into_cycles,
+            color_components, left_of_border, right_of_border, split_into_cycles, ColorRegion,
         },
         math::{
             pixel::{Pixel, Side},
@@ -391,5 +390,4 @@ mod test {
     fn components_7a() {
         assert_proper_components("7a.png", 6);
     }
-
 }

@@ -105,19 +105,15 @@ mod test {
 
     fn assert_rule_application(folder: &str, expected_application_count: usize) {
         let folder = format!("test_resources/rules/{folder}");
-        // let before_pixmap = Pixmap::from_bitmap_path(format!("{folder}/before.png"))
-        //     .unwrap()
-        //     .without_void_color();
-        // let after_pixmap = Pixmap::from_bitmap_path(format!("{folder}/after.png"))
-        //     .unwrap()
-        //     .without_void_color();
+        let before_colormap = PixmapRgba::from_bitmap_path(format!("{folder}/before.png"))
+            .unwrap()
+            .without_color(&Rgba8::VOID);
+        let before = Topology::new(&before_colormap);
 
-        let before = Topology::from_bitmap_path(format!("{folder}/before.png"))
+        let after_colormap = PixmapRgba::from_bitmap_path(format!("{folder}/after.png"))
             .unwrap()
-            .without_color(Rgba8::VOID);
-        let after = Topology::from_bitmap_path(format!("{folder}/after.png"))
-            .unwrap()
-            .without_color(Rgba8::VOID);
+            .without_color(&Rgba8::VOID);
+        let after = Topology::new(&after_colormap);
 
         let rule = Rule::new(before, after).unwrap();
 
