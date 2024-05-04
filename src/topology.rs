@@ -550,41 +550,8 @@ impl Topology {
         todo!()
     }
 
-    /// Returns the set of all regions that are right of `border`. Only returns regions that are connected to the passed
-    /// border.
-    /// If there is a region on the right side of the passed border inside a hole it is not returned!
-    #[inline(never)]
-    pub fn regions_right_of_border(&self, border: &Border) -> BTreeSet<RegionKey> {
-        // flood fill regions over seams
-        let mut right_of: BTreeSet<RegionKey> = BTreeSet::new();
-
-        // start with the regions directly right of the passed border.
-        let mut todo: Vec<_> = border
-            .seams
-            .iter()
-            .flat_map(|seam| self.right_of(seam))
-            .collect();
-
-        while let Some(region_key) = todo.pop() {
-            if right_of.insert(region_key) {
-                // new region added, add all regions touching the boundary
-                for seam in self[region_key].iter_seams() {
-                    if border.seams.contains(&seam.reversed()) {
-                        // Don't go outside the border
-                        continue;
-                    }
-
-                    if let Some(right_region_key) = self.right_of(seam) {
-                        todo.push(right_region_key);
-                    }
-                }
-            }
-        }
-
-        right_of
-    }
-
     /// Keys of resulting Regions are unchanged
+    /// Undefined behaviour if border is not part of self.
     #[inline(never)]
     pub fn topology_right_of_border(&self, border: &Border) -> Self {
         let region_map = self.region_map.right_of_border(border);
