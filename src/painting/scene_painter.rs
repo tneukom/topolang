@@ -44,11 +44,12 @@ impl ScenePainter {
         color_map: PixmapRgba,
         camera: &Camera,
         frames: &CoordinateFrames,
+        time: f64,
     ) {
         self.color_map_painter.update(color_map);
 
         let world_to_device = frames.view_to_device() * camera.world_to_view();
-        self.color_map_painter.draw(world_to_device);
+        self.color_map_painter.draw(world_to_device, time);
     }
 
     pub unsafe fn draw_bounds(

@@ -60,7 +60,7 @@ impl GridPainter {
             array_buffer,
             element_buffer,
             vertex_array,
-            gl: gl,
+            gl,
         }
     }
 
@@ -76,7 +76,7 @@ impl GridPainter {
         self.shader.use_program();
         self.shader.uniform("offset", offset);
         self.shader.uniform("spacing", spacing);
-        let mat_device_to_window = Matrix3::from(frames.device_to_window());
+        let mat_device_to_window: Matrix3<_> = frames.device_to_window().into();
         self.shader
             .uniform("device_to_window", &mat_device_to_window);
 

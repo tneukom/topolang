@@ -77,6 +77,7 @@ impl RectPainter {
         draw_rects: &[DrawRect],
         texture: &GlTexture,
         to_device: AffineMap<f64>,
+        time: f64,
     ) {
         // Create list of vertices for draw_tiles with texture coordinates from atlas
         // Draw two triangles per tile
@@ -115,6 +116,8 @@ impl RectPainter {
         self.shader.use_program();
 
         self.shader.uniform("tile_atlas_texture", glow::TEXTURE0);
+        println!("time: {time}");
+        self.shader.uniform("time", time);
 
         self.gl
             .draw_elements(glow::TRIANGLES, indices.len() as i32, glow::UNSIGNED_INT, 0);

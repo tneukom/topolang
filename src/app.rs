@@ -731,6 +731,7 @@ impl eframe::App for EguiApp {
                 self.view.world.color_map().clone(),
                 &self.view.camera,
                 &frames,
+                time,
             );
 
             // TODO:SPEEDUP: Use world.bounding_rect() instead, we don't want to call topology(),
