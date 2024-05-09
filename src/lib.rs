@@ -13,6 +13,7 @@ pub mod connected_components;
 pub mod coordinate_frame;
 mod field;
 pub mod frozen;
+pub mod history;
 pub mod interpreter;
 pub mod math;
 pub mod morphism;

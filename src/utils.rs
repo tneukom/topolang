@@ -1,5 +1,6 @@
+use instant::SystemTime;
 use itertools::Itertools;
-use std::{array, collections::BTreeSet, fmt::Debug, rc::Rc};
+use std::{array, collections::BTreeSet, fmt::Debug, rc::Rc, time::UNIX_EPOCH};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum UniqueError {
@@ -124,4 +125,11 @@ pub trait IteratorPlus<Item>: Iterator<Item = Item> + IntoIterator<Item = Item> 
 impl<I, Item> IteratorPlus<Item> for I where
     I: Iterator<Item = Item> + IntoIterator<Item = Item> + Clone
 {
+}
+
+pub fn unix_timestamp() -> f64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64()
 }

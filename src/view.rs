@@ -3,6 +3,7 @@ use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
     field::Field,
+    history::{History, SnapshotCause},
     math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect, rgba8::Rgba8},
     pixmap::Pixmap,
     world::World,
@@ -124,6 +125,7 @@ pub enum UiState {
 
 pub struct View {
     pub world: World,
+    pub history: History,
     pub camera: Camera,
 
     pub ui_state: UiState,
@@ -131,8 +133,10 @@ pub struct View {
 
 impl View {
     pub fn new(world: World) -> View {
+        let history = History::new(world.color_map().clone());
         View {
             world,
+            history,
             camera: Camera::default(),
             ui_state: UiState::Idle,
         }
@@ -181,7 +185,11 @@ impl View {
     ) -> UiState {
         // Because the brushing op is started even if left mouse is not down, we need to exit if
         // mode changes.
-        if settings.edit_mode != EditMode::Brush && settings.edit_mode != EditMode::Eraser {
+        let mode_exited = ![EditMode::Brush, EditMode::Eraser].contains(&settings.edit_mode);
+        let stop = mode_exited || !input.left_mouse.is_down;
+        if stop {
+            self.history
+                .add_snapshot(self.world.color_map().clone(), SnapshotCause::Painting);
             return UiState::Idle;
         }
 
@@ -191,6 +199,7 @@ impl View {
 
         let change = op.brush.draw_line(Arrow(op.world_mouse, input.world_mouse));
         op.world_mouse = input.world_mouse;
+
         self.world.blit_over(&change);
 
         UiState::Brushing(op)
@@ -226,6 +235,8 @@ impl View {
                     let pixel: Pixel = input.world_mouse.floor().cwise_into_lossy().into();
                     if let Some(region_key) = self.world.topology().region_at(pixel) {
                         self.world.fill_region(region_key, settings.brush.color);
+                        self.history
+                            .add_snapshot(self.world.color_map().clone(), SnapshotCause::Painting);
                     }
                 }
             }

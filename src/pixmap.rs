@@ -17,6 +17,10 @@ use crate::{
     utils::IteratorPlus,
 };
 
+/// PartialEq for Rc<T: Eq> checks pointer equality first, see
+/// https://github.com/rust-lang/rust/blob/ec1b69852f0c24ae833a74303800db2229b6653e/library/alloc/src/rc.rs#L2254
+/// Therefore tile_a == tile_b will return true immediately if Rc::ptr_eq(tile_a, tile_b). This
+/// is an important optimization for Pixmap comparison.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tile<T> {
     field: Field<Option<T>>,

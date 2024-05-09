@@ -1,9 +1,11 @@
+use anyhow::Context;
 use std::{
     collections::HashMap,
     fs,
     fs::File,
     hash::Hash,
     path::{Path, PathBuf},
+    rc::Rc,
     sync::{mpsc, Arc},
 };
 
@@ -20,6 +22,7 @@ use crate::{
     bitmap::Bitmap,
     brush::Brush,
     coordinate_frame::CoordinateFrames,
+    history::{Snapshot, SnapshotCause},
     interpreter::Interpreter,
     math::{point::Point, rect::Rect},
     painting::scene_painter::ScenePainter,
@@ -74,6 +77,55 @@ impl MouseButtonState {
     }
 }
 
+pub struct GifRecorder {
+    start: Option<Rc<Snapshot>>,
+    stop: Option<Rc<Snapshot>>,
+}
+
+impl GifRecorder {
+    pub fn new() -> Self {
+        Self {
+            start: None,
+            stop: None,
+        }
+    }
+
+    /// Try to find a path from start to stop or from stop to start
+    fn history_path(&self) -> Option<Vec<&Rc<Snapshot>>> {
+        let start = self.start.as_ref()?;
+        let stop = self.stop.as_ref()?;
+        if let Some(path) = stop.path_to(start) {
+            return Some(path);
+        }
+        if let Some(path) = start.path_to(stop) {
+            return Some(path);
+        }
+        None
+    }
+
+    pub fn export(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+        let snapshot_path = self.history_path().context("No path")?;
+
+        let file = File::create(path)?;
+        let mut gif_encoder = GifEncoder::new_with_speed(file, 10);
+        gif_encoder.set_repeat(Repeat::Infinite).unwrap();
+
+        for snapshot in snapshot_path {
+            // TODO: Offset world pixmap by bounds.low()
+            // TODO: Paint over white background to remove transparency or use apng instead
+            let image = snapshot.colormap().to_bitmap();
+            gif_encoder.encode(
+                image.as_raw(),
+                image.width() as u32,
+                image.height() as u32,
+                ExtendedColorType::Rgba8,
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
 pub struct EguiApp {
     scene_painter: ScenePainter,
     start_time: Instant,
@@ -99,7 +151,7 @@ pub struct EguiApp {
     file_chooser: FileChooser,
     color_chooser: ColorChooser,
 
-    gif_encoder: Option<GifEncoder<File>>,
+    gif_recorder: GifRecorder,
 
     channel_receiver: mpsc::Receiver<Vec<u8>>,
     channel_sender: mpsc::SyncSender<Vec<u8>>,
@@ -214,7 +266,7 @@ impl EguiApp {
             file_chooser: FileChooser::new(PathBuf::from("resources/saves")),
             color_chooser: ColorChooser::default(),
             interpreter: Interpreter::new(),
-            gif_encoder: None,
+            gif_recorder: GifRecorder::new(),
             channel_sender,
             channel_receiver,
         }
@@ -433,6 +485,52 @@ impl EguiApp {
         }
     }
 
+    pub fn gif_ui(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            if ui.button("Set Start").clicked() {
+                self.gif_recorder.start = Some(self.view.history.head.clone());
+            }
+
+            if ui.button("Set stop").clicked() {
+                self.gif_recorder.stop = Some(self.view.history.head.clone());
+            }
+
+            if ui.button("Export").clicked() {
+                if let Err(err) = self.gif_recorder.export("movie.gif") {
+                    warn!("Failed to export gif with {err}");
+                }
+            }
+        });
+    }
+
+    pub fn run_ui(&mut self, ui: &mut egui::Ui) {
+        // Step and run
+        let mut do_step: bool = false;
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(!self.run, egui::Button::new("Step"))
+                .clicked()
+            {
+                do_step = true;
+            }
+
+            if egui::Button::new("Run").selected(self.run).ui(ui).clicked() {
+                self.run = !self.run;
+            }
+        });
+
+        if self.run {
+            do_step = true;
+        }
+
+        if do_step {
+            self.interpreter.step(&mut self.view.world);
+            self.view
+                .history
+                .add_snapshot(self.view.world.color_map().clone(), SnapshotCause::Step);
+        }
+    }
+
     pub fn side_panel_ui(&mut self, ui: &mut egui::Ui) {
         self.view_ui(ui);
         ui.separator();
@@ -450,56 +548,17 @@ impl EguiApp {
         ui.add(egui::Slider::new(&mut self.view_settings.brush.radius, 0..=5).text("Radius"));
         ui.separator();
 
-        // Step and run
-        ui.horizontal(|ui| {
-            if ui
-                .add_enabled(!self.run, egui::Button::new("Step"))
-                .clicked()
-            {
-                self.interpreter.step(&mut self.view.world);
-                if let Some(gif_encoder) = &mut self.gif_encoder {
-                    // TODO: Offset world pixmap by bounds.low()
-                    // TODO: Paint over white background to remove transparency or use apng instead
-                    let image = self.view.world.color_map().to_bitmap();
-                    gif_encoder
-                        .encode(
-                            image.as_raw(),
-                            image.width() as u32,
-                            image.height() as u32,
-                            ExtendedColorType::Rgba8,
-                        )
-                        .unwrap();
-                }
-            }
-
-            if egui::Button::new("Run").selected(self.run).ui(ui).clicked() {
-                self.run = !self.run;
-            }
-        });
-
-        // Gif recording
-        ui.horizontal(|ui| {
-            let mut recording_gif = self.gif_encoder.is_some();
-            ui.checkbox(&mut recording_gif, "Gif");
-
-            if recording_gif && self.gif_encoder.is_none() {
-                // Start gif recording
-                let path = "run.gif";
-                // TODO: Proper handling of error
-                let file = File::create(path).unwrap();
-                let mut gif_encoder = GifEncoder::new_with_speed(file, 10);
-                gif_encoder.set_repeat(Repeat::Infinite).unwrap();
-                self.gif_encoder = Some(gif_encoder);
-            }
-
-            if !recording_gif {
-                self.gif_encoder = None;
-            }
-        });
-
-        if self.run {
-            self.interpreter.step(&mut self.view.world);
+        // History ui
+        let head = self.view.history.head.clone();
+        self.view.history.ui(ui);
+        // If head has changed, update world
+        if !Rc::ptr_eq(&self.view.history.head, &head) {
+            self.view.world = World::from_pixmap(self.view.history.head.colormap().clone());
         }
+
+        self.run_ui(ui);
+
+        self.gif_ui(ui);
     }
 
     pub fn top_ui(&mut self, ui: &mut egui::Ui) {
