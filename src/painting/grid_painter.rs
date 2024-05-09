@@ -41,7 +41,7 @@ impl GridPainter {
         element_buffer.bind();
 
         shader.assign_attribute_f32(
-            "glwindow_position",
+            "in_device_position",
             &VertexAttribDesc::VEC2,
             offset_of!(GridVertex, position) as i32,
             size_of::<GridVertex>() as i32,
@@ -76,9 +76,9 @@ impl GridPainter {
         self.shader.use_program();
         self.shader.uniform("offset", offset);
         self.shader.uniform("spacing", spacing);
-        let mat_glwindow_to_pixelwindow = Matrix3::from(frames.glwindow_to_pixelwindow());
+        let mat_device_to_window = Matrix3::from(frames.device_to_window());
         self.shader
-            .uniform("glwindow_to_pixelwindow", &mat_glwindow_to_pixelwindow);
+            .uniform("device_to_window", &mat_device_to_window);
 
         self.gl
             .draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0)

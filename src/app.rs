@@ -310,13 +310,13 @@ impl EguiApp {
             self.mouse_button_states.insert(button, new_state);
         }
 
-        let pixelwindow_mouse = match ctx.pointer_latest_pos() {
+        let window_mouse = match ctx.pointer_latest_pos() {
             Some(egui_mouse) => Point::new(egui_mouse.x as f64, egui_mouse.y as f64),
             None => Point::ZERO,
         };
 
         let frames = Self::frames(ctx);
-        let view_mouse = frames.pixelwindow_to_view() * pixelwindow_mouse;
+        let view_mouse = frames.window_to_view() * window_mouse;
 
         let scroll_delta = if ctx.wants_pointer_input() {
             0.0
@@ -542,7 +542,10 @@ impl EguiApp {
         // List of snapshots with cause
         let path = history.active.path_to(&history.root).unwrap();
 
+        // Floating scroll bars, see
+        // https://github.com/emilk/egui/pull/3539
         ui.style_mut().spacing.scroll = ScrollStyle::solid();
+
         egui::scroll_area::ScrollArea::vertical()
             .auto_shrink([false, false])
             .max_height(200.0)

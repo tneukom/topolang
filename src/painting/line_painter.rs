@@ -39,7 +39,7 @@ impl LinePainter {
 
         let size = size_of::<LineVertex>();
         shader.assign_attribute_f32(
-            "in_glwindow_position",
+            "in_device_position",
             &VertexAttribDesc::VEC2,
             offset_of!(LineVertex, position) as i32,
             size as i32,
@@ -57,7 +57,7 @@ impl LinePainter {
     pub unsafe fn draw_lines(
         &mut self,
         lines: &[Arrow<f64>],
-        to_glwindow: AffineMap<f64>,
+        to_device: AffineMap<f64>,
         time: f64,
     ) {
         let mut vertices: Vec<LineVertex> = Vec::new();
@@ -66,7 +66,7 @@ impl LinePainter {
         for line in lines {
             for corner in line.corners() {
                 let vertex = LineVertex {
-                    position: (to_glwindow * corner).cwise_into_lossy().to_array(),
+                    position: (to_device * corner).cwise_into_lossy().to_array(),
                 };
 
                 indices.push(vertices.len() as u32);
@@ -91,8 +91,8 @@ impl LinePainter {
             .draw_elements(glow::LINES, indices.len() as i32, glow::UNSIGNED_INT, 0);
     }
 
-    pub unsafe fn draw_rect(&mut self, rect: Rect<f64>, to_glwindow: AffineMap<f64>, time: f64) {
+    pub unsafe fn draw_rect(&mut self, rect: Rect<f64>, to_device: AffineMap<f64>, time: f64) {
         let sides = rect.ccw_side_arrows();
-        self.draw_lines(&sides, to_glwindow, time);
+        self.draw_lines(&sides, to_device, time);
     }
 }

@@ -33,9 +33,9 @@ impl ScenePainter {
     }
 
     pub unsafe fn draw_grid(&self, camera: &Camera, frames: &CoordinateFrames) {
-        let world_to_pixelwindow = frames.view_to_pixelwindow() * camera.world_to_view();
-        let origin = world_to_pixelwindow * Point::ZERO;
-        let spacing = world_to_pixelwindow.linear * Point::ONE;
+        let world_to_window = frames.view_to_window() * camera.world_to_view();
+        let origin = world_to_window * Point::ZERO;
+        let spacing = world_to_window.linear * Point::ONE;
         self.grid_painter.draw(origin, spacing, frames);
     }
 
@@ -47,8 +47,8 @@ impl ScenePainter {
     ) {
         self.color_map_painter.update(color_map);
 
-        let world_to_glwindow = frames.view_to_glwindow() * camera.world_to_view();
-        self.color_map_painter.draw(world_to_glwindow);
+        let world_to_device = frames.view_to_device() * camera.world_to_view();
+        self.color_map_painter.draw(world_to_device);
     }
 
     pub unsafe fn draw_bounds(
@@ -58,8 +58,8 @@ impl ScenePainter {
         frames: &CoordinateFrames,
         time: f64,
     ) {
-        let world_to_glwindow = frames.view_to_glwindow() * camera.world_to_view();
+        let world_to_device = frames.view_to_device() * camera.world_to_view();
         self.line_painter
-            .draw_rect(bounds.cwise_into_lossy(), world_to_glwindow, time);
+            .draw_rect(bounds.cwise_into_lossy(), world_to_device, time);
     }
 }

@@ -49,7 +49,7 @@ impl RectPainter {
 
         let size = size_of::<TileVertex>();
         shader.assign_attribute_f32(
-            "in_glwindow_position",
+            "in_device_position",
             &VertexAttribDesc::VEC2,
             offset_of!(TileVertex, position) as i32,
             size as i32,
@@ -70,13 +70,13 @@ impl RectPainter {
         }
     }
 
-    /// Why not directly take draw_tiles in the Glwindow frame? Because to_glwindow can be any
+    /// Why not directly take draw_tiles in the device frame? Because to_device can be any
     /// AffineMap, it does not have to map axis aligned rectangles to axis aligned rectangles.
     pub unsafe fn draw(
         &mut self,
         draw_rects: &[DrawRect],
         texture: &GlTexture,
-        to_glwindow: AffineMap<f64>,
+        to_device: AffineMap<f64>,
     ) {
         // Create list of vertices for draw_tiles with texture coordinates from atlas
         // Draw two triangles per tile
@@ -90,7 +90,7 @@ impl RectPainter {
                     texcoord: (texture.bitmap_to_gltexture() * atlas_corner.cwise_into_lossy())
                         .cwise_into_lossy()
                         .to_array(),
-                    position: (to_glwindow * tile_corner).cwise_into_lossy().to_array(),
+                    position: (to_device * tile_corner).cwise_into_lossy().to_array(),
                 };
 
                 vertices.push(vertex);

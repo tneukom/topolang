@@ -55,7 +55,7 @@ impl ColorMapPainter {
     }
 
     /// Draw whole texture as a single rectangle
-    pub unsafe fn draw(&mut self, to_glwindow: AffineMap<f64>) {
+    pub unsafe fn draw(&mut self, to_device: AffineMap<f64>) {
         let texture_rect = Rect::low_size([0, 0], self.texture.size());
         let draw_tile = DrawRect {
             texture_rect,
@@ -63,6 +63,6 @@ impl ColorMapPainter {
         };
 
         self.rect_painter
-            .draw(&[draw_tile], &self.texture, to_glwindow);
+            .draw(&[draw_tile], &self.texture, to_device);
     }
 }
