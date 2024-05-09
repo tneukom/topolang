@@ -1,4 +1,5 @@
 use bytemuck::{Pod, Zeroable};
+use egui::Color32;
 use std::fmt::{self, Debug};
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Zeroable, Pod, PartialOrd, Ord)]
@@ -76,6 +77,28 @@ impl Rgba8 {
     pub const VOID: Rgba8 = Rgba8::new(0x36, 0x0C, 0x29, 0xFF);
 }
 
+// TODO: Is this the idiomatic way of putting constants in a namespace?
+pub struct Pico8Palette {}
+
+impl Pico8Palette {
+    pub const BLACK: Rgba8 = rgb8(0, 0, 0);
+    pub const DARK_BLUE: Rgba8 = rgb8(29, 43, 83);
+    pub const DARK_PURPLE: Rgba8 = rgb8(126, 37, 83);
+    pub const DARK_GREEN: Rgba8 = rgb8(0, 135, 81);
+    pub const BROWN: Rgba8 = rgb8(171, 82, 54);
+    pub const DARK_GREY: Rgba8 = rgb8(95, 87, 79);
+    pub const LIGHT_GREY: Rgba8 = rgb8(194, 195, 199);
+    pub const WHITE: Rgba8 = rgb8(255, 241, 232);
+    pub const RED: Rgba8 = rgb8(255, 0, 77);
+    pub const ORANGE: Rgba8 = rgb8(255, 163, 0);
+    pub const YELLOW: Rgba8 = rgb8(255, 236, 39);
+    pub const GREEN: Rgba8 = rgb8(0, 228, 54);
+    pub const BLUE: Rgba8 = rgb8(41, 173, 255);
+    pub const LAVENDER: Rgba8 = rgb8(131, 118, 156);
+    pub const PINK: Rgba8 = rgb8(255, 119, 168);
+    pub const LIGHT_PEACH: Rgba8 = rgb8(255, 204, 170);
+}
+
 pub const fn rgba8(r: u8, g: u8, b: u8, a: u8) -> Rgba8 {
     Rgba8 { r, g, b, a }
 }
@@ -126,5 +149,11 @@ impl fmt::Display for Rgba8 {
 impl Debug for Rgba8 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Display::fmt(self, f)
+    }
+}
+
+impl From<Rgba8> for Color32 {
+    fn from(value: Rgba8) -> Self {
+        Color32::from_rgba_unmultiplied(value.r, value.g, value.b, value.a)
     }
 }

@@ -9,7 +9,10 @@ use std::{
     sync::{mpsc, Arc},
 };
 
-use egui::{load::SizedTexture, Sense, TextureOptions, Widget};
+use egui::{
+    load::SizedTexture, scroll_area::ScrollBarVisibility, style::ScrollStyle, Sense,
+    TextureOptions, Widget,
+};
 use glow::HasContext;
 use image::{
     codecs::gif::{GifEncoder, Repeat},
@@ -24,8 +27,9 @@ use crate::{
     coordinate_frame::CoordinateFrames,
     history::{Snapshot, SnapshotCause},
     interpreter::Interpreter,
-    math::{point::Point, rect::Rect},
+    math::{point::Point, rect::Rect, rgba8::Pico8Palette},
     painting::scene_painter::ScenePainter,
+    utils::ReflectEnum,
     view::{EditMode, View, ViewButton, ViewInput, ViewSettings},
     widgets::{system_colors_widget, ColorChooser, FileChooser},
     world::World,
@@ -531,6 +535,60 @@ impl EguiApp {
         }
     }
 
+    /// If the user reverts to a snapshot in the history that snapshot is returned.
+    pub fn history_ui(&mut self, ui: &mut egui::Ui) {
+        let current_head = self.view.history.head.clone();
+        let history = &mut self.view.history;
+        // List of snapshots with cause
+        let path = history.active.path_to(&history.root).unwrap();
+
+        ui.style_mut().spacing.scroll = ScrollStyle::solid();
+        egui::scroll_area::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .max_height(200.0)
+            .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+            .show(ui, |ui| {
+                for snapshot in path.into_iter() {
+                    ui.horizontal(|ui| {
+                        let mut btn = egui::Button::new(snapshot.cause().as_str());
+                        if Rc::ptr_eq(snapshot, &history.head) {
+                            btn = btn.fill(Pico8Palette::ORANGE);
+                        }
+                        if btn.ui(ui).clicked() {
+                            history.head = snapshot.clone();
+                        }
+
+                        // Add gif start/stop labels after button
+                        if let Some(gif_start) = &self.gif_recorder.start {
+                            if Rc::ptr_eq(gif_start, snapshot) {
+                                ui.label("Gif start");
+                            }
+                        };
+                        if let Some(gif_stop) = &self.gif_recorder.stop {
+                            if Rc::ptr_eq(gif_stop, snapshot) {
+                                ui.label("Gif stop");
+                            }
+                        };
+                    });
+                }
+            });
+
+        // Undo, Redo buttons
+        ui.horizontal(|ui| {
+            if ui.button("Undo").clicked() {
+                history.undo();
+            }
+            if ui.button("Redo").clicked() {
+                history.redo();
+            }
+        });
+
+        // If head has changed, update world
+        if !Rc::ptr_eq(&self.view.history.head, &current_head) {
+            self.view.world = World::from_pixmap(self.view.history.head.colormap().clone());
+        }
+    }
+
     pub fn side_panel_ui(&mut self, ui: &mut egui::Ui) {
         self.view_ui(ui);
         ui.separator();
@@ -548,16 +606,15 @@ impl EguiApp {
         ui.add(egui::Slider::new(&mut self.view_settings.brush.radius, 0..=5).text("Radius"));
         ui.separator();
 
-        // History ui
-        let head = self.view.history.head.clone();
-        self.view.history.ui(ui);
-        // If head has changed, update world
-        if !Rc::ptr_eq(&self.view.history.head, &head) {
-            self.view.world = World::from_pixmap(self.view.history.head.colormap().clone());
-        }
+        ui.label("History");
+        self.history_ui(ui);
+        ui.separator();
 
+        ui.label("Run");
         self.run_ui(ui);
+        ui.separator();
 
+        ui.label("Gif");
         self.gif_ui(ui);
     }
 

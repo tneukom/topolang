@@ -1,12 +1,37 @@
 use std::rc::Rc;
 
-use crate::{pixmap::PixmapRgba, utils::unix_timestamp};
+use crate::{
+    pixmap::PixmapRgba,
+    utils::{unix_timestamp, ReflectEnum},
+};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SnapshotCause {
     Root,
-    Painting,
+    Brush,
+    Erase,
+    Fill,
     Step,
-    Run,
+}
+
+impl SnapshotCause {
+    pub const ALL: [Self; 5] = [Self::Root, Self::Brush, Self::Erase, Self::Fill, Self::Step];
+}
+
+impl ReflectEnum for SnapshotCause {
+    fn all() -> &'static [Self] {
+        &Self::ALL
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Root => "Root",
+            Self::Brush => "Brush",
+            Self::Erase => "Erase",
+            Self::Fill => "Fill",
+            Self::Step => "Step",
+        }
+    }
 }
 
 pub struct Snapshot {
@@ -45,6 +70,10 @@ impl Snapshot {
 
     pub fn colormap(&self) -> &PixmapRgba {
         &self.colormap
+    }
+
+    pub fn cause(&self) -> SnapshotCause {
+        self.cause
     }
 }
 
@@ -88,36 +117,6 @@ impl History {
         let path = self.active.path_to(&self.head).unwrap();
         if path.len() >= 2 {
             self.head = path[path.len() - 2].clone();
-        }
-    }
-
-    /// If the user reverts to a snapshot in the history that snapshot is returned.
-    pub fn ui(&mut self, ui: &mut egui::Ui) {
-        // List of snapshots with cause
-        let path = self.active.path_to(&self.root).unwrap();
-        egui::scroll_area::ScrollArea::vertical()
-            .auto_shrink([false, false])
-            .max_height(200.0)
-            .show(ui, |ui| {
-                for (i, snapshot) in path.into_iter().enumerate() {
-                    let text = if Rc::ptr_eq(snapshot, &self.head) {
-                        format!("> {i}")
-                    } else {
-                        format!("{i}")
-                    };
-                    if ui.button(text).clicked() {
-                        // TODO: Set head to clicked snapshot
-                        self.head = snapshot.clone();
-                    }
-                }
-            });
-
-        // Undo, Redo buttons
-        if ui.button("Undo").clicked() {
-            self.undo();
-        }
-        if ui.button("Redo").clicked() {
-            self.redo();
         }
     }
 }

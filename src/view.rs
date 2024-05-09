@@ -188,8 +188,13 @@ impl View {
         let mode_exited = ![EditMode::Brush, EditMode::Eraser].contains(&settings.edit_mode);
         let stop = mode_exited || !input.left_mouse.is_down;
         if stop {
+            let cause = if op.brush.color == Rgba8::TRANSPARENT {
+                SnapshotCause::Erase
+            } else {
+                SnapshotCause::Brush
+            };
             self.history
-                .add_snapshot(self.world.color_map().clone(), SnapshotCause::Painting);
+                .add_snapshot(self.world.color_map().clone(), cause);
             return UiState::Idle;
         }
 
@@ -236,7 +241,7 @@ impl View {
                     if let Some(region_key) = self.world.topology().region_at(pixel) {
                         self.world.fill_region(region_key, settings.brush.color);
                         self.history
-                            .add_snapshot(self.world.color_map().clone(), SnapshotCause::Painting);
+                            .add_snapshot(self.world.color_map().clone(), SnapshotCause::Fill);
                     }
                 }
             }
