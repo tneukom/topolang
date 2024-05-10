@@ -62,7 +62,7 @@ impl SystemPalette {
     pub const fn rgba(self) -> Rgba8 {
         match self {
             Self::Rule => Rgba8::VOID,
-            Self::Arrow => Rgba8::new(0xFF, 0x6E, 0x00, 0xFF), // ff6e00
+            Self::Arrow => Rgba8::new(0xFF, 0x6E, 0x00, 0xB4), // ff6e00
         }
     }
 }

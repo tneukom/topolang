@@ -31,7 +31,7 @@ use crate::{
     painting::scene_painter::ScenePainter,
     utils::ReflectEnum,
     view::{EditMode, View, ViewButton, ViewInput, ViewSettings},
-    widgets::{system_colors_widget, ColorChooser, FileChooser},
+    widgets::{BrushChooser, ColorChooser, FileChooser},
     world::World,
 };
 
@@ -153,7 +153,7 @@ pub struct EguiApp {
     edit_mode_icons: HashMap<EditMode, egui::TextureHandle>,
 
     file_chooser: FileChooser,
-    color_chooser: ColorChooser,
+    brush_chooser: BrushChooser,
 
     gif_recorder: GifRecorder,
 
@@ -268,7 +268,7 @@ impl EguiApp {
             view_input: ViewInput::EMPTY,
             edit_mode_icons,
             file_chooser: FileChooser::new(PathBuf::from("resources/saves")),
-            color_chooser: ColorChooser::default(),
+            brush_chooser: BrushChooser::new(ColorChooser::default()),
             interpreter: Interpreter::new(),
             gif_recorder: GifRecorder::new(),
             channel_sender,
@@ -597,17 +597,8 @@ impl EguiApp {
         ui.separator();
 
         ui.label("Brush");
-
-        // Brush color
-        self.color_chooser.show(ui);
-        self.view_settings.brush.color = self.color_chooser.color;
-
-        ui.label("System colors");
-        system_colors_widget(ui, &mut self.color_chooser.color);
-
-        // Brush shape
-        ui.add(egui::Slider::new(&mut self.view_settings.brush.radius, 0..=5).text("Radius"));
-        ui.separator();
+        self.brush_chooser.show(ui);
+        self.view_settings.brush = self.brush_chooser.brush();
 
         ui.label("History");
         self.history_ui(ui);

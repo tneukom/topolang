@@ -2,6 +2,7 @@ use itertools::Itertools;
 use std::{ffi::OsStr, fs, ops::RangeInclusive, path::PathBuf};
 
 use crate::{
+    brush::Brush,
     math::rgba8::Rgba8,
     palettes::{Palette, SystemPalette},
     utils::ReflectEnum,
@@ -103,8 +104,53 @@ impl ColorChooser {
     }
 }
 
-/// Color of the brush is chosen separately
-pub struct BrushChooser {}
+pub struct BrushChooser {
+    color_chooser: ColorChooser,
+    rigid: bool,
+    radius: i64,
+}
+
+impl BrushChooser {
+    pub fn new(color_chooser: ColorChooser) -> Self {
+        Self {
+            color_chooser,
+            rigid: false,
+            radius: 1,
+        }
+    }
+
+    pub fn show(&mut self, ui: &mut egui::Ui) {
+        // Brush color
+        self.color_chooser.show(ui);
+
+        ui.label("System colors");
+        system_colors_widget(ui, &mut self.color_chooser.color);
+
+        // Rigid checkbox
+        ui.add_enabled_ui(self.color_chooser.color.a == 255, |ui| {
+            ui.checkbox(&mut self.rigid, "Rigid");
+        });
+
+        // Brush shape
+        ui.add(egui::Slider::new(&mut self.radius, 0..=5).text("Radius"));
+        ui.separator();
+    }
+
+    pub fn color(&self) -> Rgba8 {
+        let mut color = self.color_chooser.color;
+        if self.rigid {
+            color.a = 170;
+        };
+        color
+    }
+
+    pub fn brush(&self) -> Brush {
+        Brush {
+            color: self.color(),
+            radius: self.radius,
+        }
+    }
+}
 
 pub fn enum_combo<T: ReflectEnum + PartialEq + 'static>(
     ui: &mut egui::Ui,

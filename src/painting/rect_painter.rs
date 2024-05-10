@@ -116,7 +116,6 @@ impl RectPainter {
         self.shader.use_program();
 
         self.shader.uniform("tile_atlas_texture", glow::TEXTURE0);
-        println!("time: {time}");
         self.shader.uniform("time", time);
 
         self.gl

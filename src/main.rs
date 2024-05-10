@@ -2,11 +2,8 @@
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use log::warn;
+use seamlang::{app::EguiApp, bitmap::Bitmap, math::rgba8::Rgba8};
 use walkdir::WalkDir;
-use seamlang::app::EguiApp;
-use seamlang::bitmap::Bitmap;
-use seamlang::math::rgba8::Rgba8;
-use seamlang::rule::Rule;
 
 // pub fn main_benchmark() {
 //     use seamlang::{compiler::Compiler, rule::stabilize, topology::Topology};
@@ -33,7 +30,6 @@ use seamlang::rule::Rule;
 //         );
 //     }
 // }
-
 
 pub fn color_replace() {
     for entry in WalkDir::new("./").into_iter().filter_map(Result::ok) {
