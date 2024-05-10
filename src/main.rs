@@ -2,7 +2,11 @@
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use log::warn;
+use walkdir::WalkDir;
 use seamlang::app::EguiApp;
+use seamlang::bitmap::Bitmap;
+use seamlang::math::rgba8::Rgba8;
+use seamlang::rule::Rule;
 
 // pub fn main_benchmark() {
 //     use seamlang::{compiler::Compiler, rule::stabilize, topology::Topology};
@@ -30,6 +34,55 @@ use seamlang::app::EguiApp;
 //     }
 // }
 
+
+pub fn color_replace() {
+    for entry in WalkDir::new("./").into_iter().filter_map(Result::ok) {
+        let extension = entry
+            .path()
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext.to_lowercase());
+
+        if extension.as_deref() != Some("png") {
+            continue;
+        }
+
+        // Load png
+        let Ok(bitmap) = Bitmap::from_path(entry.path()) else {
+            println!("Failed to load {:?}", entry.path());
+            continue;
+        };
+
+        let legacy_rule_frame_color = Rgba8::from_hex("360C29FF").unwrap();
+        // alpha = 180 = 0xB4
+        let rule_frame_color = Rgba8::from_hex("360C29B4").unwrap();
+        let legacy_rule_arrow_color = Rgba8::from_hex("FF6E00FF").unwrap();
+        let rule_arrow_color = Rgba8::from_hex("FF6E00B4").unwrap();
+
+        // Replace colors
+        let result = bitmap.map(|&color| {
+            if color == legacy_rule_frame_color {
+                rule_frame_color
+            } else if color == legacy_rule_arrow_color {
+                rule_arrow_color
+            } else {
+                color
+            }
+        });
+
+        if result != bitmap {
+            println!("Saving {:?}", entry.path());
+            if let Err(_) = result.save(entry.path()) {
+                println!("Failed to save {:?}", entry.path());
+            }
+        } else {
+            println!("{:?} not modified", entry.path());
+        }
+
+        println!("Processed file {:?}", entry.path());
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub fn main_editor() {
     unsafe {
@@ -54,7 +107,8 @@ pub fn main() {
     {
         env_logger::init();
         warn!("Logging!");
-        main_editor()
+        main_editor();
+        // color_replace();
     }
 
     // main_benchmark();

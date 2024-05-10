@@ -220,6 +220,15 @@ impl<T: Clone> Array2d<T> {
             self[inv_turn.rotate_array_index(size, index)].clone()
         })
     }
+
+    pub fn map<S>(&self, f: impl FnMut(&T) -> S) -> Array2d<S> {
+        let elems = self.elems.iter().map(f).collect();
+        Array2d {
+            width: self.width,
+            height: self.height,
+            elems,
+        }
+    }
 }
 
 impl<T, const WIDTH: usize, const HEIGHT: usize> From<[[T; WIDTH]; HEIGHT]> for Array2d<T> {

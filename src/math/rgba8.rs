@@ -74,7 +74,7 @@ impl Rgba8 {
     pub const ZERO: Self = Self::TRANSPARENT;
 
     /// Hex 360c29
-    pub const VOID: Rgba8 = Rgba8::new(0x36, 0x0C, 0x29, 0xFF);
+    pub const VOID: Rgba8 = Rgba8::new(0x36, 0x0C, 0x29, 0xB4);
 }
 
 // TODO: Is this the idiomatic way of putting constants in a namespace?
