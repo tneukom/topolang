@@ -49,11 +49,12 @@ pub fn color_replace() {
             continue;
         };
 
-        let legacy_rule_frame_color = Rgba8::from_hex("360C29FF").unwrap();
+        let legacy_rule_frame_color = Rgba8::from_hex("360C29B4").unwrap();
         // alpha = 180 = 0xB4
         let rule_frame_color = Rgba8::from_hex("360C29B4").unwrap();
-        let legacy_rule_arrow_color = Rgba8::from_hex("FF6E00FF").unwrap();
-        let rule_arrow_color = Rgba8::from_hex("FF6E00B4").unwrap();
+        let legacy_rule_arrow_color = Rgba8::from_hex("FF6E00B4").unwrap();
+        // alpha = 181 = 0xB5
+        let rule_arrow_color = Rgba8::from_hex("FF6E00B5").unwrap();
 
         // Replace colors
         let result = bitmap.map(|&color| {

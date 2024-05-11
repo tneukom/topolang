@@ -7,6 +7,15 @@ in highp vec2 frag_texcoord;
 
 out highp vec4 out_color;
 
+// All components are in the range [0…1], including hue.
+// https://stackoverflow.com/a/17897228
+highp vec3 hsv2rgb(highp vec3 c)
+{
+    highp vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    highp vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
 void main() {
     highp vec2 window_frag_coord = gl_FragCoord.xy;
     highp vec4 texcolor = texture(tile_atlas_texture, frag_texcoord);
@@ -17,7 +26,8 @@ void main() {
     highp float v = dot(window_frag_coord, vec2(-1.0, 1.0)) / sqrt(2.0);
     highp vec2 uv = vec2(u, v);
 
-    if(texcolor.a == 180.0/255.0) {
+    // alpha = 180 is rule frame and alpha = 181 is rule arrow
+    if(texcolor.a == 180.0/255.0 || texcolor.a == 181.0/255.0) {
         // Rule frame and arrow
         highp float s = u + 4.0 * sin(1.0/25.0 * PI * v) + 4.0 * time;
         //highp float s = 1.0/10.0 * PI * (window_frag_coord.x + window_frag_coord.y);

@@ -23,6 +23,7 @@ pub struct Interpreter {
 }
 
 impl Interpreter {
+    // Not the same as the actual RULE_FRAME color
     const RULE_FRAME_VOID_COLOR: Rgba8 = Rgba8::CYAN;
 
     pub fn new() -> Self {

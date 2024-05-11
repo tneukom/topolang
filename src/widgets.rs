@@ -104,6 +104,12 @@ impl ColorChooser {
     }
 }
 
+pub enum BrushMaterial {
+    Normal,
+    Rigid,
+    Placeholder,
+}
+
 pub struct BrushChooser {
     color_chooser: ColorChooser,
     rigid: bool,
