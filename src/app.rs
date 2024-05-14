@@ -405,7 +405,7 @@ impl EguiApp {
 
         if ui.button("Save File").clicked() {
             let task = rfd::AsyncFileDialog::new().save_file();
-            let color_map = self.view.world.color_map();
+            let color_map = self.view.world.material_map();
             let bitmap = color_map.to_bitmap();
             match bitmap.to_png() {
                 Ok(file_content) => {
@@ -446,7 +446,7 @@ impl EguiApp {
                 .save_file()
             {
                 warn!("Saving to path {:?}", path.to_str());
-                let color_map = self.view.world.color_map();
+                let color_map = self.view.world.material_map();
                 let bitmap = color_map.to_bitmap();
                 if let Err(err) = bitmap.save(path) {
                     warn!("Failed to save with error {err}");
@@ -479,7 +479,7 @@ impl EguiApp {
         if ui.button("Save").clicked() {
             println!("Saving edit scene to {}", self.file_name);
 
-            let bitmap = self.view.world.color_map().to_bitmap();
+            let bitmap = self.view.world.material_map().to_bitmap();
             match bitmap.save(&path) {
                 Ok(_) => println!("Saved {path:?}"),
                 Err(err) => println!("Failed to save {path:?} with error {err}"),
@@ -531,7 +531,7 @@ impl EguiApp {
             self.interpreter.step(&mut self.view.world);
             self.view
                 .history
-                .add_snapshot(self.view.world.color_map().clone(), SnapshotCause::Step);
+                .add_snapshot(self.view.world.material_map().clone(), SnapshotCause::Step);
         }
     }
 
@@ -719,7 +719,7 @@ impl eframe::App for EguiApp {
             self.scene_painter.draw_grid(&self.view.camera, &frames);
 
             self.scene_painter.draw_color_map(
-                self.view.world.color_map().clone(),
+                self.view.world.material_map().clone(),
                 &self.view.camera,
                 &frames,
                 time,

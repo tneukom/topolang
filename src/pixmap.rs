@@ -5,6 +5,7 @@ use crate::{
     bitmap::Bitmap,
     connected_components::right_of_border,
     field::{Field, FieldIndex},
+    material::Material,
     math::{
         generic::EuclidDivRem,
         interval::Interval,
@@ -105,6 +106,7 @@ pub struct Pixmap<T> {
 }
 
 pub type PixmapRgba = Pixmap<Rgba8>;
+pub type PixmapMaterial = Pixmap<Material>;
 
 impl<T> Pixmap<T> {
     const ROWS: i64 = 64;

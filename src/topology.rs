@@ -83,9 +83,9 @@ impl Display for Seam {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SeamColors {
-    pub left: Rgba8,
-    pub right: Option<Rgba8>,
+pub struct SeamMaterials<M> {
+    pub left: M,
+    pub right: Option<M>,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
@@ -146,18 +146,18 @@ impl Border {
     }
 }
 
-/// The boundary is counterclockwise. Is mutable so color can be changed.
+/// The boundary is counterclockwise. Is mutable so material can be changed.
 #[derive(Debug, Clone)]
-pub struct Region {
+pub struct Region<M> {
     /// First item is outer Border
     pub boundary: Vec<Border>,
 
     pub cover: AreaCover,
 
-    pub color: Rgba8,
+    pub material: M,
 }
 
-impl Region {
+impl<M: Eq + Copy> Region<M> {
     pub fn iter_seams(&self) -> impl IteratorPlus<&Seam> {
         self.boundary.iter().flat_map(|border| border.seams.iter())
     }
@@ -187,19 +187,19 @@ impl Region {
 }
 
 /// Ignores `area_bounds` field
-impl PartialEq for Region {
+impl<M: PartialEq> PartialEq for Region<M> {
     fn eq(&self, other: &Self) -> bool {
-        self.color == other.color && self.boundary == other.boundary
+        self.material == other.material && self.boundary == other.boundary
     }
 }
 
 /// Ignores `area_bounds` field
-impl Eq for Region {}
+impl<M: Eq> Eq for Region<M> {}
 
 /// Ignores `area_bounds` field
-impl Hash for Region {
+impl<M: Hash> Hash for Region<M> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.color.hash(state);
+        self.material.hash(state);
         self.boundary.hash(state);
     }
 }
@@ -254,10 +254,10 @@ impl BorderKey {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct FillRegion {
-    /// Region key in the pattern, the matched region is filled with `color`
+pub struct FillRegion<M> {
+    /// Region key in the pattern, the matched region is filled with `material`
     pub region_key: RegionKey,
-    pub color: Rgba8,
+    pub material: M,
 }
 
 // pub struct Change {
@@ -266,8 +266,8 @@ pub struct FillRegion {
 // }
 
 #[derive(Debug, Clone)]
-pub struct Topology {
-    pub regions: BTreeMap<RegionKey, Region>,
+pub struct Topology<M> {
+    pub regions: BTreeMap<RegionKey, Region<M>>,
 
     pub region_map: Pixmap<RegionKey>,
 
@@ -277,22 +277,22 @@ pub struct Topology {
     bounding_rect: Rect<i64>,
 }
 
-impl Topology {
+impl<M: Eq + Copy> Topology<M> {
     pub fn bounding_rect(&self) -> Rect<i64> {
         self.bounding_rect
     }
 
     #[inline(never)]
-    pub fn new(color_map: &PixmapRgba) -> Self {
-        Self::new_subset(color_map, color_map.keys())
+    pub fn new(material_map: &Pixmap<M>) -> Self {
+        Self::new_subset(material_map, material_map.keys())
     }
 
     #[inline(never)]
-    pub fn new_subset(color_map: &PixmapRgba, subset: impl IntoIterator<Item = Pixel>) -> Self {
+    pub fn new_subset(material_map: &Pixmap<M>, subset: impl IntoIterator<Item = Pixel>) -> Self {
         let (pre_regions, region_map) =
-            color_components_subset(color_map, subset, RegionKey::unused);
+            color_components_subset(material_map, subset, RegionKey::unused);
 
-        let mut regions: BTreeMap<RegionKey, Region> = BTreeMap::new();
+        let mut regions: BTreeMap<RegionKey, Region<M>> = BTreeMap::new();
 
         for pre_region in pre_regions {
             // Each cycle in the sides is a border
@@ -300,7 +300,7 @@ impl Topology {
 
             for (i_border, cycle) in split_into_cycles(pre_region.sides).into_iter().enumerate() {
                 let seams =
-                    split_cycle_into_seams(&cycle, |side| color_map.get(side.right_pixel()));
+                    split_cycle_into_seams(&cycle, |side| material_map.get(side.right_pixel()));
 
                 let border = Border {
                     cycle,
@@ -313,7 +313,7 @@ impl Topology {
             let region = Region {
                 boundary,
                 cover: pre_region.cover,
-                color: pre_region.color,
+                material: pre_region.color,
             };
             regions.insert(pre_region.id, region);
         }
@@ -323,7 +323,10 @@ impl Topology {
 
     /// Seams are not recomputed, make sure to pass valid Seams!
     #[inline(never)]
-    fn from_regions(regions: BTreeMap<RegionKey, Region>, region_map: Pixmap<RegionKey>) -> Self {
+    fn from_regions(
+        regions: BTreeMap<RegionKey, Region<M>>,
+        region_map: Pixmap<RegionKey>,
+    ) -> Self {
         let mut seam_indices: BTreeMap<Side, SeamIndex> = BTreeMap::new();
 
         for (&region_key, region) in &regions {
@@ -345,27 +348,11 @@ impl Topology {
         }
     }
 
-    pub fn from_bitmap(bitmap: &Bitmap) -> Topology {
-        let pixmap = PixmapRgba::from_bitmap(bitmap);
-        Topology::new(&pixmap)
-    }
-
-    // pub fn from_bitmap_with_void(bitmap: &Bitmap) -> Topology {
-    //     let mut pixmap = pixmap_from_bitmap(&bitmap);
-    //     pixmap_remove_color(&mut pixmap, Self::VOID_COLOR);
-    //     Self::new(&pixmap)
-    // }
-
-    pub fn from_bitmap_path(path: impl AsRef<Path>) -> anyhow::Result<Topology> {
-        let bitmap = Bitmap::from_path(path)?;
-        Ok(Self::from_bitmap(&bitmap))
-    }
-
     fn remove_seam(&mut self, seam: &Seam) -> Option<SeamIndex> {
         self.seam_indices.remove(&seam.start)
     }
 
-    pub fn remove_region(&mut self, key: RegionKey) -> Option<Region> {
+    pub fn remove_region(&mut self, key: RegionKey) -> Option<Region<M>> {
         if let Some(region) = self.regions.remove(&key) {
             for seam in region.iter_seams() {
                 self.remove_seam(seam);
@@ -377,7 +364,7 @@ impl Topology {
     }
 
     /// Undefined behaviour if region overlaps existing regions
-    fn insert_region(&mut self, key: RegionKey, region: Region) {
+    fn insert_region(&mut self, key: RegionKey, region: Region<M>) {
         for (i_border, border) in region.boundary.iter().enumerate() {
             for (i_seam, seam) in border.seams.iter().enumerate() {
                 let seam_index = SeamIndex::new(key, i_border, i_seam);
@@ -426,7 +413,7 @@ impl Topology {
         self.regions.keys()
     }
 
-    pub fn iter_region_values<'a>(&'a self) -> impl IteratorPlus<&Region> + 'a {
+    pub fn iter_region_values<'a>(&'a self) -> impl IteratorPlus<&Region<M>> + 'a {
         self.regions.values()
     }
 
@@ -448,9 +435,9 @@ impl Topology {
         seam_index.region_key
     }
 
-    pub fn color_left_of(&self, seam: &Seam) -> Rgba8 {
+    pub fn material_left_of(&self, seam: &Seam) -> M {
         let left_key = self.left_of(seam);
-        self[left_key].color
+        self[left_key].material
     }
 
     /// Not every seam has a region on the right, it can be empty space
@@ -460,9 +447,9 @@ impl Topology {
         Some(seam_index.region_key)
     }
 
-    pub fn color_right_of(&self, seam: &Seam) -> Option<Rgba8> {
+    pub fn material_right_of(&self, seam: &Seam) -> Option<M> {
         let right_key = self.right_of(seam)?;
-        Some(self[right_key].color)
+        Some(self[right_key].material)
     }
 
     /// Only fails if seam is not self.contains_seam(seam)
@@ -479,10 +466,10 @@ impl Topology {
         &border.seams[(seam_index.i_seam - 1 + border.seams.len()) % border.seams.len()]
     }
 
-    pub fn seam_colors(&self, seam: &Seam) -> SeamColors {
-        SeamColors {
-            left: self.color_left_of(seam),
-            right: self.color_right_of(seam),
+    pub fn seam_materials(&self, seam: &Seam) -> SeamMaterials<M> {
+        SeamMaterials {
+            left: self.material_left_of(seam),
+            right: self.material_right_of(seam),
         }
     }
 
@@ -512,9 +499,10 @@ impl Topology {
         lhs.is_loop() && rhs.is_loop() && self.seam_border(lhs) == self.seam_border(rhs)
     }
 
-    pub fn color_map(&self) -> PixmapRgba {
+    /// WARNING: Expensive
+    pub fn material_map(&self) -> Pixmap<M> {
         self.region_map
-            .map(|region_id| self.regions[region_id].color)
+            .map(|region_id| self.regions[region_id].material)
     }
 
     pub fn iter_region_interior<'a>(
@@ -564,17 +552,6 @@ impl Topology {
         Self::from_regions(regions, region_map)
     }
 
-    pub fn rgb_seam_graph(&self) -> UndirectedGraph<Option<Rgba8>> {
-        let mut edges = BTreeSet::new();
-        for seam in self.iter_seams() {
-            let seam_colors = self.seam_colors(seam);
-            let edge = UndirectedEdge::new(Some(seam_colors.left), seam_colors.right);
-            edges.insert(edge);
-        }
-
-        edges
-    }
-
     #[inline(never)]
     pub fn sub_topology(&self, sub_regions: &BTreeSet<RegionKey>) -> Self {
         let region_map = self
@@ -589,17 +566,17 @@ impl Topology {
         Self::from_regions(regions, region_map)
     }
 
-    /// Remove all regions of the given color
-    pub fn without_color(self, color: Rgba8) -> Self {
+    /// Remove all regions of the given material
+    pub fn without_material(self, material: M) -> Self {
         let sub_regions: BTreeSet<_> = self
             .regions
             .iter()
             .filter_map(|(&key, region)| {
-                if region.color == color {
+                if region.material == material {
                     // discard this region, we need to make sure it does not border void
                     assert!(region
                         .iter_seams()
-                        .all(|seam| self.color_right_of(seam).is_some()));
+                        .all(|seam| self.material_right_of(seam).is_some()));
                     None
                 } else {
                     Some(key)
@@ -610,23 +587,48 @@ impl Topology {
         self.sub_topology(&sub_regions)
     }
 
-    /// Blit the given region to the color_map with the given color.
-    pub fn fill_region(&self, region_key: RegionKey, color: Rgba8, color_map: &mut PixmapRgba) {
+    /// Blit the given region to the material_map with the given material.
+    pub fn fill_region(&self, region_key: RegionKey, material: M, material_map: &mut Pixmap<M>) {
         let region = &self[region_key];
-        color_map.blit_op(
+        material_map.blit_op(
             &self.region_map,
             &region.cover,
-            |blit_color, &blit_region| {
+            |blit_material, &blit_region| {
                 if blit_region == region_key {
-                    *blit_color = Some(color);
+                    *blit_material = Some(material);
                 }
             },
         );
     }
 }
 
+impl Topology<Rgba8> {
+    pub fn from_bitmap(bitmap: &Bitmap) -> Self {
+        let pixmap = PixmapRgba::from_bitmap(bitmap);
+        Topology::new(&pixmap)
+    }
+
+    pub fn from_bitmap_path(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let bitmap = Bitmap::from_path(path)?;
+        Ok(Self::from_bitmap(&bitmap))
+    }
+}
+
+impl<M: Copy + Eq + Ord> Topology<M> {
+    pub fn material_seam_graph(&self) -> UndirectedGraph<Option<M>> {
+        let mut edges = BTreeSet::new();
+        for seam in self.iter_seams() {
+            let seam_materials = self.seam_materials(seam);
+            let edge = UndirectedEdge::new(Some(seam_materials.left), seam_materials.right);
+            edges.insert(edge);
+        }
+
+        edges
+    }
+}
+
 /// Warning: Slow
-impl PartialEq for Topology {
+impl<M: Eq + Hash> PartialEq for Topology<M> {
     fn eq(&self, other: &Self) -> bool {
         let self_regions: HashSet<_> = self.regions.values().collect();
         let other_regions: HashSet<_> = other.regions.values().collect();
@@ -634,21 +636,21 @@ impl PartialEq for Topology {
     }
 }
 
-impl Index<RegionKey> for Topology {
-    type Output = Region;
+impl<M> Index<RegionKey> for Topology<M> {
+    type Output = Region<M>;
 
     fn index(&self, key: RegionKey) -> &Self::Output {
         &self.regions[&key]
     }
 }
 
-impl IndexMut<RegionKey> for Topology {
+impl<M> IndexMut<RegionKey> for Topology<M> {
     fn index_mut(&mut self, key: RegionKey) -> &mut Self::Output {
         self.regions.get_mut(&key).unwrap()
     }
 }
 
-impl Index<BorderKey> for Topology {
+impl<M> Index<BorderKey> for Topology<M> {
     type Output = Border;
 
     fn index(&self, key: BorderKey) -> &Self::Output {
@@ -656,7 +658,7 @@ impl Index<BorderKey> for Topology {
     }
 }
 
-impl Display for Topology {
+impl<M: Display> Display for Topology<M> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let indent = "    ";
 
@@ -709,14 +711,14 @@ pub mod test {
         utils::{UndirectedEdge, UndirectedGraph},
     };
 
-    fn load_topology(filename: &str) -> Topology {
+    fn load_topology(filename: &str) -> Topology<Rgba8> {
         let path = format!("test_resources/topology/{filename}");
         Topology::from_bitmap_path(path).unwrap()
     }
 
     fn load_rgb_seam_graph(filename: &str) -> UndirectedGraph<Option<Rgba8>> {
         let topo = load_topology(filename);
-        topo.rgb_seam_graph()
+        topo.material_seam_graph()
     }
 
     fn rgb_edges_from<const N: usize>(

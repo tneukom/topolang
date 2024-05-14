@@ -15,6 +15,7 @@ mod field;
 pub mod frozen;
 pub mod history;
 pub mod interpreter;
+pub mod material;
 pub mod math;
 pub mod morphism;
 pub mod painting;

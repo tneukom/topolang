@@ -4,11 +4,8 @@ use itertools::Itertools;
 
 use crate::{
     area_cover::AreaCover,
-    math::{
-        pixel::{Pixel, Side, SideName},
-        rgba8::Rgba8,
-    },
-    pixmap::{Pixmap, PixmapRgba},
+    math::pixel::{Pixel, Side, SideName},
+    pixmap::Pixmap,
 };
 
 pub struct ConnectedComponent {
@@ -35,8 +32,8 @@ pub enum SideClass {
     Open,
 }
 
-pub fn flood_fill<Id: Copy + Eq>(
-    color_map: &PixmapRgba,
+pub fn flood_fill<Id: Copy + Eq, T: Eq + Copy>(
+    color_map: &Pixmap<T>,
     region_map: &mut Pixmap<Id>,
     cover: &mut AreaCover,
     seed: Pixel,
@@ -72,25 +69,25 @@ pub fn flood_fill<Id: Copy + Eq>(
     sides
 }
 
-pub struct ColorComponent {
+pub struct ColorComponent<T> {
     pub component: ConnectedComponent,
-    pub color: Rgba8,
+    pub color: T,
 }
 
-pub struct ColorRegion<Id> {
+pub struct ColorRegion<Id, T> {
     pub id: Id,
-    pub color: Rgba8,
+    pub color: T,
     pub sides: BTreeSet<Side>,
     pub cover: AreaCover,
 }
 
 /// `subset` must contain whole regions only
-pub fn color_components_subset<Id: Eq + Copy>(
-    color_map: &PixmapRgba,
+pub fn color_components_subset<Id: Eq + Copy, T: Eq + Copy>(
+    color_map: &Pixmap<T>,
     subset: impl IntoIterator<Item = Pixel>,
     mut free_id: impl FnMut() -> Id,
-) -> (Vec<ColorRegion<Id>>, Pixmap<Id>) {
-    let mut regions: Vec<ColorRegion<Id>> = Vec::new();
+) -> (Vec<ColorRegion<Id, T>>, Pixmap<Id>) {
+    let mut regions: Vec<ColorRegion<Id, T>> = Vec::new();
     let mut region_map = Pixmap::new();
 
     for seed in subset.into_iter() {
@@ -116,10 +113,10 @@ pub fn color_components_subset<Id: Eq + Copy>(
     (regions, region_map)
 }
 
-pub fn color_components<Id: Eq + Copy>(
-    color_map: &PixmapRgba,
+pub fn color_components<Id: Eq + Copy, T: Eq + Copy>(
+    color_map: &Pixmap<T>,
     free_id: impl FnMut() -> Id,
-) -> (Vec<ColorRegion<Id>>, Pixmap<Id>) {
+) -> (Vec<ColorRegion<Id, T>>, Pixmap<Id>) {
     color_components_subset(color_map, color_map.keys(), free_id)
 }
 
@@ -206,7 +203,9 @@ mod test {
         pixmap::{Pixmap, PixmapRgba},
     };
 
-    fn usize_color_components(color_map: &PixmapRgba) -> (Vec<ColorRegion<usize>>, Pixmap<usize>) {
+    fn usize_color_components(
+        color_map: &PixmapRgba,
+    ) -> (Vec<ColorRegion<usize, Rgba8>>, Pixmap<usize>) {
         let mut id: usize = 0;
         let free_id = || {
             let result = id;

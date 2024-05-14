@@ -2,7 +2,7 @@ use crate::{
     math::{pixel::Corner, rgba8::Rgba8},
     morphism::Morphism,
     pixmap::PixmapRgba,
-    topology::{RegionKey, Seam, SeamColors, Topology},
+    topology::{RegionKey, Seam, SeamMaterials, Topology},
 };
 use std::{
     cmp::Ordering,
@@ -11,11 +11,11 @@ use std::{
 
 /// Returns all seams (including non-atomic ones) in topo
 #[inline(never)]
-pub fn generalized_seams(topo: &Topology, left_color: Rgba8) -> Vec<Seam> {
+pub fn generalized_seams(topo: &Topology<Rgba8>, left_color: Rgba8) -> Vec<Seam> {
     let mut seams = Vec::new();
 
     for region in topo.regions.values() {
-        if region.color != left_color {
+        if region.material != left_color {
             continue;
         }
 
@@ -144,14 +144,14 @@ pub struct Unassigned {
     phi_start_corner: Option<Corner>,
     phi_stop_corner: Option<Corner>,
     reverse_in_pattern: bool,
-    colors: SeamColors,
+    colors: SeamMaterials<Rgba8>,
 }
 
 impl Unassigned {
     /// List of unassigned seams given a pattern and a partial Morphism `phi`
     /// If returned list is empty phi is fully defined
     #[inline(never)]
-    pub fn candidates(pattern: &Topology, phi: &Morphism) -> Vec<Self> {
+    pub fn candidates(pattern: &Topology<Rgba8>, phi: &Morphism) -> Vec<Self> {
         pattern
             .iter_seams()
             .filter(|&seam| !phi.seam_map.contains_key(seam))
@@ -161,7 +161,7 @@ impl Unassigned {
                 phi_start_corner: phi.corner_map.get(&seam.start_corner()).copied(),
                 phi_stop_corner: phi.corner_map.get(&seam.stop_corner()).copied(),
                 reverse_in_pattern: pattern.contains_seam(&seam.reversed()),
-                colors: pattern.seam_colors(seam),
+                colors: pattern.seam_materials(seam),
             })
             .collect()
     }
@@ -184,7 +184,7 @@ impl Unassigned {
 
     /// Choose the best unassigned seam to continue the search
     #[inline(never)]
-    pub fn choose(pattern: &Topology, phi: &Morphism) -> Option<Self> {
+    pub fn choose(pattern: &Topology<Rgba8>, phi: &Morphism) -> Option<Self> {
         Self::candidates(pattern, phi)
             .into_iter()
             .max_by(Self::compare_heuristic)
@@ -193,11 +193,12 @@ impl Unassigned {
     #[inline(never)]
     pub fn possible_assignment(
         &self,
-        world: &Topology,
-        pattern: &Topology,
+        world: &Topology<Rgba8>,
+        pattern: &Topology<Rgba8>,
         phi_seam: &Seam,
     ) -> bool {
-        if pattern[pattern.left_of(&self.seam)].color != world[world.left_of(phi_seam)].color {
+        if pattern[pattern.left_of(&self.seam)].material != world[world.left_of(phi_seam)].material
+        {
             // Inconsistent left side color
             return false;
         }
@@ -212,8 +213,8 @@ impl Unassigned {
                 return false;
             };
 
-            if world[right_of_phi_seam].color
-                != pattern[pattern.right_of(&self.seam).unwrap()].color
+            if world[right_of_phi_seam].material
+                != pattern[pattern.right_of(&self.seam).unwrap()].material
             {
                 // Inconsistent right color
                 return false;
@@ -246,20 +247,28 @@ impl Unassigned {
 
     /// Iterate over matching candidates for pattern seam which have a region on both sides (left and right)
     #[inline(never)]
-    fn both_sided_assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
+    fn both_sided_assignment_candidates(
+        &self,
+        world: &Topology<Rgba8>,
+        pattern: &Topology<Rgba8>,
+    ) -> Vec<Seam> {
         // let right_color = self.colors.right.expect("Not both sided");
 
         world
             .regions
             .values()
-            .filter(|region| self.colors.left == region.color)
+            .filter(|region| self.colors.left == region.material)
             .flat_map(|region| region.iter_seams().copied())
             .filter(|phi_seam| self.possible_assignment(world, pattern, phi_seam))
             .collect()
     }
 
     #[inline(never)]
-    fn fallback_assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
+    fn fallback_assignment_candidates(
+        &self,
+        world: &Topology<Rgba8>,
+        pattern: &Topology<Rgba8>,
+    ) -> Vec<Seam> {
         return generalized_seams(world, self.colors.left)
             .into_iter()
             .filter(|phi_seam| self.possible_assignment(world, pattern, phi_seam))
@@ -269,7 +278,11 @@ impl Unassigned {
     /// Returns possible candidate seams in `world` that `self.seam` could be mapped to.
     /// Returned seam don't have to be atomic.
     #[inline(never)]
-    pub fn assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
+    pub fn assignment_candidates(
+        &self,
+        world: &Topology<Rgba8>,
+        pattern: &Topology<Rgba8>,
+    ) -> Vec<Seam> {
         if self.reverse_in_pattern {
             self.both_sided_assignment_candidates(world, pattern)
         } else {
@@ -279,13 +292,13 @@ impl Unassigned {
 }
 
 pub struct Search<'a> {
-    pub world: &'a Topology,
-    pub pattern: &'a Topology,
+    pub world: &'a Topology<Rgba8>,
+    pub pattern: &'a Topology<Rgba8>,
     pub hidden: Option<&'a BTreeSet<RegionKey>>,
 }
 
 impl<'a> Search<'a> {
-    pub fn new(world: &'a Topology, pattern: &'a Topology) -> Self {
+    pub fn new(world: &'a Topology<Rgba8>, pattern: &'a Topology<Rgba8>) -> Self {
         Self {
             world,
             pattern,
@@ -370,7 +383,7 @@ pub fn extract_pattern(pixmap: &mut PixmapRgba) -> PixmapRgba {
     let frame = topo
         .regions
         .values()
-        .find(|&region| region.color == PATTERN_FRAME_COLOR)
+        .find(|&region| region.material == PATTERN_FRAME_COLOR)
         .unwrap();
     assert_eq!(frame.boundary.len(), 2);
 

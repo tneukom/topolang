@@ -1,81 +1,72 @@
+use std::{cell::OnceCell, path::Path};
+
 use crate::{
     bitmap::Bitmap,
     math::{rect::Rect, rgba8::Rgba8},
-    pixmap::PixmapRgba,
+    pixmap::{Pixmap, PixmapRgba},
     topology::{FillRegion, RegionKey, Topology},
 };
-use std::{cell::OnceCell, path::Path};
 
-struct CachedTopology {
-    topology: OnceCell<Topology>,
+struct CachedTopology<M> {
+    topology: OnceCell<Topology<M>>,
 }
 
-impl CachedTopology {
+impl<M: Eq + Copy> CachedTopology<M> {
     pub fn empty() -> Self {
         Self {
             topology: OnceCell::new(),
         }
     }
 
-    pub fn from(color_map: &PixmapRgba) -> Self {
-        let topology = Topology::new(&color_map);
+    pub fn from(material_map: &Pixmap<M>) -> Self {
+        let topology = Topology::new(&material_map);
         Self {
             topology: OnceCell::from(topology),
         }
     }
 
-    pub fn get_or_init(&self, color_map: &PixmapRgba) -> &Topology {
+    pub fn get_or_init(&self, material_map: &Pixmap<M>) -> &Topology<M> {
         self.topology.get_or_init(|| {
             println!("Recomputing topology!");
-            Topology::new(color_map)
+            Topology::new(material_map)
         })
     }
 
-    pub fn get(&self) -> Option<&Topology> {
+    pub fn get(&self) -> Option<&Topology<M>> {
         self.topology.get()
     }
 
-    pub fn get_mut(&mut self) -> Option<&mut Topology> {
+    pub fn get_mut(&mut self) -> Option<&mut Topology<M>> {
         self.topology.get_mut()
     }
 }
 
-pub struct World {
-    color_map: PixmapRgba,
+pub struct World<M> {
+    material_map: Pixmap<M>,
 
-    /// None means the topology has to be recomputed from the color_map
-    topology: CachedTopology,
+    /// None means the topology has to be recomputed from the material_map
+    topology: CachedTopology<M>,
 }
 
-impl World {
-    pub fn from_pixmap(color_map: PixmapRgba) -> Self {
-        let topology = CachedTopology::from(&color_map);
+impl<M: Eq + Copy> World<M> {
+    pub fn from_pixmap(material_map: Pixmap<M>) -> Self {
+        let topology = CachedTopology::from(&material_map);
         Self {
-            color_map,
+            material_map,
             topology,
         }
     }
 
-    pub fn from_bitmap(bitmap: &Bitmap) -> Self {
-        let color_map = PixmapRgba::from_bitmap(bitmap);
-        Self::from_pixmap(color_map)
+    pub fn topology(&self) -> &Topology<M> {
+        self.topology.get_or_init(&self.material_map)
     }
 
-    pub fn from_bitmap_path(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let bitmap = Bitmap::from_path(path)?;
-        Ok(Self::from_bitmap(&bitmap))
-    }
-
-    pub fn topology(&self) -> &Topology {
-        self.topology.get_or_init(&self.color_map)
-    }
-
-    pub fn color_map(&self) -> &PixmapRgba {
-        &self.color_map
+    pub fn material_map(&self) -> &Pixmap<M> {
+        &self.material_map
     }
 
     pub fn bounding_rect(&self) -> Rect<i64> {
-        self.color_map.bounding_rect()
+        self.material_map.bounding_rect()
     }
 
     // Previous implementation to update partial Topology
@@ -150,10 +141,10 @@ impl World {
 
     /// Invalidates all regions keys
     /// Returns true if any regions were changed
-    /// Very naive implementation, checks if any Region actually changes color and if
+    /// Very naive implementation, checks if any Region actually changes material and if
     /// yes recreates the whole topology.
     #[inline(never)]
-    pub fn fill_regions(&mut self, fill_regions: &Vec<FillRegion>) -> bool {
+    pub fn fill_regions(&mut self, fill_regions: &Vec<FillRegion<M>>) -> bool {
         let mut modified = false;
         let mut topology_invalidated = false;
         let topology = self
@@ -162,7 +153,7 @@ impl World {
             .expect("Requires topology, otherwise region ids will be invalid.");
 
         for &fill_region in fill_regions {
-            if topology[fill_region.region_key].color == fill_region.color {
+            if topology[fill_region.region_key].material == fill_region.material {
                 // already has desired color, skip
                 continue;
             }
@@ -170,24 +161,24 @@ impl World {
             modified = true;
             topology.fill_region(
                 fill_region.region_key,
-                fill_region.color,
-                &mut self.color_map,
+                fill_region.material,
+                &mut self.material_map,
             );
 
             if topology_invalidated {
                 continue;
             }
 
-            // Try to update the topology to the changed color map
-            let can_update_color = topology[fill_region.region_key]
+            // Try to update the topology to the changed material map
+            let can_update_material = topology[fill_region.region_key]
                 .iter_seams()
-                .all(|seam| topology.color_right_of(seam) != Some(fill_region.color));
+                .all(|seam| topology.material_right_of(seam) != Some(fill_region.material));
 
-            if can_update_color {
-                // If all neighboring regions have a different color than fill_region.color we can
-                // update the topology by
+            if can_update_material {
+                // If all neighboring regions have a different material than fill_region.material we
+                // can update the topology by
                 let mut_region = &mut topology[fill_region.region_key];
-                mut_region.color = fill_region.color;
+                mut_region.material = fill_region.material;
             } else {
                 // Otherwise we have to recompute the topology
                 topology_invalidated = true;
@@ -200,15 +191,30 @@ impl World {
         modified
     }
 
-    pub fn fill_region(&mut self, region_key: RegionKey, color: Rgba8) -> bool {
-        let fill_regions = vec![FillRegion { region_key, color }];
+    pub fn fill_region(&mut self, region_key: RegionKey, material: M) -> bool {
+        let fill_regions = vec![FillRegion {
+            region_key,
+            material,
+        }];
         self.fill_regions(&fill_regions)
     }
 
-    /// Blit passed Pixmap to self.color_map but only where color_map is already defined.
-    pub fn blit_over(&mut self, other: &PixmapRgba) {
-        self.color_map.blit_over(other);
+    /// Blit passed Pixmap to self.material_map but only where material_map is already defined.
+    pub fn blit_over(&mut self, other: &Pixmap<M>) {
+        self.material_map.blit_over(other);
         self.topology = CachedTopology::empty();
+    }
+}
+
+impl World<Rgba8> {
+    pub fn from_bitmap(bitmap: &Bitmap) -> Self {
+        let color_map = PixmapRgba::from_bitmap(bitmap);
+        Self::from_pixmap(color_map)
+    }
+
+    pub fn from_bitmap_path(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let bitmap = Bitmap::from_path(path)?;
+        Ok(Self::from_bitmap(&bitmap))
     }
 }
 
@@ -231,7 +237,7 @@ mod test {
         let mut world = World::from_pixmap(world_pixmap);
         world.blit_over(&blit);
 
-        assert_eq!(world.color_map(), expected_world.color_map());
+        assert_eq!(world.material_map(), expected_world.material_map());
         assert_eq!(world.topology(), expected_world.topology());
     }
 

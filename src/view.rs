@@ -124,7 +124,7 @@ pub enum UiState {
 }
 
 pub struct View {
-    pub world: World,
+    pub world: World<Rgba8>,
     pub history: History,
     pub camera: Camera,
 
@@ -132,8 +132,8 @@ pub struct View {
 }
 
 impl View {
-    pub fn new(world: World) -> View {
-        let history = History::new(world.color_map().clone());
+    pub fn new(world: World<Rgba8>) -> View {
+        let history = History::new(world.material_map().clone());
         View {
             world,
             history,
@@ -194,7 +194,7 @@ impl View {
                 SnapshotCause::Brush
             };
             self.history
-                .add_snapshot(self.world.color_map().clone(), cause);
+                .add_snapshot(self.world.material_map().clone(), cause);
             return UiState::Idle;
         }
 
@@ -241,7 +241,7 @@ impl View {
                     if let Some(region_key) = self.world.topology().region_at(pixel) {
                         self.world.fill_region(region_key, settings.brush.color);
                         self.history
-                            .add_snapshot(self.world.color_map().clone(), SnapshotCause::Fill);
+                            .add_snapshot(self.world.material_map().clone(), SnapshotCause::Fill);
                     }
                 }
             }

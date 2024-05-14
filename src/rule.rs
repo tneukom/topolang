@@ -10,15 +10,15 @@ use crate::{
 };
 
 pub struct Rule {
-    pub pattern: Topology,
-    pub fill_regions: Vec<FillRegion>,
+    pub pattern: Topology<Rgba8>,
+    pub fill_regions: Vec<FillRegion<Rgba8>>,
 }
 
 impl Rule {
-    pub fn new(before: Topology, after: Topology) -> anyhow::Result<Self> {
-        let mut fill_regions: Vec<FillRegion> = Vec::new();
+    pub fn new(before: Topology<Rgba8>, after: Topology<Rgba8>) -> anyhow::Result<Self> {
+        let mut fill_regions: Vec<FillRegion<Rgba8>> = Vec::new();
 
-        let after_pixmap = after.color_map();
+        let after_pixmap = after.material_map();
 
         for (&before_region_key, before_region) in &before.regions {
             let Some(after_fill_color) = Self::fill_color(
@@ -28,10 +28,10 @@ impl Rule {
                 anyhow::bail!("Region {before_region_key} color not constant.")
             };
 
-            if after_fill_color != before_region.color {
+            if after_fill_color != before_region.material {
                 let fill_region = FillRegion {
                     region_key: before_region_key,
-                    color: after_fill_color,
+                    material: after_fill_color,
                 };
                 fill_regions.push(fill_region);
             }
@@ -57,13 +57,13 @@ impl Rule {
     }
 
     /// Returns true if there were any changes to the world
-    pub fn apply_ops(&self, phi: &Morphism, world: &mut World) -> bool {
+    pub fn apply_ops(&self, phi: &Morphism, world: &mut World<Rgba8>) -> bool {
         let phi_fill_regions = self
             .fill_regions
             .iter()
             .map(|fill_region| FillRegion {
                 region_key: phi[fill_region.region_key],
-                color: fill_region.color,
+                material: fill_region.material,
             })
             .collect();
 
@@ -72,7 +72,7 @@ impl Rule {
     }
 }
 
-pub fn stabilize(world: &mut World, rules: &Vec<Rule>) -> usize {
+pub fn stabilize(world: &mut World<Rgba8>, rules: &Vec<Rule>) -> usize {
     let mut steps: usize = 0;
     loop {
         let mut applied = false;
@@ -129,7 +129,7 @@ mod test {
 
         assert_eq!(application_count, expected_application_count);
 
-        let result_pixmap = world.color_map();
+        let result_pixmap = world.material_map();
         let expected_result_pixmap =
             PixmapRgba::from_bitmap_path(format!("{folder}/expected_result.png")).unwrap();
 

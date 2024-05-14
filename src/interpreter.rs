@@ -17,7 +17,7 @@ pub struct CompiledRule {
 }
 
 pub struct Interpreter {
-    rule_frame: Topology,
+    rule_frame: Topology<Rgba8>,
     before_border: BorderKey,
     after_border: BorderKey,
 }
@@ -53,7 +53,7 @@ impl Interpreter {
         }
     }
 
-    pub fn compile(&self, world: &mut World) -> anyhow::Result<Vec<CompiledRule>> {
+    pub fn compile(&self, world: &mut World<Rgba8>) -> anyhow::Result<Vec<CompiledRule>> {
         // Find all matches for rule_frame in world
         let search = Search::new(world.topology(), &self.rule_frame);
         let matches = search.find_matches(NullTrace::new());
@@ -78,8 +78,8 @@ impl Interpreter {
                 source.push(phi[region_key]);
             }
 
-            let before = before.without_color(Rgba8::VOID);
-            let after = after.without_color(Rgba8::VOID);
+            let before = before.without_material(Rgba8::VOID);
+            let after = after.without_material(Rgba8::VOID);
 
             // Find translation from after to before
             // FIXME: This might not work depending of the AreaBounds implementation
@@ -99,7 +99,7 @@ impl Interpreter {
     }
 
     /// Returns if a Rule was applied
-    pub fn step(&self, world: &mut World) -> bool {
+    pub fn step(&self, world: &mut World<Rgba8>) -> bool {
         let compiled_rules = self.compile(world).unwrap();
 
         let hidden: BTreeSet<_> = compiled_rules
@@ -170,7 +170,7 @@ mod test {
         println!("Number of steps: {steps}");
         assert_eq!(steps, expected_steps);
 
-        let result_pixmap = world.color_map();
+        let result_pixmap = world.material_map();
 
         let expected_pixmap =
             PixmapRgba::from_bitmap_path(format!("{folder}/world_expected.png")).unwrap();
