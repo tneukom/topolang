@@ -1,5 +1,5 @@
 use crate::{
-    bitmap::Bitmap,
+    material::Material,
     math::{pixel::Pixel, rgba8::Rgba8},
     pattern::{NullTrace, Search},
     pixmap::PixmapRgba,
@@ -17,20 +17,22 @@ pub struct CompiledRule {
 }
 
 pub struct Interpreter {
-    rule_frame: Topology<Rgba8>,
+    rule_frame: Topology<Material>,
     before_border: BorderKey,
     after_border: BorderKey,
 }
 
 impl Interpreter {
     // Not the same as the actual RULE_FRAME color
-    const RULE_FRAME_VOID_COLOR: Rgba8 = Rgba8::CYAN;
+    const RULE_FRAME_VOID_MATERIAL: Material = Material::new(Rgba8::CYAN);
 
     pub fn new() -> Self {
         // Load rule_frame pattern from file
-        let rule_frame_bitmap = Bitmap::load_from_memory(include_bytes!("rule_frame.png")).unwrap();
         let rule_frame_pixmap =
-            PixmapRgba::from_bitmap(&rule_frame_bitmap).without_color(&Self::RULE_FRAME_VOID_COLOR);
+            PixmapRgba::load_bitmap_from_memory(include_bytes!("rule_frame.png"))
+                .unwrap()
+                .into_material()
+                .without(&Self::RULE_FRAME_VOID_MATERIAL);
         let rule_frame = Topology::new(&rule_frame_pixmap);
 
         // Side on the before border (inner border of the frame)
@@ -53,7 +55,7 @@ impl Interpreter {
         }
     }
 
-    pub fn compile(&self, world: &mut World<Rgba8>) -> anyhow::Result<Vec<CompiledRule>> {
+    pub fn compile(&self, world: &mut World<Material>) -> anyhow::Result<Vec<CompiledRule>> {
         // Find all matches for rule_frame in world
         let search = Search::new(world.topology(), &self.rule_frame);
         let matches = search.find_matches(NullTrace::new());
@@ -78,8 +80,8 @@ impl Interpreter {
                 source.push(phi[region_key]);
             }
 
-            let before = before.without_material(Rgba8::VOID);
-            let after = after.without_material(Rgba8::VOID);
+            let before = before.without_material(Material::VOID);
+            let after = after.without_material(Material::VOID);
 
             // Find translation from after to before
             // FIXME: This might not work depending of the AreaBounds implementation
@@ -99,7 +101,7 @@ impl Interpreter {
     }
 
     /// Returns if a Rule was applied
-    pub fn step(&self, world: &mut World<Rgba8>) -> bool {
+    pub fn step(&self, world: &mut World<Material>) -> bool {
         let compiled_rules = self.compile(world).unwrap();
 
         let hidden: BTreeSet<_> = compiled_rules
@@ -142,7 +144,12 @@ impl Interpreter {
 
 #[cfg(test)]
 mod test {
-    use crate::{interpreter::Interpreter, pixmap::PixmapRgba, world::World};
+    use crate::{
+        interpreter::Interpreter,
+        material::Material,
+        pixmap::{Pixmap, PixmapMaterial},
+        world::World,
+    };
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -152,7 +159,7 @@ mod test {
 
     fn assert_execute_world(name: &str, expected_steps: usize) {
         let folder = format!("test_resources/compiler/{name}/");
-        let mut world = World::from_bitmap_path(format!("{folder}/world.png")).unwrap();
+        let mut world = World::<Material>::load_bitmap(format!("{folder}/world.png")).unwrap();
 
         let compiler = Interpreter::new();
 
@@ -173,7 +180,7 @@ mod test {
         let result_pixmap = world.material_map();
 
         let expected_pixmap =
-            PixmapRgba::from_bitmap_path(format!("{folder}/world_expected.png")).unwrap();
+            PixmapMaterial::load_bitmap(format!("{folder}/world_expected.png")).unwrap();
         assert_eq!(result_pixmap, &expected_pixmap);
     }
 

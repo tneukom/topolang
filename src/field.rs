@@ -119,6 +119,22 @@ impl<T> Field<T> {
         }
     }
 
+    pub fn into_map<S>(self, f: impl FnMut(T) -> S) -> Field<S> {
+        // Will this reuse the Vec storage if sizeof(S) == sizeof(T)? See
+        // https://stackoverflow.com/a/48309116
+        // https://www.reddit.com/r/rust/comments/16hx79e/when_does_vecinto_itermapcollect_reallocate_and/
+        // https://doc.rust-lang.org/nightly/src/alloc/vec/in_place_collect.rs.html
+        let elems = self.elems.into_iter().map(f).collect();
+        Field {
+            bounds: self.bounds,
+            elems,
+        }
+    }
+
+    pub fn map_into<S: From<T>>(self) -> Field<S> {
+        self.into_map(|value| value.into())
+    }
+
     pub fn sub_map<S>(&self, bounds: Rect<i64>, mut f: impl FnMut(&T) -> S) -> Field<S> {
         assert!(self.bounds.contains_rect(bounds));
         Field::from_map(bounds, |index| f(&self[index]))

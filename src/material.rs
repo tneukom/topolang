@@ -7,7 +7,17 @@ pub struct Material {
 }
 
 impl Material {
-    const fn new(rgba: Rgba8) -> Self {
+    pub const VOID: Self = Self::new(Rgba8::VOID);
+    pub const RULE_FRAME: Self = Self::VOID;
+    pub const TRANSPARENT: Self = Self::new(Rgba8::TRANSPARENT);
+    pub const BLACK: Self = Self::new(Rgba8::BLACK);
+    // const RULE_ARROW:
+
+    pub const fn rgba(self) -> Rgba8 {
+        self.rgba
+    }
+
+    pub const fn new(rgba: Rgba8) -> Self {
         Self { rgba }
     }
 

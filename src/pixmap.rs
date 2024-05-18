@@ -48,6 +48,11 @@ impl<T> Tile<T> {
     pub fn get(&self, index: impl FieldIndex) -> Option<&T> {
         self.field.get(index).unwrap().as_ref()
     }
+
+    pub fn into_map<S>(self, mut f: impl FnMut(T) -> S) -> Tile<S> {
+        let field = self.field.into_map(|opt| opt.map(&mut f));
+        Tile { field }
+    }
 }
 
 impl<T: Clone> Tile<T> {
@@ -202,6 +207,19 @@ impl<T> Pixmap<T> {
         // TODO:SPEEDUP: Should be cached!
         RectBounds::iter_bounds(self.keys()).inc_high()
     }
+
+    // pub fn map<S>(&self, mut f: impl FnMut(&T) -> S) -> Pixmap<S> {
+    //     let tiles = self
+    //         .tiles
+    //         .map(|opt_tile| opt_tile.as_ref().map(|tile| Rc::new(tile.map(&mut f))));
+    //     Pixmap { tiles }
+    // }
+    //
+    // pub fn map_into<S: From<T>>(self) -> Pixmap<S> {
+    //     Pixmap {
+    //         tiles: self.tiles.map_into(),
+    //     }
+    // }
 }
 
 impl<T: Clone> Pixmap<T> {
@@ -250,6 +268,16 @@ impl<T: Clone> Pixmap<T> {
         let tiles = self
             .tiles
             .map(|opt_tile| opt_tile.as_ref().map(|tile| Rc::new(tile.map(&mut f))));
+        Pixmap { tiles }
+    }
+
+    pub fn into_map<S>(self, mut f: impl FnMut(T) -> S) -> Pixmap<S> {
+        let tiles = self.tiles.into_map(|opt_tile| {
+            opt_tile.map(|rc_tile| {
+                let mapped_tile = Rc::unwrap_or_clone(rc_tile).into_map(&mut f);
+                Rc::new(mapped_tile)
+            })
+        });
         Pixmap { tiles }
     }
 
@@ -384,8 +412,13 @@ impl Pixmap<Rgba8> {
         result
     }
 
-    pub fn from_bitmap_path(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let bitmap = Bitmap::from_path(path)?;
+    pub fn load_bitmap(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let bitmap = Bitmap::load(path)?;
+        Ok(Self::from_bitmap(&bitmap))
+    }
+
+    pub fn load_bitmap_from_memory(memory: &[u8]) -> Result<Self, image::ImageError> {
+        let bitmap = Bitmap::load_from_memory(memory)?;
         Ok(Self::from_bitmap(&bitmap))
     }
 
@@ -399,15 +432,51 @@ impl Pixmap<Rgba8> {
     pub fn to_bitmap(&self) -> Bitmap {
         let bounds = self.bounding_rect();
         let mut field = Field::filled(bounds, Rgba8::BLACK);
-        self.blit_to_field(&mut field);
+        for (index, value) in self.iter() {
+            field[index] = value.clone();
+        }
         field.into_array2d()
+    }
+
+    pub fn into_material(self) -> Pixmap<Material> {
+        self.into_map(|rgba| Material::from(rgba))
+    }
+}
+
+impl Pixmap<Material> {
+    pub fn into_rgba8(self) -> Pixmap<Rgba8> {
+        self.into_map(|material| material.rgba())
+    }
+
+    /// Translate pixmap to positive coordinates, top left pixel will be at (0, 0) and convert
+    /// to bitmap.
+    #[deprecated]
+    pub fn to_bitmap(&self) -> Bitmap {
+        let bounds = self.bounding_rect();
+        let mut field = Field::filled(bounds, Rgba8::BLACK);
+        for (index, value) in self.iter() {
+            field[index] = value.rgba();
+        }
+        field.into_array2d()
+    }
+
+    // TODO: Remove
+    #[deprecated]
+    pub fn load_bitmap(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        Ok(PixmapRgba::load_bitmap(path)?.into_material())
+    }
+
+    // TODO: Remove
+    #[deprecated]
+    pub fn load_bitmap_from_memory(memory: &[u8]) -> Result<Self, image::ImageError> {
+        Ok(PixmapRgba::load_bitmap_from_memory(memory)?.into_material())
     }
 }
 
 impl<T: Eq + Clone> Pixmap<T> {
     /// TODO: Rename to something more generic, like without_value, drop_value, reject_value
-    pub fn without_color(&self, removed: &T) -> Self {
-        self.filter(|color| color != removed)
+    pub fn without(&self, removed: &T) -> Self {
+        self.filter(|value| value != removed)
     }
 }
 

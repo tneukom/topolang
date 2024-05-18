@@ -27,6 +27,7 @@ use crate::{
     coordinate_frame::CoordinateFrames,
     history::{Snapshot, SnapshotCause},
     interpreter::Interpreter,
+    material::Material,
     math::{point::Point, rect::Rect, rgba8::Pico8Palette},
     painting::scene_painter::ScenePainter,
     utils::ReflectEnum,
@@ -82,8 +83,8 @@ impl MouseButtonState {
 }
 
 pub struct GifRecorder {
-    start: Option<Rc<Snapshot>>,
-    stop: Option<Rc<Snapshot>>,
+    start: Option<Rc<Snapshot<Material>>>,
+    stop: Option<Rc<Snapshot<Material>>>,
 }
 
 impl GifRecorder {
@@ -95,7 +96,7 @@ impl GifRecorder {
     }
 
     /// Try to find a path from start to stop or from stop to start
-    fn history_path(&self) -> Option<Vec<&Rc<Snapshot>>> {
+    fn history_path(&self) -> Option<Vec<&Rc<Snapshot<Material>>>> {
         let start = self.start.as_ref()?;
         let stop = self.stop.as_ref()?;
         if let Some(path) = stop.path_to(start) {
@@ -117,7 +118,7 @@ impl GifRecorder {
         for snapshot in snapshot_path {
             // TODO: Offset world pixmap by bounds.low()
             // TODO: Paint over white background to remove transparency or use apng instead
-            let image = snapshot.colormap().to_bitmap();
+            let image = snapshot.material_map().to_bitmap();
             gif_encoder.encode(
                 image.as_raw(),
                 image.width() as u32,
@@ -209,7 +210,7 @@ impl EguiApp {
         let world_image_bytes = include_bytes!("../resources/saves/turing.png");
         let world_bitmap = Bitmap::load_from_memory(world_image_bytes).unwrap();
         // let world_bitmap = Bitmap::transparent(512, 512);
-        let world = World::from_bitmap(&world_bitmap);
+        let world = World::<Material>::from_bitmap(&world_bitmap);
         // let world = Topology::from_bitmap_path("test_resources/compiler/gate/world.png").unwrap();
         let view = View::new(world);
 
@@ -465,7 +466,7 @@ impl EguiApp {
         if ui.button("Load").clicked() {
             println!("Loading file {:?} in folder", &path);
 
-            match World::from_bitmap_path(&path) {
+            match World::<Material>::load_bitmap(&path) {
                 Ok(world) => {
                     self.view = View::new(world);
                     self.reset_camera();
@@ -588,7 +589,7 @@ impl EguiApp {
 
         // If head has changed, update world
         if !Rc::ptr_eq(&self.view.history.head, &current_head) {
-            self.view.world = World::from_pixmap(self.view.history.head.colormap().clone());
+            self.view.world = World::from_pixmap(self.view.history.head.material_map().clone());
         }
     }
 
@@ -629,7 +630,7 @@ impl EguiApp {
             warn!("Failed to load png file!");
             return;
         };
-        let world = World::from_bitmap(&bitmap);
+        let world = World::<Material>::from_bitmap(&bitmap);
         self.view = View::new(world);
     }
 
@@ -718,7 +719,7 @@ impl eframe::App for EguiApp {
 
             self.scene_painter.draw_grid(&self.view.camera, &frames);
 
-            self.scene_painter.draw_color_map(
+            self.scene_painter.draw_material_map(
                 self.view.world.material_map().clone(),
                 &self.view.camera,
                 &frames,

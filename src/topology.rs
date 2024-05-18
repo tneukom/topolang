@@ -16,6 +16,7 @@ use crate::{
     connected_components::{
         color_components_subset, left_of_border, right_of_border, split_into_cycles,
     },
+    material::Material,
     math::{
         pixel::{Corner, Pixel, Side},
         point::Point,
@@ -608,8 +609,20 @@ impl Topology<Rgba8> {
         Topology::new(&pixmap)
     }
 
-    pub fn from_bitmap_path(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let bitmap = Bitmap::from_path(path)?;
+    pub fn load_bitmap(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let bitmap = Bitmap::load(path)?;
+        Ok(Self::from_bitmap(&bitmap))
+    }
+}
+
+impl Topology<Material> {
+    pub fn from_bitmap(bitmap: &Bitmap) -> Self {
+        let pixmap = PixmapRgba::from_bitmap(bitmap).into_material();
+        Topology::new(&pixmap)
+    }
+
+    pub fn load_bitmap(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let bitmap = Bitmap::load(path)?;
         Ok(Self::from_bitmap(&bitmap))
     }
 }
@@ -713,7 +726,7 @@ pub mod test {
 
     fn load_topology(filename: &str) -> Topology<Rgba8> {
         let path = format!("test_resources/topology/{filename}");
-        Topology::from_bitmap_path(path).unwrap()
+        Topology::<Rgba8>::load_bitmap(path).unwrap()
     }
 
     fn load_rgb_seam_graph(filename: &str) -> UndirectedGraph<Option<Rgba8>> {

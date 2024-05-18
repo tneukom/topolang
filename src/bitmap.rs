@@ -36,7 +36,7 @@ impl Bitmap {
         Ok(Self::from_imageio_bitmap(&imageio_bitmap))
     }
 
-    pub fn from_path(path: impl AsRef<Path>) -> Result<Self, image::ImageError> {
+    pub fn load(path: impl AsRef<Path>) -> Result<Self, image::ImageError> {
         let imageio_bitmap = image::open(path)?.into_rgba8();
         Ok(Self::from_imageio_bitmap(&imageio_bitmap))
     }

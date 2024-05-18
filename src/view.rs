@@ -4,7 +4,8 @@ use crate::{
     coordinate_frame::CoordinateFrames,
     field::Field,
     history::{History, SnapshotCause},
-    math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect, rgba8::Rgba8},
+    material::Material,
+    math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect},
     pixmap::Pixmap,
     world::World,
 };
@@ -124,15 +125,15 @@ pub enum UiState {
 }
 
 pub struct View {
-    pub world: World<Rgba8>,
-    pub history: History,
+    pub world: World<Material>,
+    pub history: History<Material>,
     pub camera: Camera,
 
     pub ui_state: UiState,
 }
 
 impl View {
-    pub fn new(world: World<Rgba8>) -> View {
+    pub fn new(world: World<Material>) -> View {
         let history = History::new(world.material_map().clone());
         View {
             world,
@@ -153,9 +154,9 @@ impl View {
     }
 
     pub fn empty() -> View {
-        let field = Field::filled(Rect::low_size([0, 0], [512, 512]), Rgba8::TRANSPARENT);
-        let color_map = Pixmap::from_field(&field);
-        let world = World::from_pixmap(color_map);
+        let field = Field::filled(Rect::low_size([0, 0], [512, 512]), Material::TRANSPARENT);
+        let material_map = Pixmap::from_field(&field);
+        let world = World::from_pixmap(material_map);
         Self::new(world)
     }
 
@@ -188,7 +189,7 @@ impl View {
         let mode_exited = ![EditMode::Brush, EditMode::Eraser].contains(&settings.edit_mode);
         let stop = mode_exited || !input.left_mouse.is_down;
         if stop {
-            let cause = if op.brush.color == Rgba8::TRANSPARENT {
+            let cause = if op.brush.material == Material::TRANSPARENT {
                 SnapshotCause::Erase
             } else {
                 SnapshotCause::Brush
@@ -225,7 +226,7 @@ impl View {
                     let mut brush = settings.brush;
                     // Clear is brushing with transparent color
                     if settings.edit_mode == EditMode::Eraser {
-                        brush.color = Rgba8::TRANSPARENT;
+                        brush.material = Material::TRANSPARENT;
                     }
 
                     let op = Brushing {
@@ -239,7 +240,7 @@ impl View {
                 if input.left_mouse.is_down {
                     let pixel: Pixel = input.world_mouse.floor().cwise_into_lossy().into();
                     if let Some(region_key) = self.world.topology().region_at(pixel) {
-                        self.world.fill_region(region_key, settings.brush.color);
+                        self.world.fill_region(region_key, settings.brush.material);
                         self.history
                             .add_snapshot(self.world.material_map().clone(), SnapshotCause::Fill);
                     }

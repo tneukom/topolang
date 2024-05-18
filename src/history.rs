@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    pixmap::PixmapRgba,
+    pixmap::Pixmap,
     utils::{unix_timestamp, ReflectEnum},
 };
 
@@ -34,20 +34,20 @@ impl ReflectEnum for SnapshotCause {
     }
 }
 
-pub struct Snapshot {
-    colormap: PixmapRgba,
+pub struct Snapshot<M> {
+    material_map: Pixmap<M>,
     cause: SnapshotCause,
 
     /// Unix time
     timestamp: f64,
 
-    parent: Option<Rc<Snapshot>>,
+    parent: Option<Rc<Snapshot<M>>>,
 }
 
-impl Snapshot {
-    pub fn new(colormap: PixmapRgba, cause: SnapshotCause, parent: Option<Rc<Snapshot>>) -> Self {
+impl<M: Copy + Eq> Snapshot<M> {
+    pub fn new(material_map: Pixmap<M>, cause: SnapshotCause, parent: Option<Rc<Self>>) -> Self {
         Self {
-            colormap,
+            material_map,
             timestamp: unix_timestamp(),
             cause,
             parent,
@@ -56,10 +56,7 @@ impl Snapshot {
 
     // TODO: Could return an Iterator instead
     /// Resulting path contains start and stop
-    pub fn path_to<'a>(
-        mut self: &'a Rc<Snapshot>,
-        stop: &'a Rc<Snapshot>,
-    ) -> Option<Vec<&Rc<Snapshot>>> {
+    pub fn path_to<'a>(mut self: &'a Rc<Self>, stop: &'a Rc<Self>) -> Option<Vec<&Rc<Self>>> {
         let mut path = vec![self];
         while !Rc::ptr_eq(self, stop) {
             self = self.parent.as_ref()?;
@@ -68,8 +65,8 @@ impl Snapshot {
         Some(path)
     }
 
-    pub fn colormap(&self) -> &PixmapRgba {
-        &self.colormap
+    pub fn material_map(&self) -> &Pixmap<M> {
+        &self.material_map
     }
 
     pub fn cause(&self) -> SnapshotCause {
@@ -77,17 +74,17 @@ impl Snapshot {
     }
 }
 
-pub struct History {
+pub struct History<M> {
     /// Currently active node
-    pub head: Rc<Snapshot>,
+    pub head: Rc<Snapshot<M>>,
     /// Leaf node
-    pub active: Rc<Snapshot>,
-    pub root: Rc<Snapshot>,
+    pub active: Rc<Snapshot<M>>,
+    pub root: Rc<Snapshot<M>>,
 }
 
-impl History {
+impl<M: Copy + Eq> History<M> {
     /// History should contain at least one item
-    pub fn new(colormap: PixmapRgba) -> Self {
+    pub fn new(colormap: Pixmap<M>) -> Self {
         let root = Rc::new(Snapshot::new(colormap, SnapshotCause::Root, None));
 
         Self {
@@ -98,11 +95,11 @@ impl History {
     }
 
     /// If colormap is same as current no new snapshot is added
-    pub fn add_snapshot(&mut self, colormap: PixmapRgba, cause: SnapshotCause) {
-        if self.head.colormap() == &colormap {
+    pub fn add_snapshot(&mut self, material_map: Pixmap<M>, cause: SnapshotCause) {
+        if self.head.material_map() == &material_map {
             return;
         }
-        self.head = Rc::new(Snapshot::new(colormap, cause, Some(self.head.clone())));
+        self.head = Rc::new(Snapshot::new(material_map, cause, Some(self.head.clone())));
         self.active = self.head.clone();
     }
 

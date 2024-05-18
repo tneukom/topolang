@@ -1,4 +1,5 @@
 use crate::{
+    material::Material,
     math::{pixel::Corner, rgba8::Rgba8},
     morphism::Morphism,
     pixmap::PixmapRgba,
@@ -11,11 +12,11 @@ use std::{
 
 /// Returns all seams (including non-atomic ones) in topo
 #[inline(never)]
-pub fn generalized_seams(topo: &Topology<Rgba8>, left_color: Rgba8) -> Vec<Seam> {
+pub fn generalized_seams<M: Copy + Eq>(topo: &Topology<M>, left_material: M) -> Vec<Seam> {
     let mut seams = Vec::new();
 
     for region in topo.regions.values() {
-        if region.material != left_color {
+        if region.material != left_material {
             continue;
         }
 
@@ -47,96 +48,6 @@ pub fn generalized_seams(topo: &Topology<Rgba8>, left_color: Rgba8) -> Vec<Seam>
     seams
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct CoutTrace {
-    level: usize,
-}
-
-impl CoutTrace {
-    pub fn new() -> Self {
-        Self { level: 0 }
-    }
-
-    pub fn assign(&self, seam: &Seam, phi_seam: &Seam) {
-        let indent = self.indent();
-        println!("{indent}{seam} -> {phi_seam}")
-    }
-
-    pub fn failed(&self) {
-        let indent = self.indent();
-        println!("{indent}Failed")
-    }
-
-    pub fn success(&self) {
-        let indent = self.indent();
-        println!("{indent}Succeeded")
-    }
-
-    pub fn indent(&self) -> String {
-        "  ".repeat(self.level)
-    }
-
-    pub fn recurse(&self) -> Self {
-        Self {
-            level: self.level + 1,
-        }
-    }
-}
-
-pub trait Trace {
-    fn assign(&self, seam: &Seam, phi_seam: &Seam);
-
-    fn failed(&self, cause: &str);
-
-    fn success(&self);
-
-    fn recurse(&self) -> Self;
-}
-
-impl Trace for CoutTrace {
-    fn assign(&self, seam: &Seam, phi_seam: &Seam) {
-        let indent = self.indent();
-        println!("{indent}{seam} -> {phi_seam}")
-    }
-
-    fn failed(&self, cause: &str) {
-        let indent = self.indent();
-        println!("{indent}Failed {cause}")
-    }
-
-    fn success(&self) {
-        let indent = self.indent();
-        println!("{indent}Succeeded")
-    }
-
-    fn recurse(&self) -> Self {
-        Self {
-            level: self.level + 1,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct NullTrace {}
-
-impl NullTrace {
-    pub fn new() -> Self {
-        NullTrace {}
-    }
-}
-
-impl Trace for NullTrace {
-    fn assign(&self, _seam: &Seam, _phi_seam: &Seam) {}
-
-    fn failed(&self, _cause: &str) {}
-
-    fn success(&self) {}
-
-    fn recurse(&self) -> Self {
-        *self
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Unassigned {
     seam: Seam,
@@ -144,14 +55,14 @@ pub struct Unassigned {
     phi_start_corner: Option<Corner>,
     phi_stop_corner: Option<Corner>,
     reverse_in_pattern: bool,
-    colors: SeamMaterials<Rgba8>,
+    materials: SeamMaterials<Material>,
 }
 
 impl Unassigned {
     /// List of unassigned seams given a pattern and a partial Morphism `phi`
     /// If returned list is empty phi is fully defined
     #[inline(never)]
-    pub fn candidates(pattern: &Topology<Rgba8>, phi: &Morphism) -> Vec<Self> {
+    pub fn candidates(pattern: &Topology<Material>, phi: &Morphism) -> Vec<Self> {
         pattern
             .iter_seams()
             .filter(|&seam| !phi.seam_map.contains_key(seam))
@@ -161,7 +72,7 @@ impl Unassigned {
                 phi_start_corner: phi.corner_map.get(&seam.start_corner()).copied(),
                 phi_stop_corner: phi.corner_map.get(&seam.stop_corner()).copied(),
                 reverse_in_pattern: pattern.contains_seam(&seam.reversed()),
-                colors: pattern.seam_materials(seam),
+                materials: pattern.seam_materials(seam),
             })
             .collect()
     }
@@ -184,7 +95,7 @@ impl Unassigned {
 
     /// Choose the best unassigned seam to continue the search
     #[inline(never)]
-    pub fn choose(pattern: &Topology<Rgba8>, phi: &Morphism) -> Option<Self> {
+    pub fn choose(pattern: &Topology<Material>, phi: &Morphism) -> Option<Self> {
         Self::candidates(pattern, phi)
             .into_iter()
             .max_by(Self::compare_heuristic)
@@ -193,8 +104,8 @@ impl Unassigned {
     #[inline(never)]
     pub fn possible_assignment(
         &self,
-        world: &Topology<Rgba8>,
-        pattern: &Topology<Rgba8>,
+        world: &Topology<Material>,
+        pattern: &Topology<Material>,
         phi_seam: &Seam,
     ) -> bool {
         if pattern[pattern.left_of(&self.seam)].material != world[world.left_of(phi_seam)].material
@@ -249,15 +160,15 @@ impl Unassigned {
     #[inline(never)]
     fn both_sided_assignment_candidates(
         &self,
-        world: &Topology<Rgba8>,
-        pattern: &Topology<Rgba8>,
+        world: &Topology<Material>,
+        pattern: &Topology<Material>,
     ) -> Vec<Seam> {
         // let right_color = self.colors.right.expect("Not both sided");
 
         world
             .regions
             .values()
-            .filter(|region| self.colors.left == region.material)
+            .filter(|region| self.materials.left == region.material)
             .flat_map(|region| region.iter_seams().copied())
             .filter(|phi_seam| self.possible_assignment(world, pattern, phi_seam))
             .collect()
@@ -266,10 +177,10 @@ impl Unassigned {
     #[inline(never)]
     fn fallback_assignment_candidates(
         &self,
-        world: &Topology<Rgba8>,
-        pattern: &Topology<Rgba8>,
+        world: &Topology<Material>,
+        pattern: &Topology<Material>,
     ) -> Vec<Seam> {
-        return generalized_seams(world, self.colors.left)
+        return generalized_seams(world, self.materials.left)
             .into_iter()
             .filter(|phi_seam| self.possible_assignment(world, pattern, phi_seam))
             .collect();
@@ -280,8 +191,8 @@ impl Unassigned {
     #[inline(never)]
     pub fn assignment_candidates(
         &self,
-        world: &Topology<Rgba8>,
-        pattern: &Topology<Rgba8>,
+        world: &Topology<Material>,
+        pattern: &Topology<Material>,
     ) -> Vec<Seam> {
         if self.reverse_in_pattern {
             self.both_sided_assignment_candidates(world, pattern)
@@ -292,13 +203,13 @@ impl Unassigned {
 }
 
 pub struct Search<'a> {
-    pub world: &'a Topology<Rgba8>,
-    pub pattern: &'a Topology<Rgba8>,
+    pub world: &'a Topology<Material>,
+    pub pattern: &'a Topology<Material>,
     pub hidden: Option<&'a BTreeSet<RegionKey>>,
 }
 
 impl<'a> Search<'a> {
-    pub fn new(world: &'a Topology<Rgba8>, pattern: &'a Topology<Rgba8>) -> Self {
+    pub fn new(world: &'a Topology<Material>, pattern: &'a Topology<Material>) -> Self {
         Self {
             world,
             pattern,
@@ -395,24 +306,113 @@ pub fn extract_pattern(pixmap: &mut PixmapRgba) -> PixmapRgba {
     pixmap.extract_right(inner_border)
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct CoutTrace {
+    level: usize,
+}
+
+impl CoutTrace {
+    pub fn new() -> Self {
+        Self { level: 0 }
+    }
+
+    pub fn assign(&self, seam: &Seam, phi_seam: &Seam) {
+        let indent = self.indent();
+        println!("{indent}{seam} -> {phi_seam}")
+    }
+
+    pub fn failed(&self) {
+        let indent = self.indent();
+        println!("{indent}Failed")
+    }
+
+    pub fn success(&self) {
+        let indent = self.indent();
+        println!("{indent}Succeeded")
+    }
+
+    pub fn indent(&self) -> String {
+        "  ".repeat(self.level)
+    }
+
+    pub fn recurse(&self) -> Self {
+        Self {
+            level: self.level + 1,
+        }
+    }
+}
+
+pub trait Trace {
+    fn assign(&self, seam: &Seam, phi_seam: &Seam);
+
+    fn failed(&self, cause: &str);
+
+    fn success(&self);
+
+    fn recurse(&self) -> Self;
+}
+
+impl Trace for CoutTrace {
+    fn assign(&self, seam: &Seam, phi_seam: &Seam) {
+        let indent = self.indent();
+        println!("{indent}{seam} -> {phi_seam}")
+    }
+
+    fn failed(&self, cause: &str) {
+        let indent = self.indent();
+        println!("{indent}Failed {cause}")
+    }
+
+    fn success(&self) {
+        let indent = self.indent();
+        println!("{indent}Succeeded")
+    }
+
+    fn recurse(&self) -> Self {
+        Self {
+            level: self.level + 1,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NullTrace {}
+
+impl NullTrace {
+    pub fn new() -> Self {
+        NullTrace {}
+    }
+}
+
+impl Trace for NullTrace {
+    fn assign(&self, _seam: &Seam, _phi_seam: &Seam) {}
+
+    fn failed(&self, _cause: &str) {}
+
+    fn success(&self) {}
+
+    fn recurse(&self) -> Self {
+        *self
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::{
+        material::Material,
         math::rgba8::Rgba8,
         pattern::{extract_pattern, NullTrace, Search},
-        pixmap::PixmapRgba,
+        pixmap::{PixmapMaterial, PixmapRgba},
         topology::Topology,
     };
 
     fn pixmap_with_void_from_path(path: &str) -> PixmapRgba {
-        PixmapRgba::from_bitmap_path(path)
-            .unwrap()
-            .without_color(&Rgba8::VOID)
+        PixmapRgba::load_bitmap(path).unwrap().without(&Rgba8::VOID)
     }
 
     fn assert_extract_inner_outer(name: &str) {
         let folder = "test_resources/extract_pattern";
-        let mut pixmap = PixmapRgba::from_bitmap_path(format!("{folder}/{name}.png")).unwrap();
+        let mut pixmap = PixmapRgba::load_bitmap(format!("{folder}/{name}.png")).unwrap();
         let inner = extract_pattern(&mut pixmap);
 
         // Load expected inner and outer pixmaps
@@ -440,11 +440,11 @@ mod test {
 
     fn assert_pattern_match(pattern_path: &str, world_path: &str, n_solutions: usize) {
         let folder = "test_resources/patterns";
-        let pixmap = PixmapRgba::from_bitmap_path(format!("{folder}/{pattern_path}"))
+        let pixmap = PixmapMaterial::load_bitmap(format!("{folder}/{pattern_path}"))
             .unwrap()
-            .without_color(&Rgba8::VOID);
+            .without(&Material::VOID);
         let pattern = Topology::new(&pixmap);
-        let world = Topology::from_bitmap_path(format!("{folder}/{world_path}")).unwrap();
+        let world = Topology::<Material>::load_bitmap(format!("{folder}/{world_path}")).unwrap();
 
         let trace = NullTrace::new();
         // let trace = CoutTrace::new();

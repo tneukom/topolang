@@ -361,7 +361,7 @@ mod test {
         let filenames = ["2a.png", "2b.png", "3a.png", "3b.png", "3c.png", "4a.png"];
         for filename in filenames {
             let path = format!("test_resources/topology/{filename}");
-            let topology = Topology::from_bitmap_path(&path).unwrap();
+            let topology = Topology::<Rgba8>::load_bitmap(&path).unwrap();
             let seam_phi = trivial_seam_automorphism(&topology);
             let phi = Morphism::induced_from_seam_map(&topology, &topology, seam_phi).unwrap();
             assert!(phi.is_total(&topology, true));
@@ -373,8 +373,8 @@ mod test {
         let folder = "test_resources/morphism/";
         let dom_path = format!("{folder}/{dom_filename}");
         let codom_path = format!("{folder}/{codom_filename}");
-        let dom = Topology::from_bitmap_path(&dom_path).unwrap();
-        let codom = Topology::from_bitmap_path(&codom_path).unwrap();
+        let dom = Topology::<Rgba8>::load_bitmap(&dom_path).unwrap();
+        let codom = Topology::<Rgba8>::load_bitmap(&codom_path).unwrap();
 
         let seam_phi = seam_map_from_colors(&dom, &codom).unwrap();
         let phi = Morphism::induced_from_seam_map(&dom, &codom, seam_phi).unwrap();

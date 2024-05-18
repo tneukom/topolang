@@ -44,7 +44,7 @@ pub fn color_replace() {
         }
 
         // Load png
-        let Ok(bitmap) = Bitmap::from_path(entry.path()) else {
+        let Ok(bitmap) = Bitmap::load(entry.path()) else {
             println!("Failed to load {:?}", entry.path());
             continue;
         };

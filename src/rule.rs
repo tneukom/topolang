@@ -1,27 +1,28 @@
 use itertools::Itertools;
 
 use crate::{
-    math::{pixel::Pixel, rgba8::Rgba8},
+    material::Material,
+    math::pixel::Pixel,
     morphism::Morphism,
     pattern::{NullTrace, Search},
-    pixmap::PixmapRgba,
+    pixmap::Pixmap,
     topology::{FillRegion, Topology},
     world::World,
 };
 
 pub struct Rule {
-    pub pattern: Topology<Rgba8>,
-    pub fill_regions: Vec<FillRegion<Rgba8>>,
+    pub pattern: Topology<Material>,
+    pub fill_regions: Vec<FillRegion<Material>>,
 }
 
 impl Rule {
-    pub fn new(before: Topology<Rgba8>, after: Topology<Rgba8>) -> anyhow::Result<Self> {
-        let mut fill_regions: Vec<FillRegion<Rgba8>> = Vec::new();
+    pub fn new(before: Topology<Material>, after: Topology<Material>) -> anyhow::Result<Self> {
+        let mut fill_regions: Vec<FillRegion<Material>> = Vec::new();
 
         let after_pixmap = after.material_map();
 
         for (&before_region_key, before_region) in &before.regions {
-            let Some(after_fill_color) = Self::fill_color(
+            let Some(after_fill_color) = Self::fill_material(
                 &after_pixmap,
                 before.iter_region_interior(before_region_key),
             ) else {
@@ -45,10 +46,10 @@ impl Rule {
 
     /// The fill color of a given region or None if the color is not constant on the region
     /// pixels.
-    pub fn fill_color(
-        pixmap: &PixmapRgba,
+    pub fn fill_material(
+        pixmap: &Pixmap<Material>,
         pixels: impl IntoIterator<Item = Pixel>,
-    ) -> Option<Rgba8> {
+    ) -> Option<Material> {
         pixels
             .into_iter()
             .map(|pixel| pixmap[pixel])
@@ -57,7 +58,7 @@ impl Rule {
     }
 
     /// Returns true if there were any changes to the world
-    pub fn apply_ops(&self, phi: &Morphism, world: &mut World<Rgba8>) -> bool {
+    pub fn apply_ops(&self, phi: &Morphism, world: &mut World<Material>) -> bool {
         let phi_fill_regions = self
             .fill_regions
             .iter()
@@ -72,7 +73,7 @@ impl Rule {
     }
 }
 
-pub fn stabilize(world: &mut World<Rgba8>, rules: &Vec<Rule>) -> usize {
+pub fn stabilize(world: &mut World<Material>, rules: &Vec<Rule>) -> usize {
     let mut steps: usize = 0;
     loop {
         let mut applied = false;
@@ -95,9 +96,9 @@ pub fn stabilize(world: &mut World<Rgba8>, rules: &Vec<Rule>) -> usize {
 #[cfg(test)]
 mod test {
     use crate::{
-        math::rgba8::Rgba8,
+        material::Material,
         pattern::{NullTrace, Search},
-        pixmap::PixmapRgba,
+        pixmap::{PixmapMaterial, PixmapRgba},
         rule::Rule,
         topology::Topology,
         world::World,
@@ -105,19 +106,21 @@ mod test {
 
     fn assert_rule_application(folder: &str, expected_application_count: usize) {
         let folder = format!("test_resources/rules/{folder}");
-        let before_colormap = PixmapRgba::from_bitmap_path(format!("{folder}/before.png"))
+        let before_material_map = PixmapRgba::load_bitmap(format!("{folder}/before.png"))
             .unwrap()
-            .without_color(&Rgba8::VOID);
-        let before = Topology::new(&before_colormap);
+            .into_material()
+            .without(&Material::VOID);
+        let before = Topology::new(&before_material_map);
 
-        let after_colormap = PixmapRgba::from_bitmap_path(format!("{folder}/after.png"))
+        let after_material_map = PixmapRgba::load_bitmap(format!("{folder}/after.png"))
             .unwrap()
-            .without_color(&Rgba8::VOID);
-        let after = Topology::new(&after_colormap);
+            .into_material()
+            .without(&Material::VOID);
+        let after = Topology::new(&after_material_map);
 
         let rule = Rule::new(before, after).unwrap();
 
-        let mut world = World::from_bitmap_path(format!("{folder}/world.png")).unwrap();
+        let mut world = World::<Material>::load_bitmap(format!("{folder}/world.png")).unwrap();
 
         let mut application_count: usize = 0;
         while let Some(phi) =
@@ -131,7 +134,7 @@ mod test {
 
         let result_pixmap = world.material_map();
         let expected_result_pixmap =
-            PixmapRgba::from_bitmap_path(format!("{folder}/expected_result.png")).unwrap();
+            PixmapMaterial::load_bitmap(format!("{folder}/expected_result.png")).unwrap();
 
         // result_pixmap
         //     .to_bitmap_with_size(world_bitmap.size())
