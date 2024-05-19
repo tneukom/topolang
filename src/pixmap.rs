@@ -410,24 +410,6 @@ impl<T: Clone> Pixmap<T> {
 }
 
 impl Pixmap<Rgba8> {
-    #[deprecated]
-    pub fn load_bitmap(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let bitmap = RgbaField::load(path)?;
-        Ok(Self::from_field(&bitmap))
-    }
-
-    #[deprecated]
-    pub fn load_bitmap_from_memory(memory: &[u8]) -> Result<Self, image::ImageError> {
-        let bitmap = RgbaField::load_from_memory(memory)?;
-        Ok(Self::from_field(&bitmap))
-    }
-
-    #[deprecated]
-    pub fn save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
-        let bitmap = self.to_field(Rgba8::TRANSPARENT);
-        bitmap.save(path)
-    }
-
     pub fn into_material(self) -> Pixmap<Material> {
         self.into_map(|rgba| Material::from(rgba))
     }
@@ -438,30 +420,15 @@ impl Pixmap<Material> {
         self.into_map(|material| material.rgba())
     }
 
-    // TODO: Remove
-    // /// Translate pixmap to positive coordinates, top left pixel will be at (0, 0) and convert
-    // /// to bitmap.
-    // #[deprecated]
-    // pub fn to_bitmap(&self) -> Bitmap {
-    //     let bounds = self.bounding_rect();
-    //     let mut field = Field::filled(bounds, Rgba8::BLACK);
-    //     for (index, value) in self.iter() {
-    //         field[index] = value.rgba();
-    //     }
-    //     field.into_array2d()
-    // }
-    //
-    // // TODO: Remove
-    // #[deprecated]
-    // pub fn load_bitmap(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-    //     Ok(PixmapRgba::load_bitmap(path)?.into_material())
-    // }
-    //
-    // // TODO: Remove
-    // #[deprecated]
-    // pub fn load_bitmap_from_memory(memory: &[u8]) -> Result<Self, image::ImageError> {
-    //     Ok(PixmapRgba::load_bitmap_from_memory(memory)?.into_material())
-    // }
+    pub fn load_from_memory(memory: &[u8]) -> anyhow::Result<Self> {
+        Ok(RgbaField::load_from_memory(memory)?
+            .into_material()
+            .to_pixmap())
+    }
+
+    pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        Ok(RgbaField::load(path)?.into_material().to_pixmap())
+    }
 }
 
 impl<T: Eq + Clone> Pixmap<T> {

@@ -3,7 +3,7 @@ use std::{cell::OnceCell, path::Path};
 use crate::{
     field::RgbaField,
     material::Material,
-    math::{rect::Rect, rgba8::Rgba8},
+    math::rect::Rect,
     pixmap::{Pixmap, PixmapRgba},
     topology::{FillRegion, RegionKey, Topology},
 };
@@ -207,25 +207,13 @@ impl<M: Eq + Copy> World<M> {
     }
 }
 
-impl World<Rgba8> {
-    pub fn from_bitmap(bitmap: &RgbaField) -> Self {
-        let color_map = PixmapRgba::from_field(bitmap);
-        Self::from_pixmap(color_map)
-    }
-
-    pub fn load_bitmap(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let bitmap = RgbaField::load(path)?;
-        Ok(Self::from_bitmap(&bitmap))
-    }
-}
-
 impl World<Material> {
     pub fn from_bitmap(bitmap: &RgbaField) -> Self {
         let material_map = PixmapRgba::from_field(bitmap).into_material();
         Self::from_pixmap(material_map)
     }
 
-    pub fn load_bitmap(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+    pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let bitmap = RgbaField::load(path)?;
         Ok(Self::from_bitmap(&bitmap))
     }
@@ -233,14 +221,18 @@ impl World<Material> {
 
 #[cfg(test)]
 mod test {
-    use crate::{math::rgba8::Rgba8, pixmap::PixmapRgba, world::World};
+    use crate::{field::RgbaField, math::rgba8::Rgba8, world::World};
 
     fn assert_blit(name: &str) {
         let folder = format!("test_resources/topology/blit/{name}");
 
-        let world_pixmap = PixmapRgba::load_bitmap(format!("{folder}/base.png")).unwrap();
-        let blit = PixmapRgba::load_bitmap(format!("{folder}/blit.png"))
+        let world_pixmap = RgbaField::load(format!("{folder}/base.png"))
             .unwrap()
+            .to_pixmap();
+
+        let blit = RgbaField::load(format!("{folder}/blit.png"))
+            .unwrap()
+            .to_pixmap()
             .without(&Rgba8::TRANSPARENT);
 
         let mut expected_pixmap = world_pixmap.clone();

@@ -24,7 +24,7 @@ use log::{info, warn};
 use crate::{
     brush::Brush,
     coordinate_frame::CoordinateFrames,
-    field::{FieldIndex, RgbaField},
+    field::RgbaField,
     history::{Snapshot, SnapshotCause},
     interpreter::Interpreter,
     material::Material,
@@ -212,9 +212,12 @@ impl EguiApp {
         // Load topology from file
         // TODO: Should be fetched instead of included
         let world_image_bytes = include_bytes!("../resources/saves/turing.png");
-        let world_bitmap = RgbaField::load_from_memory(world_image_bytes).unwrap();
         // let world_bitmap = Bitmap::transparent(512, 512);
-        let world = World::<Material>::from_bitmap(&world_bitmap);
+        let world_color_map = RgbaField::load_from_memory(world_image_bytes)
+            .unwrap()
+            .into_material()
+            .to_pixmap();
+        let world = World::from_pixmap(world_color_map);
         // let world = Topology::from_bitmap_path("test_resources/compiler/gate/world.png").unwrap();
         let view = View::new(world);
 
@@ -475,7 +478,7 @@ impl EguiApp {
         if ui.button("Load").clicked() {
             println!("Loading file {:?} in folder", &path);
 
-            match World::<Material>::load_bitmap(&path) {
+            match World::<Material>::load(&path) {
                 Ok(world) => {
                     self.view = View::new(world);
                     self.reset_camera();

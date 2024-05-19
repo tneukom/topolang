@@ -196,6 +196,7 @@ mod test {
         connected_components::{
             color_components, left_of_border, right_of_border, split_into_cycles, ColorRegion,
         },
+        field::RgbaField,
         math::{
             pixel::{Pixel, Side},
             rgba8::Rgba8,
@@ -277,7 +278,7 @@ mod test {
     fn test_right_of_border(filename: &str) {
         let folder = "test_resources/connected_components/right_of_border";
         let path = format!("{folder}/{filename}");
-        let color_map = PixmapRgba::load_bitmap(path).unwrap();
+        let color_map = RgbaField::load(path).unwrap().to_pixmap();
         let red_area = pixmap_color_area(&color_map, &Rgba8::RED);
         let blue_area = pixmap_color_area(&color_map, &Rgba8::BLUE);
 
@@ -315,7 +316,7 @@ mod test {
         // Load bitmap
         let folder = "test_resources/connected_components";
         let path = format!("{folder}/{filename}");
-        let color_map = PixmapRgba::load_bitmap(path).unwrap();
+        let color_map = RgbaField::load(path).unwrap().to_pixmap();
 
         // Compute regions
         let (regions, region_map) = usize_color_components(&color_map);

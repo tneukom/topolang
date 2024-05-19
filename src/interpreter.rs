@@ -1,8 +1,8 @@
 use crate::{
+    field::RgbaField,
     material::Material,
     math::{pixel::Pixel, rgba8::Rgba8},
     pattern::{NullTrace, Search},
-    pixmap::PixmapRgba,
     rule::Rule,
     topology::{BorderKey, RegionKey, Topology},
     world::World,
@@ -28,11 +28,11 @@ impl Interpreter {
 
     pub fn new() -> Self {
         // Load rule_frame pattern from file
-        let rule_frame_pixmap =
-            PixmapRgba::load_bitmap_from_memory(include_bytes!("rule_frame.png"))
-                .unwrap()
-                .into_material()
-                .without(&Self::RULE_FRAME_VOID_MATERIAL);
+        let rule_frame_pixmap = RgbaField::load_from_memory(include_bytes!("rule_frame.png"))
+            .unwrap()
+            .into_material()
+            .to_pixmap()
+            .without(&Self::RULE_FRAME_VOID_MATERIAL);
         let rule_frame = Topology::new(&rule_frame_pixmap);
 
         // Side on the before border (inner border of the frame)
@@ -145,8 +145,7 @@ impl Interpreter {
 #[cfg(test)]
 mod test {
     use crate::{
-        field::RgbaField, interpreter::Interpreter, material::Material, pixmap::PixmapMaterial,
-        world::World,
+        interpreter::Interpreter, material::Material, pixmap::PixmapMaterial, world::World,
     };
     use pretty_assertions::assert_eq;
 
@@ -157,7 +156,7 @@ mod test {
 
     fn assert_execute_world(name: &str, expected_steps: usize) {
         let folder = format!("test_resources/compiler/{name}/");
-        let mut world = World::<Material>::load_bitmap(format!("{folder}/world.png")).unwrap();
+        let mut world = World::<Material>::load(format!("{folder}/world.png")).unwrap();
 
         let compiler = Interpreter::new();
 
@@ -177,10 +176,7 @@ mod test {
 
         let result_pixmap = world.material_map();
 
-        let expected_pixmap = RgbaField::load(format!("{folder}/world_expected.png"))
-            .unwrap()
-            .into_material()
-            .to_pixmap();
+        let expected_pixmap = PixmapMaterial::load(format!("{folder}/world_expected.png")).unwrap();
         assert_eq!(result_pixmap, &expected_pixmap);
     }
 

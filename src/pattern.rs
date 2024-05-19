@@ -408,12 +408,17 @@ mod test {
     };
 
     fn pixmap_with_void_from_path(path: &str) -> PixmapRgba {
-        PixmapRgba::load_bitmap(path).unwrap().without(&Rgba8::VOID)
+        RgbaField::load(path)
+            .unwrap()
+            .to_pixmap()
+            .without(&Rgba8::VOID)
     }
 
     fn assert_extract_inner_outer(name: &str) {
         let folder = "test_resources/extract_pattern";
-        let mut pixmap = PixmapRgba::load_bitmap(format!("{folder}/{name}.png")).unwrap();
+        let mut pixmap = RgbaField::load(format!("{folder}/{name}.png"))
+            .unwrap()
+            .to_pixmap();
         let inner = extract_pattern(&mut pixmap);
 
         // Load expected inner and outer pixmaps
@@ -441,13 +446,13 @@ mod test {
 
     fn assert_pattern_match(pattern_path: &str, world_path: &str, n_solutions: usize) {
         let folder = "test_resources/patterns";
-        let pixmap = RgbaField::load(format!("{folder}/{pattern_path}"))
+        let pixmap = PixmapMaterial::load(format!("{folder}/{pattern_path}"))
             .unwrap()
-            .into_material()
-            .to_pixmap()
             .without(&Material::VOID);
         let pattern = Topology::new(&pixmap);
-        let world = Topology::<Material>::load_bitmap(format!("{folder}/{world_path}")).unwrap();
+
+        let world_material_map = PixmapMaterial::load(format!("{folder}/{world_path}")).unwrap();
+        let world = Topology::new(&world_material_map);
 
         let trace = NullTrace::new();
         // let trace = CoutTrace::new();
