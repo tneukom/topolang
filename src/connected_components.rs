@@ -201,11 +201,11 @@ mod test {
             pixel::{Pixel, Side},
             rgba8::Rgba8,
         },
-        pixmap::{Pixmap, PixmapRgba},
+        pixmap::{Pixmap, RgbaMap},
     };
 
     fn usize_color_components(
-        color_map: &PixmapRgba,
+        color_map: &RgbaMap,
     ) -> (Vec<ColorRegion<usize, Rgba8>>, Pixmap<usize>) {
         let mut id: usize = 0;
         let free_id = || {

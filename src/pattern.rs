@@ -2,7 +2,7 @@ use crate::{
     material::Material,
     math::{pixel::Corner, rgba8::Rgba8},
     morphism::Morphism,
-    pixmap::PixmapRgba,
+    pixmap::RgbaMap,
     topology::{RegionKey, Seam, SeamMaterials, Topology},
 };
 use std::{
@@ -288,7 +288,7 @@ impl<'a> Search<'a> {
 const PATTERN_FRAME_COLOR: Rgba8 = Rgba8::MAGENTA;
 
 #[inline(never)]
-pub fn extract_pattern(pixmap: &mut PixmapRgba) -> PixmapRgba {
+pub fn extract_pattern(pixmap: &mut RgbaMap) -> RgbaMap {
     let topo = Topology::new(&pixmap);
 
     let frame = topo
@@ -403,11 +403,11 @@ mod test {
         material::Material,
         math::rgba8::Rgba8,
         pattern::{extract_pattern, NullTrace, Search},
-        pixmap::{PixmapMaterial, PixmapRgba},
+        pixmap::{MaterialMap, RgbaMap},
         topology::Topology,
     };
 
-    fn pixmap_with_void_from_path(path: &str) -> PixmapRgba {
+    fn pixmap_with_void_from_path(path: &str) -> RgbaMap {
         RgbaField::load(path)
             .unwrap()
             .to_pixmap()
@@ -446,12 +446,12 @@ mod test {
 
     fn assert_pattern_match(pattern_path: &str, world_path: &str, n_solutions: usize) {
         let folder = "test_resources/patterns";
-        let pixmap = PixmapMaterial::load(format!("{folder}/{pattern_path}"))
+        let pixmap = MaterialMap::load(format!("{folder}/{pattern_path}"))
             .unwrap()
             .without(&Material::VOID);
         let pattern = Topology::new(&pixmap);
 
-        let world_material_map = PixmapMaterial::load(format!("{folder}/{world_path}")).unwrap();
+        let world_material_map = MaterialMap::load(format!("{folder}/{world_path}")).unwrap();
         let world = Topology::new(&world_material_map);
 
         let trace = NullTrace::new();

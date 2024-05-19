@@ -22,7 +22,7 @@ use crate::{
         rect::Rect,
         rgba8::Rgba8,
     },
-    pixmap::{Pixmap, PixmapRgba},
+    pixmap::{Pixmap, RgbaMap},
     utils::{IteratorPlus, UndirectedEdge, UndirectedGraph},
 };
 
@@ -604,7 +604,7 @@ impl<M: Eq + Copy> Topology<M> {
 
 impl Topology<Rgba8> {
     pub fn from_bitmap(bitmap: &RgbaField) -> Self {
-        let pixmap = PixmapRgba::from_field(bitmap);
+        let pixmap = RgbaMap::from_field(bitmap);
         Topology::new(&pixmap)
     }
 

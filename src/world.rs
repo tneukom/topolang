@@ -4,7 +4,7 @@ use crate::{
     field::RgbaField,
     material::Material,
     math::rect::Rect,
-    pixmap::{Pixmap, PixmapRgba},
+    pixmap::{Pixmap, RgbaMap},
     topology::{FillRegion, RegionKey, Topology},
 };
 
@@ -209,7 +209,7 @@ impl<M: Eq + Copy> World<M> {
 
 impl World<Material> {
     pub fn from_bitmap(bitmap: &RgbaField) -> Self {
-        let material_map = PixmapRgba::from_field(bitmap).into_material();
+        let material_map = RgbaMap::from_field(bitmap).into_material();
         Self::from_pixmap(material_map)
     }
 

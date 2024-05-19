@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     material::Material,
     math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect},
-    pixmap::{Pixmap, PixmapMaterial},
+    pixmap::{MaterialMap, Pixmap},
     utils::IteratorPlus,
 };
 
@@ -29,7 +29,7 @@ impl Brush {
             .collect()
     }
 
-    pub fn draw_line(&self, line: Arrow<f64>) -> PixmapMaterial {
+    pub fn draw_line(&self, line: Arrow<f64>) -> MaterialMap {
         // for point in Self::points_within_radius(line, self.radius) {
         //     target.set(point.into(), self.color);
         // }

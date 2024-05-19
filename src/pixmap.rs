@@ -109,8 +109,8 @@ pub struct Pixmap<T> {
     tiles: Field<Option<Rc<Tile<T>>>>,
 }
 
-pub type PixmapRgba = Pixmap<Rgba8>;
-pub type PixmapMaterial = Pixmap<Material>;
+pub type RgbaMap = Pixmap<Rgba8>;
+pub type MaterialMap = Pixmap<Material>;
 
 impl<T> Pixmap<T> {
     const ROWS: i64 = 64;

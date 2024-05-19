@@ -144,9 +144,7 @@ impl Interpreter {
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        interpreter::Interpreter, material::Material, pixmap::PixmapMaterial, world::World,
-    };
+    use crate::{interpreter::Interpreter, material::Material, pixmap::MaterialMap, world::World};
     use pretty_assertions::assert_eq;
 
     #[test]
@@ -176,7 +174,7 @@ mod test {
 
         let result_pixmap = world.material_map();
 
-        let expected_pixmap = PixmapMaterial::load(format!("{folder}/world_expected.png")).unwrap();
+        let expected_pixmap = MaterialMap::load(format!("{folder}/world_expected.png")).unwrap();
         assert_eq!(result_pixmap, &expected_pixmap);
     }
 

@@ -98,7 +98,7 @@ mod test {
     use crate::{
         material::Material,
         pattern::{NullTrace, Search},
-        pixmap::PixmapMaterial,
+        pixmap::MaterialMap,
         rule::Rule,
         topology::Topology,
         world::World,
@@ -107,19 +107,19 @@ mod test {
     fn assert_rule_application(folder: &str, expected_application_count: usize) {
         let folder = format!("test_resources/rules/{folder}");
 
-        let before_material_map = PixmapMaterial::load(format!("{folder}/before.png"))
+        let before_material_map = MaterialMap::load(format!("{folder}/before.png"))
             .unwrap()
             .without(&Material::VOID);
         let before = Topology::new(&before_material_map);
 
-        let after_material_map = PixmapMaterial::load(format!("{folder}/after.png"))
+        let after_material_map = MaterialMap::load(format!("{folder}/after.png"))
             .unwrap()
             .without(&Material::VOID);
         let after = Topology::new(&after_material_map);
 
         let rule = Rule::new(before, after).unwrap();
 
-        let world_material_map = PixmapMaterial::load(format!("{folder}/world.png")).unwrap();
+        let world_material_map = MaterialMap::load(format!("{folder}/world.png")).unwrap();
         let mut world = World::<Material>::from_pixmap(world_material_map);
 
         let mut application_count: usize = 0;
@@ -134,7 +134,7 @@ mod test {
 
         let result_pixmap = world.material_map();
         let expected_result_pixmap =
-            PixmapMaterial::load(format!("{folder}/expected_result.png")).unwrap();
+            MaterialMap::load(format!("{folder}/expected_result.png")).unwrap();
 
         // result_pixmap
         //     .to_bitmap_with_size(world_bitmap.size())

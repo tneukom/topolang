@@ -8,11 +8,11 @@ use crate::{
         gl_texture::{Filter, GlTexture},
         rect_painter::{DrawRect, RectPainter},
     },
-    pixmap::{PixmapMaterial, PixmapRgba},
+    pixmap::{MaterialMap, RgbaMap},
 };
 
 pub struct ColorMapPainter {
-    color_map: PixmapMaterial,
+    color_map: MaterialMap,
     rect_painter: RectPainter,
     texture: GlTexture,
 }
@@ -24,7 +24,7 @@ impl ColorMapPainter {
         let bitmap = RgbaField::filled(Rect::low_size([0, 0], [size, size]), Rgba8::TRANSPARENT);
         texture.texture_image(&bitmap);
 
-        let color_map = PixmapMaterial::filled(Material::TRANSPARENT);
+        let color_map = MaterialMap::filled(Material::TRANSPARENT);
 
         Self {
             color_map,
@@ -33,11 +33,11 @@ impl ColorMapPainter {
         }
     }
 
-    pub unsafe fn update(&mut self, material_map: PixmapMaterial) {
-        for tile_index in PixmapRgba::tile_indices() {
+    pub unsafe fn update(&mut self, material_map: MaterialMap) {
+        for tile_index in RgbaMap::tile_indices() {
             let current_tile = self.color_map.get_rc_tile(tile_index);
             let new_tile = material_map.get_rc_tile(tile_index);
-            if PixmapMaterial::tile_ptr_eq(current_tile, new_tile) {
+            if MaterialMap::tile_ptr_eq(current_tile, new_tile) {
                 continue;
             }
 
@@ -46,7 +46,7 @@ impl ColorMapPainter {
                 let color_field = new_tile
                     .fill_none(Material::TRANSPARENT)
                     .map_into::<Rgba8>();
-                let tile_offset = PixmapRgba::tile_rect(tile_index).low();
+                let tile_offset = RgbaMap::tile_rect(tile_index).low();
                 self.texture.texture_sub_image(tile_offset, &color_field);
             } else {
                 // clear sub texture

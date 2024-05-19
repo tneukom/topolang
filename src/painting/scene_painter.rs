@@ -7,7 +7,7 @@ use crate::{
     painting::{
         line_painter::LinePainter, rect_painter::RectPainter, topology_painter::ColorMapPainter,
     },
-    pixmap::PixmapMaterial,
+    pixmap::MaterialMap,
 };
 
 use super::grid_painter::GridPainter;
@@ -41,7 +41,7 @@ impl ScenePainter {
 
     pub unsafe fn draw_material_map(
         &mut self,
-        material_map: PixmapMaterial,
+        material_map: MaterialMap,
         camera: &Camera,
         frames: &CoordinateFrames,
         time: f64,
