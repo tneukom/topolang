@@ -1,8 +1,14 @@
-use std::ops::{Index, IndexMut};
+use image::{Rgba, RgbaImage};
+use std::{
+    io::Cursor,
+    ops::{Index, IndexMut},
+    path::Path,
+};
 
 use crate::{
-    array_2d::Array2d,
-    math::{point::Point, rect::Rect},
+    material::Material,
+    math::{point::Point, rect::Rect, rgba8::Rgba8},
+    pixmap::Pixmap,
     utils::IteratorPlus,
 };
 
@@ -12,8 +18,13 @@ pub struct Field<T> {
     elems: Vec<T>,
 }
 
+pub type RgbaField = Field<Rgba8>;
+pub type MaterialField = Field<Material>;
+
 impl<T> Field<T> {
     pub fn from_linear(bounds: Rect<i64>, elems: Vec<T>) -> Self {
+        assert!(bounds.width() >= 0);
+        assert!(bounds.height() >= 0);
         assert_eq!(bounds.width() * bounds.height(), elems.len() as i64);
         Self { bounds, elems }
     }
@@ -25,11 +36,6 @@ impl<T> Field<T> {
         let mut elems = Vec::with_capacity(bounds.width() as usize * bounds.height() as usize);
         elems.extend(bounds.iter_half_open().map(f));
         Self::from_linear(bounds, elems)
-    }
-
-    pub fn into_array2d(self) -> Array2d<T> {
-        let size = self.bounds.size().as_usize();
-        Array2d::from_linear(size.x, size.y, self.elems)
     }
 
     pub fn linear_slice(&self) -> &[T] {
@@ -162,6 +168,91 @@ impl<T: Clone> Field<T> {
 
     pub fn clipped(&self, bounds: Rect<i64>) -> Self {
         self.sub(bounds.intersect(self.bounds))
+    }
+
+    pub fn to_pixmap(&self) -> Pixmap<T> {
+        Pixmap::from_field(self)
+    }
+}
+
+impl RgbaField {
+    fn from_imageio_bitmap(imageio_bitmap: &RgbaImage) -> Self {
+        let mut bitmap = Self::filled(
+            Rect::low_size(
+                [0, 0],
+                [
+                    imageio_bitmap.width() as i64,
+                    imageio_bitmap.height() as i64,
+                ],
+            ),
+            Rgba8::ZERO,
+        );
+
+        for y in 0..bitmap.height() {
+            for x in 0..bitmap.width() {
+                let Rgba(rgba) = imageio_bitmap.get_pixel(x as u32, y as u32);
+                bitmap[(x, y)] = Rgba8::from(*rgba);
+            }
+        }
+
+        bitmap
+    }
+
+    pub fn load_from_memory(memory: &[u8]) -> Result<Self, image::ImageError> {
+        let imageio_bitmap = image::load_from_memory(memory)?.into_rgba8();
+        Ok(Self::from_imageio_bitmap(&imageio_bitmap))
+    }
+
+    pub fn load(path: impl AsRef<Path>) -> Result<Self, image::ImageError> {
+        let imageio_bitmap = image::open(path)?.into_rgba8();
+        Ok(Self::from_imageio_bitmap(&imageio_bitmap))
+    }
+
+    pub fn to_imageio(&self) -> image::RgbaImage {
+        let mut imageio_bitmap = image::RgbaImage::new(self.width() as u32, self.height() as u32);
+
+        for y in 0..self.height() {
+            for x in 0..self.width() {
+                let imageio_rgba = image::Rgba(self[[x, y]].to_array());
+                imageio_bitmap.put_pixel(x as u32, y as u32, imageio_rgba);
+            }
+        }
+
+        imageio_bitmap
+    }
+
+    pub fn save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+        self.to_imageio().save(path)?;
+        Ok(())
+    }
+
+    pub fn to_png(&self) -> anyhow::Result<Vec<u8>> {
+        let mut cursor = Cursor::new(Vec::new());
+        self.to_imageio()
+            .write_to(&mut cursor, image::ImageFormat::Png)?;
+        Ok(cursor.into_inner())
+    }
+
+    pub fn is_plain(&self, color: Rgba8) -> bool {
+        self.iter().all(|pixel| pixel == &color)
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.is_plain(Rgba8::TRANSPARENT)
+    }
+
+    pub fn as_raw(&self) -> &[u8] {
+        unsafe { self.as_slice().align_to::<u8>().1 }
+    }
+
+    pub fn into_material(self) -> MaterialField {
+        self.into_map(|rgba| rgba.into())
+    }
+}
+
+impl MaterialField {
+    pub fn into_rgba(self) -> RgbaField {
+        self.into_map(|material| material.into())
     }
 }
 

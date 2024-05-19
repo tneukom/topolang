@@ -22,9 +22,9 @@ use instant::Instant;
 use log::{info, warn};
 
 use crate::{
-    bitmap::Bitmap,
     brush::Brush,
     coordinate_frame::CoordinateFrames,
+    field::{FieldIndex, RgbaField},
     history::{Snapshot, SnapshotCause},
     interpreter::Interpreter,
     material::Material,
@@ -118,7 +118,11 @@ impl GifRecorder {
         for snapshot in snapshot_path {
             // TODO: Offset world pixmap by bounds.low()
             // TODO: Paint over white background to remove transparency or use apng instead
-            let image = snapshot.material_map().to_bitmap();
+            let image = snapshot
+                .material_map()
+                .to_field(Material::TRANSPARENT)
+                .into_rgba();
+
             gif_encoder.encode(
                 image.as_raw(),
                 image.width() as u32,
@@ -208,7 +212,7 @@ impl EguiApp {
         // Load topology from file
         // TODO: Should be fetched instead of included
         let world_image_bytes = include_bytes!("../resources/saves/turing.png");
-        let world_bitmap = Bitmap::load_from_memory(world_image_bytes).unwrap();
+        let world_bitmap = RgbaField::load_from_memory(world_image_bytes).unwrap();
         // let world_bitmap = Bitmap::transparent(512, 512);
         let world = World::<Material>::from_bitmap(&world_bitmap);
         // let world = Topology::from_bitmap_path("test_resources/compiler/gate/world.png").unwrap();
@@ -222,10 +226,11 @@ impl EguiApp {
         let gl = cc.gl.clone().unwrap();
 
         let load_egui_icon = |name: &str, bytes: &[u8]| {
-            let bitmap = Bitmap::load_from_memory(bytes).unwrap();
+            let bitmap = RgbaField::load_from_memory(bytes).unwrap();
             let raw: &[u8] = &bitmap.as_raw();
             let size = [bitmap.width(), bitmap.height()];
-            let egui_image = egui::ColorImage::from_rgba_unmultiplied(size, raw);
+            let egui_image =
+                egui::ColorImage::from_rgba_unmultiplied([size[0] as usize, size[1] as usize], raw);
 
             cc.egui_ctx
                 .load_texture(name, egui_image, TextureOptions::LINEAR)
@@ -447,8 +452,12 @@ impl EguiApp {
                 .save_file()
             {
                 warn!("Saving to path {:?}", path.to_str());
-                let color_map = self.view.world.material_map();
-                let bitmap = color_map.to_bitmap();
+                let bitmap = self
+                    .view
+                    .world
+                    .material_map()
+                    .to_field(Material::TRANSPARENT)
+                    .into_rgba();
                 if let Err(err) = bitmap.save(path) {
                     warn!("Failed to save with error {err}");
                 }
@@ -480,7 +489,12 @@ impl EguiApp {
         if ui.button("Save").clicked() {
             println!("Saving edit scene to {}", self.file_name);
 
-            let bitmap = self.view.world.material_map().to_bitmap();
+            let bitmap = self
+                .view
+                .world
+                .material_map()
+                .to_field(Material::TRANSPARENT)
+                .into_rgba();
             match bitmap.save(&path) {
                 Ok(_) => println!("Saved {path:?}"),
                 Err(err) => println!("Failed to save {path:?} with error {err}"),
@@ -626,7 +640,7 @@ impl EguiApp {
 
     fn load_file(&mut self, content: &[u8]) {
         info!("Loading a file!");
-        let Ok(bitmap) = Bitmap::load_from_memory(content) else {
+        let Ok(bitmap) = RgbaField::load_from_memory(content) else {
             warn!("Failed to load png file!");
             return;
         };

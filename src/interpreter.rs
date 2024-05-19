@@ -145,9 +145,7 @@ impl Interpreter {
 #[cfg(test)]
 mod test {
     use crate::{
-        interpreter::Interpreter,
-        material::Material,
-        pixmap::{Pixmap, PixmapMaterial},
+        field::RgbaField, interpreter::Interpreter, material::Material, pixmap::PixmapMaterial,
         world::World,
     };
     use pretty_assertions::assert_eq;
@@ -179,8 +177,10 @@ mod test {
 
         let result_pixmap = world.material_map();
 
-        let expected_pixmap =
-            PixmapMaterial::load_bitmap(format!("{folder}/world_expected.png")).unwrap();
+        let expected_pixmap = RgbaField::load(format!("{folder}/world_expected.png"))
+            .unwrap()
+            .into_material()
+            .to_pixmap();
         assert_eq!(result_pixmap, &expected_pixmap);
     }
 

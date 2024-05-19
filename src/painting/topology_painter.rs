@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    bitmap::Bitmap,
+    field::RgbaField,
     material::Material,
     math::{affine_map::AffineMap, rect::Rect, rgba8::Rgba8},
     painting::{
@@ -18,10 +18,10 @@ pub struct ColorMapPainter {
 }
 
 impl ColorMapPainter {
-    pub unsafe fn new(gl: Arc<glow::Context>, size: usize) -> Self {
+    pub unsafe fn new(gl: Arc<glow::Context>, size: i64) -> Self {
         let mut texture = GlTexture::from_size(gl.clone(), size, size, Filter::Nearest);
         // TODO:SPEEDUP: Do we need to create an empty bitmap just to clear the texture?
-        let bitmap = Bitmap::filled(size, size, Rgba8::TRANSPARENT);
+        let bitmap = RgbaField::filled(Rect::low_size([0, 0], [size, size]), Rgba8::TRANSPARENT);
         texture.texture_image(&bitmap);
 
         let color_map = PixmapMaterial::filled(Material::TRANSPARENT);

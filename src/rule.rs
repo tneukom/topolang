@@ -96,6 +96,7 @@ pub fn stabilize(world: &mut World<Material>, rules: &Vec<Rule>) -> usize {
 #[cfg(test)]
 mod test {
     use crate::{
+        field::RgbaField,
         material::Material,
         pattern::{NullTrace, Search},
         pixmap::{PixmapMaterial, PixmapRgba},
@@ -133,8 +134,10 @@ mod test {
         assert_eq!(application_count, expected_application_count);
 
         let result_pixmap = world.material_map();
-        let expected_result_pixmap =
-            PixmapMaterial::load_bitmap(format!("{folder}/expected_result.png")).unwrap();
+        let expected_result_pixmap = RgbaField::load(format!("{folder}/expected_result.png"))
+            .unwrap()
+            .into_material()
+            .to_pixmap();
 
         // result_pixmap
         //     .to_bitmap_with_size(world_bitmap.size())

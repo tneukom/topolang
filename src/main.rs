@@ -2,7 +2,7 @@
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use log::warn;
-use seamlang::{app::EguiApp, bitmap::Bitmap, math::rgba8::Rgba8};
+use seamlang::{app::EguiApp, field::RgbaField, math::rgba8::Rgba8};
 use walkdir::WalkDir;
 
 // pub fn main_benchmark() {
@@ -44,7 +44,7 @@ pub fn color_replace() {
         }
 
         // Load png
-        let Ok(bitmap) = Bitmap::load(entry.path()) else {
+        let Ok(bitmap) = RgbaField::load(entry.path()) else {
             println!("Failed to load {:?}", entry.path());
             continue;
         };

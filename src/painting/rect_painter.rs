@@ -20,7 +20,7 @@ pub struct TileVertex {
 
 /// Draw a single tile at a given position and size
 pub struct DrawRect {
-    pub texture_rect: Rect<usize>,
+    pub texture_rect: Rect<i64>,
     pub corners: [Point<f64>; 4],
 }
 

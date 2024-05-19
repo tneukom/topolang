@@ -1,6 +1,5 @@
 use crate::{
-    bitmap::Bitmap,
-    field::Field,
+    field::{Field, RgbaField},
     math::{affine_map::AffineMap, point::Point, rgba8::Rgba8},
 };
 use glow::{HasContext, PixelUnpackData};
@@ -9,8 +8,8 @@ use std::sync::Arc;
 pub struct GlTexture {
     pub context: Arc<glow::Context>,
     pub id: glow::Texture,
-    pub width: usize,
-    pub height: usize,
+    pub width: i64,
+    pub height: i64,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -23,8 +22,8 @@ pub enum Filter {
 impl GlTexture {
     pub unsafe fn from_size(
         gl: Arc<glow::Context>,
-        width: usize,
-        height: usize,
+        width: i64,
+        height: i64,
         filter: Filter,
     ) -> Self {
         let id = gl.create_texture().expect("Failed to create texture");
@@ -56,7 +55,7 @@ impl GlTexture {
     /// Bitmap colorspace is assumed to be SRGB
     pub unsafe fn from_bitmap(
         context: Arc<glow::Context>,
-        bitmap: &Bitmap,
+        bitmap: &RgbaField,
         filter: Filter,
     ) -> Self {
         let mut texture = Self::from_size(context.clone(), bitmap.width(), bitmap.height(), filter);
@@ -64,7 +63,7 @@ impl GlTexture {
         texture
     }
 
-    pub unsafe fn texture_image(&mut self, bitmap: &Bitmap) {
+    pub unsafe fn texture_image(&mut self, bitmap: &Field<Rgba8>) {
         assert_eq!(bitmap.width(), self.width);
         assert_eq!(bitmap.height(), self.height);
 
@@ -116,7 +115,7 @@ impl GlTexture {
         )
     }
 
-    pub fn size(&self) -> Point<usize> {
+    pub fn size(&self) -> Point<i64> {
         Point(self.width, self.height)
     }
 }

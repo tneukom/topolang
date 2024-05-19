@@ -1,7 +1,7 @@
 use std::{cell::OnceCell, path::Path};
 
 use crate::{
-    bitmap::Bitmap,
+    field::RgbaField,
     material::Material,
     math::{rect::Rect, rgba8::Rgba8},
     pixmap::{Pixmap, PixmapRgba},
@@ -208,25 +208,25 @@ impl<M: Eq + Copy> World<M> {
 }
 
 impl World<Rgba8> {
-    pub fn from_bitmap(bitmap: &Bitmap) -> Self {
-        let color_map = PixmapRgba::from_bitmap(bitmap);
+    pub fn from_bitmap(bitmap: &RgbaField) -> Self {
+        let color_map = PixmapRgba::from_field(bitmap);
         Self::from_pixmap(color_map)
     }
 
     pub fn load_bitmap(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let bitmap = Bitmap::load(path)?;
+        let bitmap = RgbaField::load(path)?;
         Ok(Self::from_bitmap(&bitmap))
     }
 }
 
 impl World<Material> {
-    pub fn from_bitmap(bitmap: &Bitmap) -> Self {
-        let material_map = PixmapRgba::from_bitmap(bitmap).into_material();
+    pub fn from_bitmap(bitmap: &RgbaField) -> Self {
+        let material_map = PixmapRgba::from_field(bitmap).into_material();
         Self::from_pixmap(material_map)
     }
 
     pub fn load_bitmap(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let bitmap = Bitmap::load(path)?;
+        let bitmap = RgbaField::load(path)?;
         Ok(Self::from_bitmap(&bitmap))
     }
 }

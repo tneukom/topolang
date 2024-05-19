@@ -5,13 +5,11 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 pub mod app;
 pub mod area_cover;
-pub mod array_2d;
-pub mod bitmap;
 pub mod brush;
 pub mod camera;
 pub mod connected_components;
 pub mod coordinate_frame;
-mod field;
+pub mod field;
 pub mod frozen;
 pub mod history;
 pub mod interpreter;

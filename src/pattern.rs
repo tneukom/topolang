@@ -399,6 +399,7 @@ impl Trace for NullTrace {
 #[cfg(test)]
 mod test {
     use crate::{
+        field::RgbaField,
         material::Material,
         math::rgba8::Rgba8,
         pattern::{extract_pattern, NullTrace, Search},
@@ -440,8 +441,10 @@ mod test {
 
     fn assert_pattern_match(pattern_path: &str, world_path: &str, n_solutions: usize) {
         let folder = "test_resources/patterns";
-        let pixmap = PixmapMaterial::load_bitmap(format!("{folder}/{pattern_path}"))
+        let pixmap = RgbaField::load(format!("{folder}/{pattern_path}"))
             .unwrap()
+            .into_material()
+            .to_pixmap()
             .without(&Material::VOID);
         let pattern = Topology::new(&pixmap);
         let world = Topology::<Material>::load_bitmap(format!("{folder}/{world_path}")).unwrap();

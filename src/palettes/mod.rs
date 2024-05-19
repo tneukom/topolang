@@ -1,4 +1,4 @@
-use crate::{bitmap::Bitmap, math::rgba8::Rgba8, utils::ReflectEnum};
+use crate::{field::RgbaField, math::rgba8::Rgba8, utils::ReflectEnum};
 use itertools::Itertools;
 
 pub struct Palette {
@@ -10,7 +10,11 @@ pub struct Palette {
 }
 
 impl Palette {
-    pub fn from_bitmap(bitmap: &Bitmap, name: impl Into<String>, link: impl Into<String>) -> Self {
+    pub fn from_bitmap(
+        bitmap: &RgbaField,
+        name: impl Into<String>,
+        link: impl Into<String>,
+    ) -> Self {
         let colors: Vec<_> = bitmap.iter().copied().unique().collect();
         assert!(!colors.is_empty());
 
@@ -22,12 +26,12 @@ impl Palette {
     }
 
     pub fn palette_pico8() -> Palette {
-        let bitmap = Bitmap::load_from_memory(include_bytes!("pico8.png")).unwrap();
+        let bitmap = RgbaField::load_from_memory(include_bytes!("pico8.png")).unwrap();
         Self::from_bitmap(&bitmap, "PICO-8", "https://lospec.com/palette-list/pico-8")
     }
 
     pub fn palette_desatur8() -> Palette {
-        let bitmap = Bitmap::load_from_memory(include_bytes!("desatur8.png")).unwrap();
+        let bitmap = RgbaField::load_from_memory(include_bytes!("desatur8.png")).unwrap();
         Self::from_bitmap(
             &bitmap,
             "DESATUR8",
@@ -36,7 +40,7 @@ impl Palette {
     }
 
     pub fn palette_windows16() -> Palette {
-        let bitmap = Bitmap::load_from_memory(include_bytes!("windows16.png")).unwrap();
+        let bitmap = RgbaField::load_from_memory(include_bytes!("windows16.png")).unwrap();
         Self::from_bitmap(
             &bitmap,
             "WINDOWS-16",
@@ -45,7 +49,7 @@ impl Palette {
     }
 
     pub fn palette_na16() -> Palette {
-        let bitmap = Bitmap::load_from_memory(include_bytes!("na16.png")).unwrap();
+        let bitmap = RgbaField::load_from_memory(include_bytes!("na16.png")).unwrap();
         Self::from_bitmap(&bitmap, "NA16", "https://lospec.com/palette-list/na16")
     }
 }

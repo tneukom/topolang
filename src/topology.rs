@@ -12,10 +12,10 @@ use itertools::Itertools;
 
 use crate::{
     area_cover::AreaCover,
-    bitmap::Bitmap,
     connected_components::{
         color_components_subset, left_of_border, right_of_border, split_into_cycles,
     },
+    field::RgbaField,
     material::Material,
     math::{
         pixel::{Corner, Pixel, Side},
@@ -604,25 +604,27 @@ impl<M: Eq + Copy> Topology<M> {
 }
 
 impl Topology<Rgba8> {
-    pub fn from_bitmap(bitmap: &Bitmap) -> Self {
-        let pixmap = PixmapRgba::from_bitmap(bitmap);
+    pub fn from_bitmap(bitmap: &RgbaField) -> Self {
+        let pixmap = PixmapRgba::from_field(bitmap);
         Topology::new(&pixmap)
     }
 
     pub fn load_bitmap(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let bitmap = Bitmap::load(path)?;
+        let bitmap = RgbaField::load(path)?;
         Ok(Self::from_bitmap(&bitmap))
     }
 }
 
 impl Topology<Material> {
-    pub fn from_bitmap(bitmap: &Bitmap) -> Self {
-        let pixmap = PixmapRgba::from_bitmap(bitmap).into_material();
+    #[deprecated]
+    pub fn from_bitmap(bitmap: &RgbaField) -> Self {
+        let pixmap = PixmapRgba::from_field(bitmap).into_material();
         Topology::new(&pixmap)
     }
 
+    #[deprecated]
     pub fn load_bitmap(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let bitmap = Bitmap::load(path)?;
+        let bitmap = RgbaField::load(path)?;
         Ok(Self::from_bitmap(&bitmap))
     }
 }

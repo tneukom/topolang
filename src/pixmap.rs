@@ -2,9 +2,8 @@ use std::{collections::HashMap, ops::Index, path::Path, rc::Rc};
 
 use crate::{
     area_cover::AreaCover,
-    bitmap::Bitmap,
     connected_components::right_of_border,
-    field::{Field, FieldIndex},
+    field::{Field, FieldIndex, RgbaField},
     material::Material,
     math::{
         generic::EuclidDivRem,
@@ -228,12 +227,6 @@ impl<T: Clone> Pixmap<T> {
         Self { tiles }
     }
 
-    pub fn from_field(field: &Field<T>) -> Self {
-        let mut pixmap = Self::new();
-        pixmap.blit_field(field);
-        pixmap
-    }
-
     pub fn filled(value: T) -> Self {
         let tile = Rc::new(Tile::filled(value));
         let tiles = Field::filled(Self::BOUNDS, Some(tile));
@@ -391,6 +384,23 @@ impl<T: Clone> Pixmap<T> {
         }
     }
 
+    /// Translate pixmap to positive coordinates, top left pixel will be at (0, 0) and convert
+    /// to bitmap.
+    pub fn to_field(&self, default: T) -> Field<T> {
+        let bounds = self.bounding_rect();
+        let mut field = Field::filled(bounds, default);
+        for (index, value) in self.iter() {
+            field[index] = value.clone();
+        }
+        field
+    }
+
+    pub fn from_field(field: &Field<T>) -> Self {
+        let mut pixmap = Self::new();
+        pixmap.blit_field(field);
+        pixmap
+    }
+
     // pub fn shrink(&self) -> Self {
     //     let bounds = self.actual_bounds();
     //     Pixmap {
@@ -400,42 +410,22 @@ impl<T: Clone> Pixmap<T> {
 }
 
 impl Pixmap<Rgba8> {
-    // TODO: Simplify
-    pub fn from_bitmap(bitmap: &Bitmap) -> Self {
-        let mut result = Pixmap::new();
-        for (index, &color) in bitmap.enumerate() {
-            if color.a == 0 && color != Rgba8::TRANSPARENT {
-                println!("Bitmap should not contain colors with alpha = 0 but rgb != 0")
-            }
-            result.set(index.as_i64(), color);
-        }
-        result
-    }
-
+    #[deprecated]
     pub fn load_bitmap(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let bitmap = Bitmap::load(path)?;
-        Ok(Self::from_bitmap(&bitmap))
+        let bitmap = RgbaField::load(path)?;
+        Ok(Self::from_field(&bitmap))
     }
 
+    #[deprecated]
     pub fn load_bitmap_from_memory(memory: &[u8]) -> Result<Self, image::ImageError> {
-        let bitmap = Bitmap::load_from_memory(memory)?;
-        Ok(Self::from_bitmap(&bitmap))
+        let bitmap = RgbaField::load_from_memory(memory)?;
+        Ok(Self::from_field(&bitmap))
     }
 
+    #[deprecated]
     pub fn save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
-        let bitmap = self.to_bitmap();
+        let bitmap = self.to_field(Rgba8::TRANSPARENT);
         bitmap.save(path)
-    }
-
-    /// Translate pixmap to positive coordinates, top left pixel will be at (0, 0) and convert
-    /// to bitmap.
-    pub fn to_bitmap(&self) -> Bitmap {
-        let bounds = self.bounding_rect();
-        let mut field = Field::filled(bounds, Rgba8::BLACK);
-        for (index, value) in self.iter() {
-            field[index] = value.clone();
-        }
-        field.into_array2d()
     }
 
     pub fn into_material(self) -> Pixmap<Material> {
@@ -448,29 +438,30 @@ impl Pixmap<Material> {
         self.into_map(|material| material.rgba())
     }
 
-    /// Translate pixmap to positive coordinates, top left pixel will be at (0, 0) and convert
-    /// to bitmap.
-    #[deprecated]
-    pub fn to_bitmap(&self) -> Bitmap {
-        let bounds = self.bounding_rect();
-        let mut field = Field::filled(bounds, Rgba8::BLACK);
-        for (index, value) in self.iter() {
-            field[index] = value.rgba();
-        }
-        field.into_array2d()
-    }
-
     // TODO: Remove
-    #[deprecated]
-    pub fn load_bitmap(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        Ok(PixmapRgba::load_bitmap(path)?.into_material())
-    }
-
-    // TODO: Remove
-    #[deprecated]
-    pub fn load_bitmap_from_memory(memory: &[u8]) -> Result<Self, image::ImageError> {
-        Ok(PixmapRgba::load_bitmap_from_memory(memory)?.into_material())
-    }
+    // /// Translate pixmap to positive coordinates, top left pixel will be at (0, 0) and convert
+    // /// to bitmap.
+    // #[deprecated]
+    // pub fn to_bitmap(&self) -> Bitmap {
+    //     let bounds = self.bounding_rect();
+    //     let mut field = Field::filled(bounds, Rgba8::BLACK);
+    //     for (index, value) in self.iter() {
+    //         field[index] = value.rgba();
+    //     }
+    //     field.into_array2d()
+    // }
+    //
+    // // TODO: Remove
+    // #[deprecated]
+    // pub fn load_bitmap(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+    //     Ok(PixmapRgba::load_bitmap(path)?.into_material())
+    // }
+    //
+    // // TODO: Remove
+    // #[deprecated]
+    // pub fn load_bitmap_from_memory(memory: &[u8]) -> Result<Self, image::ImageError> {
+    //     Ok(PixmapRgba::load_bitmap_from_memory(memory)?.into_material())
+    // }
 }
 
 impl<T: Eq + Clone> Pixmap<T> {
