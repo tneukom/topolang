@@ -71,9 +71,9 @@ pub fn is_injective<T: Ord>(phi: &BTreeMap<T, T>) -> bool {
 
 impl Morphism {
     #[inline(never)]
-    pub fn induced_from_seam_map<M: Copy + Eq>(
-        dom: &Topology<M>,
-        codom: &Topology<M>,
+    pub fn induced_from_seam_map(
+        dom: &Topology,
+        codom: &Topology,
         seam_map: BTreeMap<Seam, Seam>,
     ) -> Option<Self> {
         let region_map = induced_region_map(dom, codom, &seam_map)?;
@@ -93,11 +93,7 @@ impl Morphism {
 
     /// Maps regions to regions of the same material
     #[inline(never)]
-    pub fn preserves_materials<M: Copy + Eq>(
-        &self,
-        dom: &Topology<M>,
-        codom: &Topology<M>,
-    ) -> bool {
+    pub fn preserves_materials(&self, dom: &Topology, codom: &Topology) -> bool {
         self.region_map
             .iter()
             .all(|(&region, &phi_region)| dom[region].material == codom[phi_region].material)
@@ -110,11 +106,7 @@ impl Morphism {
     ///   left * phi = phi * left
     ///   phi * reversed = reversed * phi
     #[inline(never)]
-    pub fn preserves_structure<M: Copy + Eq>(
-        &self,
-        dom: &Topology<M>,
-        codom: &Topology<M>,
-    ) -> bool {
+    pub fn preserves_structure(&self, dom: &Topology, codom: &Topology) -> bool {
         for (seam, phi_seam) in &self.seam_map {
             if self[seam.start_corner()] != phi_seam.start_corner() {
                 return false;
@@ -145,18 +137,14 @@ impl Morphism {
 
     /// Map inner borders to inner borders and outer borders to outer borders.
     #[inline(never)]
-    pub fn preserves_inner_outer<M: Copy + Eq>(
-        &self,
-        dom: &Topology<M>,
-        codom: &Topology<M>,
-    ) -> bool {
+    pub fn preserves_inner_outer(&self, dom: &Topology, codom: &Topology) -> bool {
         self.border_map
             .iter()
             .all(|(&border, &phi_border)| dom[border].is_outer == codom[phi_border].is_outer)
     }
 
     #[inline(never)]
-    pub fn non_overlapping<M: Copy + Eq>(&self, dom: &Topology<M>, codom: &Topology<M>) -> bool {
+    pub fn non_overlapping(&self, dom: &Topology, codom: &Topology) -> bool {
         self.border_map.iter().all(|(&border, &phi_border)| {
             let len_phi_seams: usize = dom[border]
                 .seams
@@ -173,7 +161,7 @@ impl Morphism {
 
     /// Preserves structure and materials
     #[inline(never)]
-    pub fn is_homomorphism<M: Copy + Eq>(&self, dom: &Topology<M>, codom: &Topology<M>) -> bool {
+    pub fn is_homomorphism(&self, dom: &Topology, codom: &Topology) -> bool {
         self.preserves_structure(dom, codom)
             && self.preserves_materials(dom, codom)
             && self.non_overlapping(dom, codom)
@@ -182,7 +170,7 @@ impl Morphism {
 
     /// Maps all regions, seams, seam corners of dom
     #[inline(never)]
-    pub fn is_total<M: Copy + Eq>(&self, dom: &Topology<M>, include_void_seams: bool) -> bool {
+    pub fn is_total(&self, dom: &Topology, include_void_seams: bool) -> bool {
         let seam_total = dom
             .iter_seams()
             .filter(|&seam| include_void_seams || !dom.touches_void(seam))
@@ -221,8 +209,8 @@ pub fn extend_map<K: Ord, V: Eq>(map: &mut BTreeMap<K, V>, key: K, value: V) -> 
 /// error in that case.
 /// Very slow! Could be done faster by iterating over regions, seams around that region while
 /// checking if there are duplicate neighbors.
-pub fn induced_seam_map<M: Copy + Eq>(
-    dom: &Topology<M>,
+pub fn induced_seam_map(
+    dom: &Topology,
     region_phi: &BTreeMap<RegionKey, RegionKey>,
 ) -> anyhow::Result<Option<BTreeMap<Seam, Seam>>> {
     let mut seam_phi: BTreeMap<Seam, Seam> = BTreeMap::new();
@@ -252,9 +240,9 @@ pub fn induced_seam_map<M: Copy + Eq>(
 ///   left ∘ φ = φ ∘ left
 ///   right ∘ φ = φ ∘ right
 #[inline(never)]
-pub fn induced_region_map<M: Copy + Eq>(
-    dom: &Topology<M>,
-    codom: &Topology<M>,
+pub fn induced_region_map(
+    dom: &Topology,
+    codom: &Topology,
     seam_phi: &BTreeMap<Seam, Seam>,
 ) -> Option<BTreeMap<RegionKey, RegionKey>> {
     let mut region_phi: BTreeMap<RegionKey, RegionKey> = BTreeMap::new();
@@ -272,9 +260,9 @@ pub fn induced_region_map<M: Copy + Eq>(
 }
 
 #[inline(never)]
-pub fn induced_border_map<M: Copy + Eq>(
-    dom: &Topology<M>,
-    codom: &Topology<M>,
+pub fn induced_border_map(
+    dom: &Topology,
+    codom: &Topology,
     seam_phi: &BTreeMap<Seam, Seam>,
 ) -> Option<BTreeMap<BorderKey, BorderKey>> {
     let mut border_phi: BTreeMap<BorderKey, BorderKey> = BTreeMap::new();
@@ -319,9 +307,11 @@ pub fn induced_corner_map(seam_phi: &BTreeMap<Seam, Seam>) -> Option<BTreeMap<Co
 #[cfg(test)]
 mod test {
     use crate::{
-        math::rgba8::Rgba8,
+        field::RgbaField,
         morphism::Morphism,
+        pixmap::MaterialMap,
         topology::{Seam, Topology},
+        utils::IntoT,
     };
     use anyhow::anyhow;
     use itertools::Itertools;
@@ -329,8 +319,8 @@ mod test {
 
     /// Seam map determined by left and right region materials.
     fn seam_map_from_colors(
-        dom: &Topology<Rgba8>,
-        codom: &Topology<Rgba8>,
+        dom: &Topology,
+        codom: &Topology,
     ) -> anyhow::Result<BTreeMap<Seam, Seam>> {
         let mut phi: BTreeMap<Seam, Seam> = BTreeMap::new();
 
@@ -352,7 +342,7 @@ mod test {
     }
 
     /// Map each seam of a Topology to itself
-    fn trivial_seam_automorphism(topo: &Topology<Rgba8>) -> BTreeMap<Seam, Seam> {
+    fn trivial_seam_automorphism(topo: &Topology) -> BTreeMap<Seam, Seam> {
         topo.iter_seams().map(|&seam| (seam, seam)).collect()
     }
 
@@ -361,7 +351,10 @@ mod test {
         let filenames = ["2a.png", "2b.png", "3a.png", "3b.png", "3c.png", "4a.png"];
         for filename in filenames {
             let path = format!("test_resources/topology/{filename}");
-            let topology = Topology::<Rgba8>::load_bitmap(&path).unwrap();
+            let topology = RgbaField::load(&path)
+                .unwrap()
+                .intot::<MaterialMap>()
+                .into();
             let seam_phi = trivial_seam_automorphism(&topology);
             let phi = Morphism::induced_from_seam_map(&topology, &topology, seam_phi).unwrap();
             assert!(phi.is_total(&topology, true));
@@ -373,8 +366,14 @@ mod test {
         let folder = "test_resources/morphism/";
         let dom_path = format!("{folder}/{dom_filename}");
         let codom_path = format!("{folder}/{codom_filename}");
-        let dom = Topology::<Rgba8>::load_bitmap(&dom_path).unwrap();
-        let codom = Topology::<Rgba8>::load_bitmap(&codom_path).unwrap();
+        let dom = RgbaField::load(&dom_path)
+            .unwrap()
+            .intot::<MaterialMap>()
+            .into();
+        let codom = RgbaField::load(&codom_path)
+            .unwrap()
+            .intot::<MaterialMap>()
+            .into();
 
         let seam_phi = seam_map_from_colors(&dom, &codom).unwrap();
         let phi = Morphism::induced_from_seam_map(&dom, &codom, seam_phi).unwrap();

@@ -477,15 +477,7 @@ impl EguiApp {
 
         if ui.button("Load").clicked() {
             println!("Loading file {:?} in folder", &path);
-
-            match World::<Material>::load(&path) {
-                Ok(world) => {
-                    self.view = View::new(world);
-                    self.reset_camera();
-                }
-                Err(err) => println!("Failed to load world from {path:?} with error {err}"),
-            }
-
+            self.load_from_path(&path);
             ui.close_menu();
         }
 
@@ -643,11 +635,11 @@ impl EguiApp {
 
     fn load_file(&mut self, content: &[u8]) {
         info!("Loading a file!");
-        let Ok(bitmap) = RgbaField::load_from_memory(content) else {
+        let Ok(rgba_field) = RgbaField::load_from_memory(content) else {
             warn!("Failed to load png file!");
             return;
         };
-        let world = World::<Material>::from_bitmap(&bitmap);
+        let world = World::from_pixmap(rgba_field.into());
         self.view = View::new(world);
     }
 

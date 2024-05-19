@@ -1,56 +1,55 @@
-use std::{cell::OnceCell, path::Path};
+use std::cell::OnceCell;
 
 use crate::{
-    field::RgbaField,
     material::Material,
     math::rect::Rect,
-    pixmap::{Pixmap, RgbaMap},
+    pixmap::MaterialMap,
     topology::{FillRegion, RegionKey, Topology},
 };
 
-struct CachedTopology<M> {
-    topology: OnceCell<Topology<M>>,
+struct CachedTopology {
+    topology: OnceCell<Topology>,
 }
 
-impl<M: Eq + Copy> CachedTopology<M> {
+impl CachedTopology {
     pub fn empty() -> Self {
         Self {
             topology: OnceCell::new(),
         }
     }
 
-    pub fn from(material_map: &Pixmap<M>) -> Self {
+    pub fn from(material_map: &MaterialMap) -> Self {
         let topology = Topology::new(&material_map);
         Self {
             topology: OnceCell::from(topology),
         }
     }
 
-    pub fn get_or_init(&self, material_map: &Pixmap<M>) -> &Topology<M> {
+    pub fn get_or_init(&self, material_map: &MaterialMap) -> &Topology {
         self.topology.get_or_init(|| {
             println!("Recomputing topology!");
             Topology::new(material_map)
         })
     }
 
-    pub fn get(&self) -> Option<&Topology<M>> {
+    pub fn get(&self) -> Option<&Topology> {
         self.topology.get()
     }
 
-    pub fn get_mut(&mut self) -> Option<&mut Topology<M>> {
+    pub fn get_mut(&mut self) -> Option<&mut Topology> {
         self.topology.get_mut()
     }
 }
 
-pub struct World<M> {
-    material_map: Pixmap<M>,
+pub struct World {
+    material_map: MaterialMap,
 
     /// None means the topology has to be recomputed from the material_map
-    topology: CachedTopology<M>,
+    topology: CachedTopology,
 }
 
-impl<M: Eq + Copy> World<M> {
-    pub fn from_pixmap(material_map: Pixmap<M>) -> Self {
+impl World {
+    pub fn from_pixmap(material_map: MaterialMap) -> Self {
         let topology = CachedTopology::from(&material_map);
         Self {
             material_map,
@@ -58,11 +57,11 @@ impl<M: Eq + Copy> World<M> {
         }
     }
 
-    pub fn topology(&self) -> &Topology<M> {
+    pub fn topology(&self) -> &Topology {
         self.topology.get_or_init(&self.material_map)
     }
 
-    pub fn material_map(&self) -> &Pixmap<M> {
+    pub fn material_map(&self) -> &MaterialMap {
         &self.material_map
     }
 
@@ -145,7 +144,7 @@ impl<M: Eq + Copy> World<M> {
     /// Very naive implementation, checks if any Region actually changes material and if
     /// yes recreates the whole topology.
     #[inline(never)]
-    pub fn fill_regions(&mut self, fill_regions: &Vec<FillRegion<M>>) -> bool {
+    pub fn fill_regions(&mut self, fill_regions: &Vec<FillRegion>) -> bool {
         let mut modified = false;
         let mut topology_invalidated = false;
         let topology = self
@@ -192,7 +191,7 @@ impl<M: Eq + Copy> World<M> {
         modified
     }
 
-    pub fn fill_region(&mut self, region_key: RegionKey, material: M) -> bool {
+    pub fn fill_region(&mut self, region_key: RegionKey, material: Material) -> bool {
         let fill_regions = vec![FillRegion {
             region_key,
             material,
@@ -201,39 +200,35 @@ impl<M: Eq + Copy> World<M> {
     }
 
     /// Blit passed Pixmap to self.material_map but only where material_map is already defined.
-    pub fn blit_over(&mut self, other: &Pixmap<M>) {
+    pub fn blit_over(&mut self, other: &MaterialMap) {
         self.material_map.blit_over(other);
         self.topology = CachedTopology::empty();
     }
 }
 
-impl World<Material> {
-    pub fn from_bitmap(bitmap: &RgbaField) -> Self {
-        let material_map = RgbaMap::from_field(bitmap).into_material();
+impl From<MaterialMap> for World {
+    fn from(material_map: MaterialMap) -> Self {
         Self::from_pixmap(material_map)
-    }
-
-    pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let bitmap = RgbaField::load(path)?;
-        Ok(Self::from_bitmap(&bitmap))
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{field::RgbaField, math::rgba8::Rgba8, world::World};
+    use crate::{
+        field::RgbaField, material::Material, pixmap::MaterialMap, utils::IntoT, world::World,
+    };
 
     fn assert_blit(name: &str) {
         let folder = format!("test_resources/topology/blit/{name}");
 
         let world_pixmap = RgbaField::load(format!("{folder}/base.png"))
             .unwrap()
-            .to_pixmap();
+            .intot::<MaterialMap>();
 
         let blit = RgbaField::load(format!("{folder}/blit.png"))
             .unwrap()
-            .to_pixmap()
-            .without(&Rgba8::TRANSPARENT);
+            .intot::<MaterialMap>()
+            .without(&Material::TRANSPARENT);
 
         let mut expected_pixmap = world_pixmap.clone();
         expected_pixmap.blit_over(&blit);

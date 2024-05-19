@@ -1,5 +1,8 @@
 use crate::math::rgba8::Rgba8;
-use std::cmp::Ordering;
+use std::{
+    cmp::Ordering,
+    hash::{Hash, Hasher},
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Material {
@@ -55,9 +58,25 @@ impl PartialOrd for Material {
     }
 }
 
+impl Hash for Material {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        if self.rgba.a == 180 || self.rgba.a == 181 {
+            self.rgba.a.hash(state);
+        } else {
+            self.rgba.hash(state);
+        }
+    }
+}
+
 impl From<Rgba8> for Material {
     fn from(rgba: Rgba8) -> Self {
-        Material { rgba }
+        Self::from(&rgba)
+    }
+}
+
+impl From<&Rgba8> for Material {
+    fn from(rgba: &Rgba8) -> Self {
+        Material { rgba: *rgba }
     }
 }
 

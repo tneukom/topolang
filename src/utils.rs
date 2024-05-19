@@ -133,3 +133,13 @@ pub fn unix_timestamp() -> f64 {
         .unwrap()
         .as_secs_f64()
 }
+
+pub trait IntoT: Sized {
+    fn intot<S: From<Self>>(self) -> S;
+}
+
+impl<T> IntoT for T {
+    fn intot<S: From<Self>>(self) -> S {
+        S::from(self)
+    }
+}

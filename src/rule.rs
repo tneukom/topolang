@@ -11,13 +11,13 @@ use crate::{
 };
 
 pub struct Rule {
-    pub pattern: Topology<Material>,
-    pub fill_regions: Vec<FillRegion<Material>>,
+    pub pattern: Topology,
+    pub fill_regions: Vec<FillRegion>,
 }
 
 impl Rule {
-    pub fn new(before: Topology<Material>, after: Topology<Material>) -> anyhow::Result<Self> {
-        let mut fill_regions: Vec<FillRegion<Material>> = Vec::new();
+    pub fn new(before: Topology, after: Topology) -> anyhow::Result<Self> {
+        let mut fill_regions: Vec<FillRegion> = Vec::new();
 
         let after_pixmap = after.material_map();
 
@@ -58,7 +58,7 @@ impl Rule {
     }
 
     /// Returns true if there were any changes to the world
-    pub fn apply_ops(&self, phi: &Morphism, world: &mut World<Material>) -> bool {
+    pub fn apply_ops(&self, phi: &Morphism, world: &mut World) -> bool {
         let phi_fill_regions = self
             .fill_regions
             .iter()
@@ -73,7 +73,7 @@ impl Rule {
     }
 }
 
-pub fn stabilize(world: &mut World<Material>, rules: &Vec<Rule>) -> usize {
+pub fn stabilize(world: &mut World, rules: &Vec<Rule>) -> usize {
     let mut steps: usize = 0;
     loop {
         let mut applied = false;
@@ -96,31 +96,37 @@ pub fn stabilize(world: &mut World<Material>, rules: &Vec<Rule>) -> usize {
 #[cfg(test)]
 mod test {
     use crate::{
+        field::RgbaField,
         material::Material,
         pattern::{NullTrace, Search},
         pixmap::MaterialMap,
         rule::Rule,
         topology::Topology,
+        utils::IntoT,
         world::World,
     };
 
     fn assert_rule_application(folder: &str, expected_application_count: usize) {
         let folder = format!("test_resources/rules/{folder}");
 
-        let before_material_map = MaterialMap::load(format!("{folder}/before.png"))
+        let before_material_map = RgbaField::load(format!("{folder}/before.png"))
             .unwrap()
+            .intot::<MaterialMap>()
             .without(&Material::VOID);
         let before = Topology::new(&before_material_map);
 
-        let after_material_map = MaterialMap::load(format!("{folder}/after.png"))
+        let after_material_map = RgbaField::load(format!("{folder}/after.png"))
             .unwrap()
+            .intot::<MaterialMap>()
             .without(&Material::VOID);
         let after = Topology::new(&after_material_map);
 
         let rule = Rule::new(before, after).unwrap();
 
-        let world_material_map = MaterialMap::load(format!("{folder}/world.png")).unwrap();
-        let mut world = World::<Material>::from_pixmap(world_material_map);
+        let world_material_map = RgbaField::load(format!("{folder}/world.png"))
+            .unwrap()
+            .into();
+        let mut world = World::from_pixmap(world_material_map);
 
         let mut application_count: usize = 0;
         while let Some(phi) =
@@ -133,8 +139,9 @@ mod test {
         assert_eq!(application_count, expected_application_count);
 
         let result_pixmap = world.material_map();
-        let expected_result_pixmap =
-            MaterialMap::load(format!("{folder}/expected_result.png")).unwrap();
+        let expected_result_pixmap = RgbaField::load(format!("{folder}/expected_result.png"))
+            .unwrap()
+            .into();
 
         // result_pixmap
         //     .to_bitmap_with_size(world_bitmap.size())

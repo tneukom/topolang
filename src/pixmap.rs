@@ -1,9 +1,9 @@
-use std::{collections::HashMap, ops::Index, path::Path, rc::Rc};
+use std::{collections::HashMap, ops::Index, rc::Rc};
 
 use crate::{
     area_cover::AreaCover,
     connected_components::right_of_border,
-    field::{Field, FieldIndex, RgbaField},
+    field::{Field, FieldIndex, MaterialField, RgbaField},
     material::Material,
     math::{
         generic::EuclidDivRem,
@@ -363,13 +363,6 @@ impl<T: Clone> Pixmap<T> {
         }
     }
 
-    /// TODO:SPEEDUP: Tile by tile
-    pub fn blit_field(&mut self, other: &Field<T>) {
-        for (index, value) in other.enumerate() {
-            self.set(index, value.clone());
-        }
-    }
-
     pub fn blit_to_field(&self, field: &mut Field<T>) {
         for (index, value) in self.iter() {
             field[index] = value.clone();
@@ -397,7 +390,9 @@ impl<T: Clone> Pixmap<T> {
 
     pub fn from_field(field: &Field<T>) -> Self {
         let mut pixmap = Self::new();
-        pixmap.blit_field(field);
+        for (index, value) in field.enumerate() {
+            pixmap.set(index, value.clone());
+        }
         pixmap
     }
 
@@ -419,15 +414,33 @@ impl Pixmap<Material> {
     pub fn into_rgba8(self) -> Pixmap<Rgba8> {
         self.into_map(|material| material.rgba())
     }
+}
 
-    pub fn load_from_memory(memory: &[u8]) -> anyhow::Result<Self> {
-        Ok(RgbaField::load_from_memory(memory)?
-            .into_material()
-            .to_pixmap())
+impl From<&MaterialField> for MaterialMap {
+    fn from(field: &MaterialField) -> Self {
+        Self::from_field(field)
     }
+}
 
-    pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        Ok(RgbaField::load(path)?.into_material().to_pixmap())
+impl From<MaterialField> for MaterialMap {
+    fn from(field: MaterialField) -> Self {
+        Self::from(&field)
+    }
+}
+
+impl From<&RgbaField> for MaterialMap {
+    fn from(field: &RgbaField) -> Self {
+        let mut pixmap = Self::new();
+        for (index, value) in field.enumerate() {
+            pixmap.set(index, value.into());
+        }
+        pixmap
+    }
+}
+
+impl From<RgbaField> for MaterialMap {
+    fn from(field: RgbaField) -> Self {
+        Self::from(&field)
     }
 }
 

@@ -1,18 +1,18 @@
-use crate::{
-    material::Material,
-    math::{pixel::Corner, rgba8::Rgba8},
-    morphism::Morphism,
-    pixmap::RgbaMap,
-    topology::{RegionKey, Seam, SeamMaterials, Topology},
-};
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet},
 };
 
+use crate::{
+    material::Material,
+    math::pixel::Corner,
+    morphism::Morphism,
+    topology::{RegionKey, Seam, SeamMaterials, Topology},
+};
+
 /// Returns all seams (including non-atomic ones) in topo
 #[inline(never)]
-pub fn generalized_seams<M: Copy + Eq>(topo: &Topology<M>, left_material: M) -> Vec<Seam> {
+pub fn generalized_seams(topo: &Topology, left_material: Material) -> Vec<Seam> {
     let mut seams = Vec::new();
 
     for region in topo.regions.values() {
@@ -55,14 +55,14 @@ pub struct Unassigned {
     phi_start_corner: Option<Corner>,
     phi_stop_corner: Option<Corner>,
     reverse_in_pattern: bool,
-    materials: SeamMaterials<Material>,
+    materials: SeamMaterials,
 }
 
 impl Unassigned {
     /// List of unassigned seams given a pattern and a partial Morphism `phi`
     /// If returned list is empty phi is fully defined
     #[inline(never)]
-    pub fn candidates(pattern: &Topology<Material>, phi: &Morphism) -> Vec<Self> {
+    pub fn candidates(pattern: &Topology, phi: &Morphism) -> Vec<Self> {
         pattern
             .iter_seams()
             .filter(|&seam| !phi.seam_map.contains_key(seam))
@@ -95,7 +95,7 @@ impl Unassigned {
 
     /// Choose the best unassigned seam to continue the search
     #[inline(never)]
-    pub fn choose(pattern: &Topology<Material>, phi: &Morphism) -> Option<Self> {
+    pub fn choose(pattern: &Topology, phi: &Morphism) -> Option<Self> {
         Self::candidates(pattern, phi)
             .into_iter()
             .max_by(Self::compare_heuristic)
@@ -104,8 +104,8 @@ impl Unassigned {
     #[inline(never)]
     pub fn possible_assignment(
         &self,
-        world: &Topology<Material>,
-        pattern: &Topology<Material>,
+        world: &Topology,
+        pattern: &Topology,
         phi_seam: &Seam,
     ) -> bool {
         if pattern[pattern.left_of(&self.seam)].material != world[world.left_of(phi_seam)].material
@@ -158,11 +158,7 @@ impl Unassigned {
 
     /// Iterate over matching candidates for pattern seam which have a region on both sides (left and right)
     #[inline(never)]
-    fn both_sided_assignment_candidates(
-        &self,
-        world: &Topology<Material>,
-        pattern: &Topology<Material>,
-    ) -> Vec<Seam> {
+    fn both_sided_assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
         // let right_color = self.colors.right.expect("Not both sided");
 
         world
@@ -175,11 +171,7 @@ impl Unassigned {
     }
 
     #[inline(never)]
-    fn fallback_assignment_candidates(
-        &self,
-        world: &Topology<Material>,
-        pattern: &Topology<Material>,
-    ) -> Vec<Seam> {
+    fn fallback_assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
         return generalized_seams(world, self.materials.left)
             .into_iter()
             .filter(|phi_seam| self.possible_assignment(world, pattern, phi_seam))
@@ -189,11 +181,7 @@ impl Unassigned {
     /// Returns possible candidate seams in `world` that `self.seam` could be mapped to.
     /// Returned seam don't have to be atomic.
     #[inline(never)]
-    pub fn assignment_candidates(
-        &self,
-        world: &Topology<Material>,
-        pattern: &Topology<Material>,
-    ) -> Vec<Seam> {
+    pub fn assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
         if self.reverse_in_pattern {
             self.both_sided_assignment_candidates(world, pattern)
         } else {
@@ -203,13 +191,13 @@ impl Unassigned {
 }
 
 pub struct Search<'a> {
-    pub world: &'a Topology<Material>,
-    pub pattern: &'a Topology<Material>,
+    pub world: &'a Topology,
+    pub pattern: &'a Topology,
     pub hidden: Option<&'a BTreeSet<RegionKey>>,
 }
 
 impl<'a> Search<'a> {
-    pub fn new(world: &'a Topology<Material>, pattern: &'a Topology<Material>) -> Self {
+    pub fn new(world: &'a Topology, pattern: &'a Topology) -> Self {
         Self {
             world,
             pattern,
@@ -283,27 +271,6 @@ impl<'a> Search<'a> {
         let phis = self.find_matches(trace);
         phis.into_iter().next()
     }
-}
-
-const PATTERN_FRAME_COLOR: Rgba8 = Rgba8::MAGENTA;
-
-#[inline(never)]
-pub fn extract_pattern(pixmap: &mut RgbaMap) -> RgbaMap {
-    let topo = Topology::new(&pixmap);
-
-    let frame = topo
-        .regions
-        .values()
-        .find(|&region| region.material == PATTERN_FRAME_COLOR)
-        .unwrap();
-    assert_eq!(frame.boundary.len(), 2);
-
-    let inner_border = frame
-        .boundary
-        .iter()
-        .find(|border| !border.is_outer)
-        .unwrap();
-    pixmap.extract_right(inner_border)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -402,23 +369,46 @@ mod test {
         field::RgbaField,
         material::Material,
         math::rgba8::Rgba8,
-        pattern::{extract_pattern, NullTrace, Search},
-        pixmap::{MaterialMap, RgbaMap},
+        pattern::{NullTrace, Search},
+        pixmap::MaterialMap,
         topology::Topology,
+        utils::IntoT,
     };
 
-    fn pixmap_with_void_from_path(path: &str) -> RgbaMap {
+    const PATTERN_FRAME_MATERIAL: Material = Material::new(Rgba8::MAGENTA);
+
+    #[inline(never)]
+    pub fn extract_pattern(pixmap: &mut MaterialMap) -> MaterialMap {
+        let topo = Topology::new(&pixmap);
+
+        let frame = topo
+            .regions
+            .values()
+            .find(|&region| region.material == PATTERN_FRAME_MATERIAL)
+            .unwrap();
+        assert_eq!(frame.boundary.len(), 2);
+
+        let inner_border = frame
+            .boundary
+            .iter()
+            .find(|border| !border.is_outer)
+            .unwrap();
+
+        pixmap.extract_right(inner_border)
+    }
+
+    fn pixmap_with_void_from_path(path: &str) -> MaterialMap {
         RgbaField::load(path)
             .unwrap()
-            .to_pixmap()
-            .without(&Rgba8::VOID)
+            .intot::<MaterialMap>()
+            .without(&Material::VOID)
     }
 
     fn assert_extract_inner_outer(name: &str) {
         let folder = "test_resources/extract_pattern";
         let mut pixmap = RgbaField::load(format!("{folder}/{name}.png"))
             .unwrap()
-            .to_pixmap();
+            .into();
         let inner = extract_pattern(&mut pixmap);
 
         // Load expected inner and outer pixmaps
@@ -446,12 +436,15 @@ mod test {
 
     fn assert_pattern_match(pattern_path: &str, world_path: &str, n_solutions: usize) {
         let folder = "test_resources/patterns";
-        let pixmap = MaterialMap::load(format!("{folder}/{pattern_path}"))
+        let pixmap = RgbaField::load(format!("{folder}/{pattern_path}"))
             .unwrap()
+            .intot::<MaterialMap>()
             .without(&Material::VOID);
         let pattern = Topology::new(&pixmap);
 
-        let world_material_map = MaterialMap::load(format!("{folder}/{world_path}")).unwrap();
+        let world_material_map = RgbaField::load(format!("{folder}/{world_path}"))
+            .unwrap()
+            .into();
         let world = Topology::new(&world_material_map);
 
         let trace = NullTrace::new();

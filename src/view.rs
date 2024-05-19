@@ -125,7 +125,7 @@ pub enum UiState {
 }
 
 pub struct View {
-    pub world: World<Material>,
+    pub world: World,
     pub history: History<Material>,
     pub camera: Camera,
 
@@ -133,7 +133,7 @@ pub struct View {
 }
 
 impl View {
-    pub fn new(world: World<Material>) -> View {
+    pub fn new(world: World) -> View {
         let history = History::new(world.material_map().clone());
         View {
             world,

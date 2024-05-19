@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use crate::{
     field::RgbaField,
     material::Material,
@@ -7,7 +9,6 @@ use crate::{
     topology::{BorderKey, RegionKey, Topology},
     world::World,
 };
-use std::collections::BTreeSet;
 
 pub struct CompiledRule {
     /// All regions in the Rule frame, before and after. These elements should be hidden during Rule execution.
@@ -17,7 +18,7 @@ pub struct CompiledRule {
 }
 
 pub struct Interpreter {
-    rule_frame: Topology<Material>,
+    rule_frame: Topology,
     before_border: BorderKey,
     after_border: BorderKey,
 }
@@ -55,7 +56,7 @@ impl Interpreter {
         }
     }
 
-    pub fn compile(&self, world: &mut World<Material>) -> anyhow::Result<Vec<CompiledRule>> {
+    pub fn compile(&self, world: &mut World) -> anyhow::Result<Vec<CompiledRule>> {
         // Find all matches for rule_frame in world
         let search = Search::new(world.topology(), &self.rule_frame);
         let matches = search.find_matches(NullTrace::new());
@@ -101,7 +102,7 @@ impl Interpreter {
     }
 
     /// Returns if a Rule was applied
-    pub fn step(&self, world: &mut World<Material>) -> bool {
+    pub fn step(&self, world: &mut World) -> bool {
         let compiled_rules = self.compile(world).unwrap();
 
         let hidden: BTreeSet<_> = compiled_rules
@@ -144,8 +145,11 @@ impl Interpreter {
 
 #[cfg(test)]
 mod test {
-    use crate::{interpreter::Interpreter, material::Material, pixmap::MaterialMap, world::World};
     use pretty_assertions::assert_eq;
+
+    use crate::{
+        field::RgbaField, interpreter::Interpreter, pixmap::MaterialMap, utils::IntoT, world::World,
+    };
 
     #[test]
     fn init() {
@@ -154,7 +158,10 @@ mod test {
 
     fn assert_execute_world(name: &str, expected_steps: usize) {
         let folder = format!("test_resources/compiler/{name}/");
-        let mut world = World::<Material>::load(format!("{folder}/world.png")).unwrap();
+        let mut world = RgbaField::load(format!("{folder}/world.png"))
+            .unwrap()
+            .intot::<MaterialMap>()
+            .intot::<World>();
 
         let compiler = Interpreter::new();
 
@@ -174,7 +181,9 @@ mod test {
 
         let result_pixmap = world.material_map();
 
-        let expected_pixmap = MaterialMap::load(format!("{folder}/world_expected.png")).unwrap();
+        let expected_pixmap = RgbaField::load(format!("{folder}/world_expected.png"))
+            .unwrap()
+            .into();
         assert_eq!(result_pixmap, &expected_pixmap);
     }
 
