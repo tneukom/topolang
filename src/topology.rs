@@ -182,6 +182,10 @@ impl Region {
     pub fn interior_padding<'a>(&'a self) -> impl IteratorPlus<Pixel> + 'a {
         self.iter_boundary_sides().map(|side| side.left_pixel())
     }
+
+    pub fn bounding_rect(&self) -> Rect<i64> {
+        self.cover.bounding_rect()
+    }
 }
 
 /// Ignores `area_bounds` field

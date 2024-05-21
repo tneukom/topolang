@@ -6,36 +6,43 @@ use std::{
 
 #[derive(Debug, Clone, Copy)]
 pub struct Material {
-    rgba: Rgba8,
+    color: Rgba8,
 }
 
 impl Material {
+    pub const RIGID_ALPHA: u8 = 170;
+    pub const NORMAL_ALPHA: u8 = 255;
+
     pub const VOID: Self = Self::new(Rgba8::VOID);
     pub const RULE_FRAME: Self = Self::VOID;
     pub const TRANSPARENT: Self = Self::new(Rgba8::TRANSPARENT);
     pub const BLACK: Self = Self::new(Rgba8::BLACK);
     // const RULE_ARROW:
 
-    pub const fn rgba(self) -> Rgba8 {
-        self.rgba
+    pub const fn color(self) -> Rgba8 {
+        self.color
     }
 
     pub const fn new(rgba: Rgba8) -> Self {
-        Self { rgba }
+        Self { color: rgba }
     }
 
-    pub fn is_rigid(&self) -> bool {
-        self.rgba.a == 170
+    pub fn is_rigid(self) -> bool {
+        self.color.a == Self::RIGID_ALPHA
+    }
+
+    pub fn is_normal(self) -> bool {
+        self.color.a == Self::NORMAL_ALPHA
     }
 }
 
 impl PartialEq for Material {
     fn eq(&self, other: &Self) -> bool {
         // For rule frame and arrow (alpha = 180, 181) all rgb values are considered equal
-        if self.rgba.a == 180 || self.rgba.a == 181 {
-            self.rgba.a == other.rgba.a
+        if self.color.a == 180 || self.color.a == 181 {
+            self.color.a == other.color.a
         } else {
-            self.rgba == other.rgba
+            self.color == other.color
         }
     }
 }
@@ -44,10 +51,10 @@ impl Eq for Material {}
 
 impl Ord for Material {
     fn cmp(&self, other: &Self) -> Ordering {
-        if self.rgba.a == 180 || self.rgba.a == 181 {
-            self.rgba.a.cmp(&other.rgba.a)
+        if self.color.a == 180 || self.color.a == 181 {
+            self.color.a.cmp(&other.color.a)
         } else {
-            self.rgba.cmp(&other.rgba)
+            self.color.cmp(&other.color)
         }
     }
 }
@@ -60,10 +67,10 @@ impl PartialOrd for Material {
 
 impl Hash for Material {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        if self.rgba.a == 180 || self.rgba.a == 181 {
-            self.rgba.a.hash(state);
+        if self.color.a == 180 || self.color.a == 181 {
+            self.color.a.hash(state);
         } else {
-            self.rgba.hash(state);
+            self.color.hash(state);
         }
     }
 }
@@ -76,12 +83,12 @@ impl From<Rgba8> for Material {
 
 impl From<&Rgba8> for Material {
     fn from(rgba: &Rgba8) -> Self {
-        Material { rgba: *rgba }
+        Material { color: *rgba }
     }
 }
 
 impl From<Material> for Rgba8 {
     fn from(material: Material) -> Self {
-        material.rgba
+        material.color
     }
 }

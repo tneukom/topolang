@@ -59,6 +59,10 @@ impl Rgba8 {
         Some(Rgba8 { r, g, b, a })
     }
 
+    pub fn rgb(self) -> [u8; 3] {
+        [self.r, self.g, self.b]
+    }
+
     pub const BLACK: Self = rgba8(0x00, 0x00, 0x00, 0xFF);
     pub const WHITE: Self = rgba8(0xFF, 0xFF, 0xFF, 0xFF);
     pub const RED: Self = rgba8(0xFF, 0x00, 0x00, 0xFF);

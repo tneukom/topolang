@@ -94,9 +94,54 @@ impl Morphism {
     /// Maps regions to regions of the same material
     #[inline(never)]
     pub fn preserves_materials(&self, dom: &Topology, codom: &Topology) -> bool {
+        self.region_map.iter().all(|(&region, &phi_region)| {
+            let dom_material = dom[region].material;
+            let codom_material = codom[phi_region].material;
+            if dom_material.is_rigid() {
+                // match rigid rgb or normal rgb
+                (codom_material.is_normal() || codom_material.is_rigid())
+                    && dom_material.color().rgb() == codom_material.color().rgb()
+            } else {
+                // exact color match otherwise
+                dom[region].material == codom[phi_region].material
+            }
+        })
+    }
+
+    // fn region_is_subset_of(lhs_region: RegionKey, lhs_topo: &Topology, right_topo: &Topology) {
+    //     lhs_topo.iter_region_interior(lhs_region)
+    //
+    // }
+
+    /// Returns true if the left side is equal to the right side plus an offset.
+    pub fn is_translation_of(
+        lhs: RegionKey,
+        lhs_topo: &Topology,
+        rhs: RegionKey,
+        rhs_topo: &Topology,
+    ) -> bool {
+        let offset = lhs_topo[lhs].bounding_rect().low() - rhs_topo[rhs].bounding_rect().low();
+
+        let lhs_offset_interior = lhs_topo
+            .iter_region_interior(lhs)
+            .map(|pixel| pixel + offset);
+
+        let rhs_interior= rhs_topo.iter_region_interior(rhs);
+
+        // Assumes iteration order is same independent of translations.
+        Iterator::eq(lhs_offset_interior, rhs_interior)
+    }
+
+    /// Rigid regions are mapped to regions with exactly the same shape
+    #[inline(never)]
+    pub fn preserves_rigidity(&self, dom: &Topology, codom: &Topology) -> bool {
         self.region_map
             .iter()
-            .all(|(&region, &phi_region)| dom[region].material == codom[phi_region].material)
+            .all(|(&region_key, &phi_region_key)| {
+                // If region is rigid, phi_region must be a translation of region
+                !dom[region_key].material.is_rigid()
+                    || Self::is_translation_of(region_key, dom, phi_region_key, codom)
+            })
     }
 
     /// Check if phi : A → B preserves structure, (neighbor and next_neighbor), i.e.
