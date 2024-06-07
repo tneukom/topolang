@@ -2,7 +2,6 @@ use std::{collections::HashMap, ops::Index, rc::Rc};
 
 use crate::{
     area_cover::AreaCover,
-    connected_components::right_of_border,
     field::{Field, FieldIndex, MaterialField, RgbaField},
     material::Material,
     math::{
@@ -177,6 +176,7 @@ impl<T> Pixmap<T> {
         self.iter_from_tiles(self.enumerate_tiles())
     }
 
+    /// Iterate all entries contained in `cover`
     pub fn iter_cover<'a>(
         &'a self,
         cover: &'a AreaCover,
@@ -184,6 +184,7 @@ impl<T> Pixmap<T> {
         self.iter_from_tiles(self.enumerate_cover_tiles(cover))
     }
 
+    /// Iterate tiles intersecting `cover`
     pub fn enumerate_cover_tiles<'a>(
         &'a self,
         cover: &'a AreaCover,
@@ -193,6 +194,7 @@ impl<T> Pixmap<T> {
             .filter_map(|tile_index| self.get_tile(tile_index).map(|tile| (tile_index, tile)))
     }
 
+    /// Iterate keys (pixels)
     pub fn keys<'a>(&'a self) -> impl IteratorPlus<Point<i64>> + 'a {
         self.iter().map(|kv| kv.0)
     }
@@ -226,18 +228,6 @@ impl<T: Clone> Pixmap<T> {
         let tiles = Field::filled(Self::BOUNDS, None);
         Self { tiles }
     }
-
-    pub fn filled(value: T) -> Self {
-        let tile = Rc::new(Tile::filled(value));
-        let tiles = Field::filled(Self::BOUNDS, Some(tile));
-        Self { tiles }
-    }
-
-    // pub fn get_mut(&mut self, index: impl FieldIndex) -> Option<&mut T> {
-    //     let (tile_index, pixel_index) = Self::split_index(index.point());
-    //     let tile = self.tiles.get_mut(tile_index)?.as_ref()?;
-    //     tile.pixels.get_mut(pixel_index).unwrap()
-    // }
 
     /// Panics if tile_index is outside of tile_index_bounds
     fn get_tile_mut(&mut self, tile_index: Point<i64>) -> &mut Tile<T> {
@@ -311,11 +301,9 @@ impl<T: Clone> Pixmap<T> {
         result
     }
 
-    pub fn right_of_border(&self, border: &Border) -> Pixmap<T> {
-        // Extract pixels left of inner_border
-        let right_pixels = right_of_border(&border.cycle);
+    pub fn sub(&self, pixels: impl IntoIterator<Item = Pixel>) -> Self {
         let mut result = Self::new();
-        for pixel in right_pixels {
+        for pixel in pixels {
             if let Some(value) = self.get(pixel) {
                 result.set(pixel, value.clone());
             }
@@ -323,19 +311,40 @@ impl<T: Clone> Pixmap<T> {
         result
     }
 
-    /// Entries right of boundary are removed
-    /// TODO: Use border.bounds(), skip BTreeSet
-    /// TODO:REMOVE should use right_of_border
-    pub fn extract_right(&mut self, boundary: &Border) -> Pixmap<T> {
-        // Extract pixels left of inner_border
-        let right_pixels = boundary.right_pixels();
+    pub fn extract(&mut self, pixels: impl IntoIterator<Item = Pixel>) -> Self {
         let mut result = Self::new();
-        for pixel in right_pixels {
+        for pixel in pixels {
             if let Some(removed) = self.remove(pixel) {
                 result.set(pixel, removed);
             }
         }
         result
+    }
+
+    /// Returns sub pixmap with the keys right of the given border.
+    pub fn right_of_border(&self, border: &Border) -> Self {
+        self.sub(border.right_pixels())
+    }
+
+    /// Extract the pixels on the right side of the given border.
+    /// TODO: Use border.bounds(), skip BTreeSet
+    /// TODO:REMOVE should use right_of_border
+    pub fn extract_right_of_border(&mut self, border: &Border) -> Self {
+        self.extract(border.right_pixels())
+    }
+
+    /// Extract the pixel in the interior of the given rectangle.
+    pub fn sub_rect(&self, rect: Rect<i64>) -> Self {
+        // TODO:SPEEDUP: Could be done much faster especially for large rectangle that contain
+        //   few pixels from self.
+        self.sub(rect.iter_half_open())
+    }
+
+    pub fn fill_rect(&mut self, rect: Rect<i64>, value: T) {
+        // TODO:SPEEDUP: fill tile by tile
+        for index in rect.iter_half_open() {
+            self.set(index, value.clone());
+        }
     }
 
     pub fn blit_if(&mut self, other: &Self, mut pred: impl FnMut(&Option<T>) -> bool) {

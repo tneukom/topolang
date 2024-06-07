@@ -5,8 +5,13 @@ use crate::{
     field::Field,
     history::{History, SnapshotCause},
     material::Material,
-    math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect},
-    pixmap::Pixmap,
+    math::{
+        arrow::Arrow,
+        pixel::Pixel,
+        point::Point,
+        rect::{Rect, RectBounds},
+    },
+    pixmap::{MaterialMap, Pixmap},
     world::World,
 };
 
@@ -86,6 +91,7 @@ pub enum EditMode {
     Brush,
     Eraser,
     Fill,
+    SelectRect,
 }
 
 impl EditMode {
@@ -94,10 +100,11 @@ impl EditMode {
             Self::Brush => "Brush",
             Self::Eraser => "Eraser",
             Self::Fill => "Fill",
+            Self::SelectRect => "Select Rect",
         }
     }
 
-    pub const ALL: [EditMode; 3] = [Self::Brush, Self::Eraser, Self::Fill];
+    pub const ALL: [EditMode; 4] = [Self::Brush, Self::Eraser, Self::Fill, Self::SelectRect];
 }
 
 #[derive(Debug, Clone)]
@@ -118,16 +125,44 @@ pub struct Brushing {
 }
 
 #[derive(Debug, Clone)]
+pub struct SelectingRect {
+    pub start: Point<f64>,
+    pub stop: Point<f64>,
+}
+
+impl SelectingRect {
+    pub fn rect(&self) -> Rect<i64> {
+        // end can be smaller than start, so we take the bounds of both points
+        [self.start.cwise_into_lossy(), self.stop.cwise_into_lossy()].bounds()
+    }
+}
+
+// TODO: Might make sense store the initial selection to avoid rounding
+#[derive(Clone, Debug)]
+pub struct MovingSelection {
+    world_start_mouse: Point<i64>,
+}
+
+#[derive(Debug, Clone)]
 pub enum UiState {
     MoveCamera(MoveCamera),
     Brushing(Brushing),
+    SelectingRect(SelectingRect),
     Idle,
+}
+
+#[derive(Debug, Clone)]
+pub struct Selection {
+    pub rect: Rect<i64>,
+    pub selected: MaterialMap,
 }
 
 pub struct View {
     pub world: World,
     pub history: History<Material>,
     pub camera: Camera,
+
+    pub selection: Option<Selection>,
 
     pub ui_state: UiState,
 }
@@ -140,6 +175,7 @@ impl View {
             history,
             camera: Camera::default(),
             ui_state: UiState::Idle,
+            selection: None,
         }
     }
 
@@ -156,8 +192,15 @@ impl View {
     pub fn empty() -> View {
         let field = Field::filled(Rect::low_size([0, 0], [512, 512]), Material::TRANSPARENT);
         let material_map = Pixmap::from_field(&field);
-        let world = World::from_pixmap(material_map);
+        let world = World::from_material_map(material_map);
         Self::new(world)
+    }
+
+    /// If there currently is a selection, cancel it and integrate its content back into the world
+    pub fn cancel_selection(&mut self) {
+        if let Some(selection) = self.selection.take() {
+            self.world.blit_over(&selection.selected)
+        }
     }
 
     pub fn handle_moving_camera(
@@ -211,6 +254,30 @@ impl View {
         UiState::Brushing(op)
     }
 
+    pub fn handle_selecting_rect(
+        &mut self,
+        mut op: SelectingRect,
+        input: &ViewInput,
+        _settings: &ViewSettings,
+    ) -> UiState {
+        if input.left_mouse.is_up() {
+            self.cancel_selection();
+
+            // set selection by cutting the selected rectangle out of the world
+            let selection_rect = op.rect();
+            let selection = self.world.material_map().sub_rect(selection_rect);
+            self.world.fill_rect(selection_rect, Material::TRANSPARENT);
+            self.selection = Some(Selection {
+                rect: selection_rect,
+                selected: selection,
+            });
+            return UiState::Idle;
+        }
+
+        op.stop = input.world_mouse;
+        UiState::SelectingRect(op)
+    }
+
     /// Transition from None state
     pub fn begin_action(&mut self, input: &ViewInput, settings: &ViewSettings) -> UiState {
         if input.move_camera_down() {
@@ -246,6 +313,15 @@ impl View {
                     }
                 }
             }
+            EditMode::SelectRect => {
+                if input.left_mouse.is_down {
+                    let op = SelectingRect {
+                        start: input.world_mouse,
+                        stop: input.world_mouse,
+                    };
+                    return self.handle_selecting_rect(op, input, settings);
+                }
+            }
         }
 
         UiState::Idle
@@ -276,6 +352,7 @@ impl View {
         self.ui_state = match ui_state {
             UiState::MoveCamera(op) => self.handle_moving_camera(op, input, settings),
             UiState::Brushing(op) => self.handle_brushing(op, input, settings),
+            UiState::SelectingRect(op) => self.handle_selecting_rect(op, input, settings),
             UiState::Idle => self.begin_action(input, settings),
         };
     }

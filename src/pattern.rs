@@ -394,7 +394,7 @@ mod test {
             .find(|border| !border.is_outer)
             .unwrap();
 
-        pixmap.extract_right(inner_border)
+        pixmap.extract_right_of_border(inner_border)
     }
 
     fn pixmap_with_void_from_path(path: &str) -> MaterialMap {

@@ -7,6 +7,7 @@ use crate::{
     topology::{FillRegion, RegionKey, Topology},
 };
 
+#[derive(Debug, Clone)]
 struct CachedTopology {
     topology: OnceCell<Topology>,
 }
@@ -41,6 +42,7 @@ impl CachedTopology {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct World {
     material_map: MaterialMap,
 
@@ -49,7 +51,7 @@ pub struct World {
 }
 
 impl World {
-    pub fn from_pixmap(material_map: MaterialMap) -> Self {
+    pub fn from_material_map(material_map: MaterialMap) -> Self {
         let topology = CachedTopology::from(&material_map);
         Self {
             material_map,
@@ -68,76 +70,6 @@ impl World {
     pub fn bounding_rect(&self) -> Rect<i64> {
         self.material_map.bounding_rect()
     }
-
-    // Previous implementation to update partial Topology
-    // pub fn blit(&mut self, pixmap: &PixmapRgba) {
-    //     // Find regions that are touched by `pixels`
-    //     let touched_regions = self.touched_regions(pixmap.keys());
-    //
-    //     // Blit pixels to the Pixmap
-    //     self.color_map.blit(pixmap);
-    //
-    //     // Convert Pixmap back to Topology
-    //     let topology = Topology::new(&extracted_pixmap);
-    //
-    //     // Blit topology region_map back to self
-    //     self.region_map.blit(&topology.region_map);
-    //
-    //     // Merge topology with self
-    //     for (region_key, region) in topology.regions.into_iter() {
-    //         self.insert_region(region_key, region);
-    //     }
-    // }
-
-    // #[inline(never)]
-    // fn fill_regions_fallback(&mut self, fill_regions: &Vec<FillRegion>) {
-    //     let mut color_map = self.color_map();
-    //
-    //     for fill_region in fill_regions.into_iter() {
-    //         for pixel in self.iter_region_interior(fill_region.region_key) {
-    //             color_map.set(pixel, fill_region.color);
-    //         }
-    //     }
-    //
-    //     *self = Self::new(&color_map)
-    // }
-
-    // /// Invalidates all regions keys
-    // /// Returns true if any regions were changed
-    // #[inline(never)]
-    // pub fn fill_regions(&mut self, fill_regions: &Vec<FillRegion>) -> bool {
-    //     let mut modified = false;
-    //     let mut remaining = Vec::new();
-    //
-    //     for &fill_region in fill_regions {
-    //         // If all neighboring regions have a different color than fill_region.color we can
-    //         // simply replace Region.color
-    //         let region = &self[fill_region.region_key];
-    //
-    //         if region.color == fill_region.color {
-    //             // already has desired color, skip
-    //             continue;
-    //         }
-    //
-    //         modified = true;
-    //
-    //         if region
-    //             .iter_seams()
-    //             .all(|seam| self.color_right_of(seam) != Some(fill_region.color))
-    //         {
-    //             let mut_region = &mut self[fill_region.region_key];
-    //             mut_region.color = fill_region.color;
-    //         } else {
-    //             remaining.push(fill_region)
-    //         }
-    //     }
-    //
-    //     if !remaining.is_empty() {
-    //         self.fill_regions_fallback(&remaining);
-    //     }
-    //
-    //     modified
-    // }
 
     /// Invalidates all regions keys
     /// Returns true if any regions were changed
@@ -204,11 +136,16 @@ impl World {
         self.material_map.blit_over(other);
         self.topology = CachedTopology::empty();
     }
+
+    pub fn fill_rect(&mut self, rect: Rect<i64>, material: Material) {
+        self.material_map.fill_rect(rect, material);
+        self.topology = CachedTopology::empty();
+    }
 }
 
 impl From<MaterialMap> for World {
     fn from(material_map: MaterialMap) -> Self {
-        Self::from_pixmap(material_map)
+        Self::from_material_map(material_map)
     }
 }
 
@@ -232,9 +169,9 @@ mod test {
 
         let mut expected_pixmap = world_pixmap.clone();
         expected_pixmap.blit_over(&blit);
-        let expected_world = World::from_pixmap(expected_pixmap);
+        let expected_world = World::from_material_map(expected_pixmap);
 
-        let mut world = World::from_pixmap(world_pixmap);
+        let mut world = World::from_material_map(world_pixmap);
         world.blit_over(&blit);
 
         assert_eq!(world.material_map(), expected_world.material_map());

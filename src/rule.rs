@@ -126,7 +126,7 @@ mod test {
         let world_material_map = RgbaField::load(format!("{folder}/world.png"))
             .unwrap()
             .into();
-        let mut world = World::from_pixmap(world_material_map);
+        let mut world = World::from_material_map(world_material_map);
 
         let mut application_count: usize = 0;
         while let Some(phi) =

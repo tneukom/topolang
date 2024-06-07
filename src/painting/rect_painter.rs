@@ -1,7 +1,9 @@
-use std::{mem::size_of, sync::Arc};
+use std::{
+    mem::{offset_of, size_of},
+    sync::Arc,
+};
 
 use glow::HasContext;
-use memoffset::offset_of;
 
 use crate::{
     math::{affine_map::AffineMap, point::Point, rect::Rect},

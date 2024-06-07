@@ -126,7 +126,7 @@ impl Morphism {
             .iter_region_interior(lhs)
             .map(|pixel| pixel + offset);
 
-        let rhs_interior= rhs_topo.iter_region_interior(rhs);
+        let rhs_interior = rhs_topo.iter_region_interior(rhs);
 
         // Assumes iteration order is same independent of translations.
         Iterator::eq(lhs_offset_interior, rhs_interior)

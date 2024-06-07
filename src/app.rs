@@ -29,7 +29,7 @@ use crate::{
     interpreter::Interpreter,
     material::Material,
     math::{point::Point, rect::Rect, rgba8::Pico8Palette},
-    painting::scene_painter::ScenePainter,
+    painting::scene_painter::ViewPainter,
     utils::ReflectEnum,
     view::{EditMode, View, ViewButton, ViewInput, ViewSettings},
     widgets::{BrushChooser, ColorChooser, FileChooser},
@@ -136,7 +136,7 @@ impl GifRecorder {
 }
 
 pub struct EguiApp {
-    scene_painter: ScenePainter,
+    view_painter: ViewPainter,
     start_time: Instant,
     pub view_settings: ViewSettings,
 
@@ -206,7 +206,7 @@ impl EguiApp {
     }
 
     pub unsafe fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let scene_painter = ScenePainter::new(cc.gl.as_ref().unwrap().clone());
+        let scene_painter = ViewPainter::new(cc.gl.as_ref().unwrap().clone());
         let start_time = Instant::now();
 
         // Load topology from file
@@ -217,7 +217,7 @@ impl EguiApp {
             .unwrap()
             .into_material()
             .to_pixmap();
-        let world = World::from_pixmap(world_color_map);
+        let world = World::from_material_map(world_color_map);
         // let world = Topology::from_bitmap_path("test_resources/compiler/gate/world.png").unwrap();
         let view = View::new(world);
 
@@ -252,6 +252,13 @@ impl EguiApp {
                 EditMode::Fill,
                 load_egui_icon("icons/fill.png", include_bytes!("icons/fill.png")),
             ),
+            (
+                EditMode::SelectRect,
+                load_egui_icon(
+                    "icons/select_rect.png",
+                    include_bytes!("icons/select_rect.png"),
+                ),
+            ),
         ]);
 
         let view_settings = ViewSettings {
@@ -262,7 +269,7 @@ impl EguiApp {
         let (channel_sender, channel_receiver) = mpsc::sync_channel(1);
 
         Self {
-            scene_painter,
+            view_painter: scene_painter,
             start_time,
             view,
             view_settings,
@@ -598,7 +605,8 @@ impl EguiApp {
 
         // If head has changed, update world
         if !Rc::ptr_eq(&self.view.history.head, &current_head) {
-            self.view.world = World::from_pixmap(self.view.history.head.material_map().clone());
+            self.view.world =
+                World::from_material_map(self.view.history.head.material_map().clone());
         }
     }
 
@@ -639,7 +647,7 @@ impl EguiApp {
             warn!("Failed to load png file!");
             return;
         };
-        let world = World::from_pixmap(rgba_field.into());
+        let world = World::from_material_map(rgba_field.into());
         self.view = View::new(world);
     }
 
@@ -726,23 +734,8 @@ impl eframe::App for EguiApp {
             // self.gl.clear_color(1.0, 1.0, 0.0, 1.0);
             self.gl.clear(glow::COLOR_BUFFER_BIT);
 
-            self.scene_painter.draw_grid(&self.view.camera, &frames);
-
-            self.scene_painter.draw_material_map(
-                self.view.world.material_map().clone(),
-                &self.view.camera,
-                &frames,
-                time,
-            );
-
-            // TODO:SPEEDUP: Use world.bounding_rect() instead, we don't want to call topology(),
-            //   might be expensive.
-            let bounding_rect = self.view.world.bounding_rect();
-            self.scene_painter
-                .draw_bounds(bounding_rect, &self.view.camera, &frames, time);
+            self.view_painter.draw_view(&self.view, &frames, time);
         }
-
-        self.scene_painter.i_frame += 1;
 
         ctx.request_repaint();
     }

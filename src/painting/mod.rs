@@ -4,5 +4,6 @@ pub mod grid_painter;
 pub mod line_painter;
 pub mod rect_painter;
 pub mod scene_painter;
+pub mod selection_painter;
 pub mod shader;
 pub mod topology_painter;

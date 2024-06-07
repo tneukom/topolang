@@ -50,3 +50,8 @@ impl<T> Add<&Point<T>> for Point<T> where
 
 Looks like the rust compiler can properly inline add(Point<&T>, Point<&T>) into
 add(&Point<T>, &Point<T>), see https://godbolt.org/z/ceTPbMKh9.
+
+# Rust in place collect
+https://www.reddit.com/r/rust/comments/16hx79e/when_does_vecinto_itermapcollect_reallocate_and/
+
+https://doc.rust-lang.org/nightly/src/alloc/vec/in_place_collect.rs.html

@@ -2158,7 +2158,6 @@ dependencies = [
  "instant",
  "itertools",
  "log",
- "memoffset 0.9.1",
  "num-traits",
  "petgraph",
  "pretty_assertions",
