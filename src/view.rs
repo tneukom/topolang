@@ -133,7 +133,7 @@ pub struct SelectingRect {
 impl SelectingRect {
     pub fn rect(&self) -> Rect<i64> {
         // end can be smaller than start, so we take the bounds of both points
-        [self.start.cwise_into_lossy(), self.stop.cwise_into_lossy()].bounds()
+        [self.start.cwise_cast(), self.stop.cwise_cast()].bounds()
     }
 }
 
@@ -185,8 +185,7 @@ impl View {
             world_bounds = Rect::low_high([-128, -128], [128, 128])
         }
 
-        self.camera =
-            Camera::fit_world_into_view(world_bounds.cwise_into_lossy(), view_rect).round();
+        self.camera = Camera::fit_world_into_view(world_bounds.cwise_cast(), view_rect).round();
     }
 
     pub fn empty() -> View {
@@ -305,7 +304,7 @@ impl View {
             }
             EditMode::Fill => {
                 if input.left_mouse.is_down {
-                    let pixel: Pixel = input.world_mouse.floor().cwise_into_lossy().into();
+                    let pixel: Pixel = input.world_mouse.floor().cwise_cast().into();
                     if let Some(region_key) = self.world.topology().region_at(pixel) {
                         self.world.fill_region(region_key, settings.brush.material);
                         self.history
@@ -358,7 +357,7 @@ impl View {
     }
 
     pub fn tile_containing(&self, world_point: Point<f64>) -> Point<i64> {
-        world_point.floor().cwise_into_lossy()
+        world_point.floor().cwise_cast()
     }
 
     // /// Preview of the current drawing operation

@@ -51,7 +51,7 @@ impl GridPainter {
 
         let rect = Rect::<f64>::low_size(Point(-1.0, -1.0), Point(2.0, 2.0));
         let vertices = rect.corners().map(|corner| GridVertex {
-            position: corner.cwise_into_lossy().to_array(),
+            position: corner.cwise_cast().to_array(),
         });
 
         array_buffer.buffer_data(&vertices);

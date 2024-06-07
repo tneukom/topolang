@@ -66,7 +66,7 @@ impl ViewPainter {
     ) {
         let world_to_device = frames.view_to_device() * camera.world_to_view();
         self.line_painter
-            .draw_rect(bounds.cwise_into_lossy(), world_to_device, time);
+            .draw_rect(bounds.cwise_cast(), world_to_device, time);
     }
 
     pub unsafe fn draw_selection_outline(
@@ -78,7 +78,7 @@ impl ViewPainter {
     ) {
         let world_to_device = frames.view_to_device() * camera.world_to_view();
         self.selection_outline_painter
-            .draw(&[rect.cwise_into_lossy()], world_to_device, time);
+            .draw(&[rect.cwise_cast()], world_to_device, time);
     }
 
     pub unsafe fn draw_view(&mut self, view: &View, frames: &CoordinateFrames, time: f64) {

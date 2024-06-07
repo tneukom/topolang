@@ -2,7 +2,7 @@ use crate::{
     math::{
         arrow::Arrow,
         axis_line::AxisLine,
-        generic::{ConstZero, CwiseMul, IntoLossy, Num},
+        generic::{Cast, ConstZero, CwiseMul, Num},
         interval::Interval,
         point::Point,
     },
@@ -63,13 +63,13 @@ impl<T> Rect<T> {
         }
     }
 
-    pub fn cwise_into_lossy<S>(self) -> Rect<S>
+    pub fn cwise_cast<S>(self) -> Rect<S>
     where
-        T: IntoLossy<S>,
+        T: Cast<S>,
     {
         Rect {
-            x: self.x.cwise_into_lossy(),
-            y: self.y.cwise_into_lossy(),
+            x: self.x.cwise_cast(),
+            y: self.y.cwise_cast(),
         }
     }
 

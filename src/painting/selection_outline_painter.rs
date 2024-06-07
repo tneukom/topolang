@@ -67,7 +67,7 @@ impl SelectionOutlinePainter {
             for arrow in rect.ccw_side_arrows() {
                 for corner in arrow.corners() {
                     let vertex = SelectionVertex {
-                        position: (to_glwindow * corner).cwise_into_lossy().to_array(),
+                        position: (to_glwindow * corner).cwise_cast().to_array(),
                     };
 
                     indices.push(vertices.len() as u32);

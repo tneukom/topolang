@@ -2,7 +2,7 @@ use super::{
     point::Point,
     rect::{Rect, RectBounds},
 };
-use crate::math::generic::{Dot, IntoLossy, Num, SignedNum};
+use crate::math::generic::{Cast, Dot, Num, SignedNum};
 use num_traits::clamp;
 use std::{clone::Clone, fmt::Debug};
 
@@ -113,13 +113,13 @@ impl<T: Num> Arrow<T> {
         }
     }
 
-    pub fn cwise_into_lossy<S>(self) -> Arrow<S>
+    pub fn cwise_cast<S>(self) -> Arrow<S>
     where
-        T: IntoLossy<S>,
+        T: Cast<S>,
     {
         Arrow {
-            a: self.a.cwise_into_lossy(),
-            b: self.b.cwise_into_lossy(),
+            a: self.a.cwise_cast(),
+            b: self.b.cwise_cast(),
         }
     }
 

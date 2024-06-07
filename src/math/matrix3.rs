@@ -1,6 +1,6 @@
 use crate::math::{
     affine_map::AffineMap,
-    generic::{IntoLossy, Num},
+    generic::{Cast, Num},
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -48,20 +48,20 @@ impl<T> Matrix3<T> {
         )
     }
 
-    pub fn cwise_into_lossy<S>(self) -> Matrix3<S>
+    pub fn cwise_cast<S>(self) -> Matrix3<S>
     where
-        T: IntoLossy<S>,
+        T: Cast<S>,
     {
         Matrix3::new(
-            self.a11.into_lossy(),
-            self.a12.into_lossy(),
-            self.a13.into_lossy(),
-            self.a21.into_lossy(),
-            self.a22.into_lossy(),
-            self.a23.into_lossy(),
-            self.a31.into_lossy(),
-            self.a32.into_lossy(),
-            self.a33.into_lossy(),
+            self.a11.cast(),
+            self.a12.cast(),
+            self.a13.cast(),
+            self.a21.cast(),
+            self.a22.cast(),
+            self.a23.cast(),
+            self.a31.cast(),
+            self.a32.cast(),
+            self.a33.cast(),
         )
     }
 }

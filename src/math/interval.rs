@@ -1,4 +1,4 @@
-use crate::math::generic::{ConstZero, IntoLossy, Num};
+use crate::math::generic::{Cast, ConstZero, Num};
 use std::{
     hash::{Hash, Hasher},
     ops::{Add, Mul, Sub},
@@ -33,13 +33,13 @@ impl<T> Interval<T> {
         }
     }
 
-    pub fn cwise_into_lossy<S>(self) -> Interval<S>
+    pub fn cwise_cast<S>(self) -> Interval<S>
     where
-        T: IntoLossy<S>,
+        T: Cast<S>,
     {
         Interval {
-            low: self.low.into_lossy(),
-            high: self.high.into_lossy(),
+            low: self.low.cast(),
+            high: self.high.cast(),
         }
     }
 

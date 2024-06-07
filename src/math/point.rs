@@ -1,6 +1,4 @@
-use crate::math::generic::{
-    CwiseDiv, CwiseInv, CwiseMul, Dot, EuclidDivRem, IntoLossy, Num, SignedNum,
-};
+use crate::math::generic::{Cast, CwiseDiv, CwiseInv, CwiseMul, Dot, EuclidDivRem, Num, SignedNum};
 use num_traits::{real::Real, Inv};
 use std::{
     cmp::Ordering,
@@ -46,13 +44,13 @@ impl<T> Point<T> {
         }
     }
 
-    pub fn cwise_into_lossy<S>(self) -> Point<S>
+    pub fn cwise_cast<S>(self) -> Point<S>
     where
-        T: IntoLossy<S>,
+        T: Cast<S>,
     {
         Point {
-            x: self.x.into_lossy(),
-            y: self.y.into_lossy(),
+            x: self.x.cast(),
+            y: self.y.cast(),
         }
     }
 

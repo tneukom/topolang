@@ -364,7 +364,7 @@ impl EguiApp {
     }
 
     pub fn reset_camera(&mut self) {
-        self.view.center_camera(self.view_rect.cwise_into_lossy());
+        self.view.center_camera(self.view_rect.cwise_cast());
     }
 
     pub fn view_ui(&mut self, ui: &mut egui::Ui) {

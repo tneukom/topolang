@@ -4,52 +4,42 @@ use std::{
     ops::{Add, Div, Mul, Neg, Sub},
 };
 
-pub trait FromLossy<Value>: Sized {
-    fn from_lossy(value: Value) -> Self;
+pub trait Cast<To>: Sized {
+    fn cast(self) -> To;
 }
 
-pub trait IntoLossy<Value>: Sized {
-    fn into_lossy(self) -> Value;
-}
-
-impl<Value, This> IntoLossy<Value> for This
-where
-    Value: FromLossy<This>,
-{
-    fn into_lossy(self) -> Value {
-        Value::from_lossy(self)
-    }
-}
-
-macro_rules! impl_from_lossy_primitive_as {
-    ($t_self: ty, $t_value: ty) => {
-        impl FromLossy<$t_value> for $t_self {
-            fn from_lossy(value: $t_value) -> Self {
-                value as Self
+macro_rules! impl_cast_primitive_as {
+    ($t_self: ty, $t_to: ty) => {
+        impl Cast<$t_to> for $t_self {
+            fn cast(self) -> $t_to {
+                self as $t_to
             }
         }
     };
 }
 
-impl_from_lossy_primitive_as!(f32, i64);
-impl_from_lossy_primitive_as!(f64, i64);
-impl_from_lossy_primitive_as!(f32, u64);
-impl_from_lossy_primitive_as!(f64, u64);
+impl_cast_primitive_as!(f32, i64);
+impl_cast_primitive_as!(f64, i64);
+impl_cast_primitive_as!(f32, u64);
+impl_cast_primitive_as!(f64, u64);
 
-impl_from_lossy_primitive_as!(f32, f64);
-impl_from_lossy_primitive_as!(i64, f64);
-impl_from_lossy_primitive_as!(u64, f64);
-impl_from_lossy_primitive_as!(usize, f64);
+impl_cast_primitive_as!(f32, f32);
+impl_cast_primitive_as!(f32, f64);
+impl_cast_primitive_as!(f64, f32);
+impl_cast_primitive_as!(f64, f64);
 
-impl_from_lossy_primitive_as!(f32, f32);
-impl_from_lossy_primitive_as!(i64, f32);
-impl_from_lossy_primitive_as!(u64, f32);
-impl_from_lossy_primitive_as!(usize, f32);
+impl_cast_primitive_as!(i64, f64);
+impl_cast_primitive_as!(u64, f64);
+impl_cast_primitive_as!(usize, f64);
 
-impl_from_lossy_primitive_as!(f32, usize);
-impl_from_lossy_primitive_as!(f64, usize);
-impl_from_lossy_primitive_as!(i64, usize);
-impl_from_lossy_primitive_as!(u64, usize);
+impl_cast_primitive_as!(i64, f32);
+impl_cast_primitive_as!(u64, f32);
+impl_cast_primitive_as!(usize, f32);
+
+impl_cast_primitive_as!(f32, usize);
+impl_cast_primitive_as!(f64, usize);
+impl_cast_primitive_as!(i64, usize);
+impl_cast_primitive_as!(u64, usize);
 
 pub trait ConstZero {
     const ZERO: Self;
@@ -418,7 +408,7 @@ impl SignedNum for i64 {}
 
 impl SignedNum for isize {}
 
-pub trait FieldNum: SignedNum + Div<Output = Self> + Inv<Output = Self> + FromLossy<i64> {}
+pub trait FieldNum: SignedNum + Div<Output = Self> + Inv<Output = Self> + Cast<i64> {}
 
 impl FieldNum for f64 {}
 

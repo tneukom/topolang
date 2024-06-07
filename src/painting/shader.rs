@@ -261,7 +261,7 @@ impl AssignUniform for &Matrix2<f64> {
 
 impl AssignUniform for &Matrix3<f64> {
     unsafe fn assign_uniform(gl: &glow::Context, location: &glow::UniformLocation, value: Self) {
-        gl.uniform_matrix_3_f32_slice(Some(location), true, &value.cwise_into_lossy().to_array());
+        gl.uniform_matrix_3_f32_slice(Some(location), true, &value.cwise_cast().to_array());
     }
 }
 

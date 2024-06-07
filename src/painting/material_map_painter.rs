@@ -65,7 +65,7 @@ impl MaterialMapPainter {
         let texture_rect = Rect::low_size([0, 0], self.texture.size());
         let draw_tile = DrawRect {
             texture_rect,
-            corners: texture_rect.cwise_into_lossy().corners(),
+            corners: texture_rect.cwise_cast().corners(),
         };
 
         self.rect_painter

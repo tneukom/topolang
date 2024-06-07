@@ -75,7 +75,7 @@ impl SideName {
 /// see docs/pixel_pattern.jpg and
 impl Point<i64> {
     pub fn containing(p: Point<f64>) -> Self {
-        let i64_p = p.floor().cwise_into_lossy::<i64>();
+        let i64_p = p.floor().cwise_cast::<i64>();
         Self::new(i64_p.x, i64_p.y)
     }
 
