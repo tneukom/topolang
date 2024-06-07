@@ -29,7 +29,7 @@ use crate::{
     interpreter::Interpreter,
     material::Material,
     math::{point::Point, rect::Rect, rgba8::Pico8Palette},
-    painting::scene_painter::ViewPainter,
+    painting::view_painter::ViewPainter,
     utils::ReflectEnum,
     view::{EditMode, View, ViewButton, ViewInput, ViewSettings},
     widgets::{BrushChooser, ColorChooser, FileChooser},

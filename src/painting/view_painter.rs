@@ -5,8 +5,8 @@ use crate::{
     coordinate_frame::CoordinateFrames,
     math::{point::Point, rect::Rect},
     painting::{
-        line_painter::LinePainter, rect_painter::RectPainter, selection_painter::SelectionPainter,
-        topology_painter::ColorMapPainter,
+        line_painter::LinePainter, material_map_painter::MaterialMapPainter,
+        rect_painter::RectPainter, selection_outline_painter::SelectionOutlinePainter,
     },
     pixmap::MaterialMap,
     view::{UiState, View},
@@ -18,9 +18,9 @@ pub struct ViewPainter {
     pub grid_painter: GridPainter,
     pub tile_painter: RectPainter,
     pub line_painter: LinePainter,
-    pub world_painter: ColorMapPainter,
-    pub selection_painter: ColorMapPainter,
-    pub selection_outline_painter: SelectionPainter,
+    pub world_painter: MaterialMapPainter,
+    pub selection_painter: MaterialMapPainter,
+    pub selection_outline_painter: SelectionOutlinePainter,
 
     pub i_frame: usize,
 }
@@ -31,9 +31,9 @@ impl ViewPainter {
             grid_painter: GridPainter::new(gl.clone()),
             tile_painter: RectPainter::new(gl.clone()),
             line_painter: LinePainter::new(gl.clone()),
-            world_painter: ColorMapPainter::new(gl.clone(), 1024),
-            selection_painter: ColorMapPainter::new(gl.clone(), 1024),
-            selection_outline_painter: SelectionPainter::new(gl.clone()),
+            world_painter: MaterialMapPainter::new(gl.clone(), 1024),
+            selection_painter: MaterialMapPainter::new(gl.clone(), 1024),
+            selection_outline_painter: SelectionOutlinePainter::new(gl.clone()),
             i_frame: 0,
         }
     }
@@ -46,7 +46,7 @@ impl ViewPainter {
     }
 
     pub unsafe fn draw_material_map(
-        painter: &mut ColorMapPainter,
+        painter: &mut MaterialMapPainter,
         material_map: MaterialMap,
         camera: &Camera,
         frames: &CoordinateFrames,

@@ -18,7 +18,7 @@ pub struct SelectionVertex {
     pub position: [f32; 2],
 }
 
-pub struct SelectionPainter {
+pub struct SelectionOutlinePainter {
     shader: Shader,
     array_buffer: GlBuffer<SelectionVertex>,
     element_buffer: GlBuffer<u32>,
@@ -26,7 +26,7 @@ pub struct SelectionPainter {
     gl: Arc<glow::Context>,
 }
 
-impl SelectionPainter {
+impl SelectionOutlinePainter {
     pub unsafe fn new(gl: Arc<glow::Context>) -> Self {
         let vs_source = include_str!("shaders/selection.vert");
         let fs_source = include_str!("shaders/selection.frag");

@@ -11,13 +11,13 @@ use crate::{
     pixmap::{MaterialMap, RgbaMap, Tile},
 };
 
-pub struct ColorMapPainter {
+pub struct MaterialMapPainter {
     color_map: MaterialMap,
     rect_painter: RectPainter,
     texture: GlTexture,
 }
 
-impl ColorMapPainter {
+impl MaterialMapPainter {
     pub unsafe fn new(gl: Arc<glow::Context>, size: i64) -> Self {
         let mut texture = GlTexture::from_size(gl.clone(), size, size, Filter::Nearest);
         // TODO:SPEEDUP: Do we need to create an empty bitmap just to clear the texture?
