@@ -9,10 +9,7 @@ use std::{
     sync::{mpsc, Arc},
 };
 
-use egui::{
-    load::SizedTexture, scroll_area::ScrollBarVisibility, style::ScrollStyle, CursorIcon, Sense,
-    TextureOptions, Widget,
-};
+use egui::{load::SizedTexture, scroll_area::ScrollBarVisibility, style::ScrollStyle, CursorIcon, Sense, TextureOptions, Widget, Event};
 use glow::HasContext;
 use image::{
     codecs::gif::{GifEncoder, Repeat},
@@ -403,6 +400,22 @@ impl EguiApp {
         });
     }
 
+    pub fn copy_paste_ui(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            if ui.button("Copy").clicked() {
+                self.view.clipboard_copy();
+            }
+
+            if ui.button("Cut").clicked() {
+                self.view.clipboard_cut();
+            }
+
+            if ui.button("Paste").clicked() {
+                self.view.clipboard_paste();
+            }
+        });
+    }
+
     #[cfg(target_arch = "wasm32")]
     pub fn open_save_ui(&mut self, ui: &mut egui::Ui) {
         if ui.button("Open File").clicked() {
@@ -612,6 +625,9 @@ impl EguiApp {
 
     pub fn side_panel_ui(&mut self, ui: &mut egui::Ui) {
         self.view_ui(ui);
+        ui.separator();
+
+        self.copy_paste_ui(ui);
         ui.separator();
 
         ui.label("Brush");

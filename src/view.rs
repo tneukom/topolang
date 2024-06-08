@@ -176,6 +176,7 @@ pub struct View {
     pub camera: Camera,
 
     pub selection: Option<Selection>,
+    pub clipboard: Option<Selection>,
 
     pub ui_state: UiState,
 }
@@ -189,6 +190,7 @@ impl View {
             camera: Camera::default(),
             ui_state: UiState::Idle,
             selection: None,
+            clipboard: None,
         }
     }
 
@@ -425,6 +427,27 @@ impl View {
             false
         }
     }
+
+    pub fn clipboard_copy(&mut self) {
+        if let Some(selection) = &self.selection {
+            self.clipboard = Some(selection.clone());
+        }
+    }
+
+    pub fn clipboard_cut(&mut self) {
+        if let Some(selection) = self.selection.take() {
+            self.clipboard = Some(selection);
+        }
+    }
+
+    pub fn clipboard_paste(&mut self) {
+        self.cancel_selection();
+        if let Some(clipboard) = &self.clipboard {
+            self.selection = Some(clipboard.clone());
+        }
+    }
+
+
 
     // /// Preview of the current drawing operation
     // pub fn preview(&self, settings: &ViewSettings) -> TileMap {
