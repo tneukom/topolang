@@ -52,20 +52,6 @@ pub trait ReflectEnum: Sized + Copy + 'static {
     }
 }
 
-// TODO: Remove once https://github.com/rust-lang/rust/issues/93610 is merged
-pub trait RcExt<T> {
-    fn unwrap_or_clone2(this: Self) -> T;
-}
-
-impl<T> RcExt<T> for Rc<T>
-where
-    T: Clone,
-{
-    fn unwrap_or_clone2(this: Self) -> T {
-        Rc::try_unwrap(this).unwrap_or_else(|rc| (*rc).clone())
-    }
-}
-
 // TODO: Use each_ref when stable
 // https://www.reddit.com/r/learnrust/comments/10jo2kj/how_do_you_convert_an_array_into_an_array_of/
 // https://doc.rust-lang.org/std/primitive.array.html#method.each_ref
