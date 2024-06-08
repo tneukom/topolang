@@ -10,7 +10,7 @@ use std::{
 };
 
 use egui::{
-    load::SizedTexture, scroll_area::ScrollBarVisibility, style::ScrollStyle, Sense,
+    load::SizedTexture, scroll_area::ScrollBarVisibility, style::ScrollStyle, CursorIcon, Sense,
     TextureOptions, Widget,
 };
 use glow::HasContext;
@@ -31,7 +31,7 @@ use crate::{
     math::{point::Point, rect::Rect, rgba8::Pico8Palette},
     painting::view_painter::ViewPainter,
     utils::ReflectEnum,
-    view::{EditMode, View, ViewButton, ViewInput, ViewSettings},
+    view::{EditMode, UiState, View, ViewButton, ViewInput, ViewSettings},
     widgets::{BrushChooser, ColorChooser, FileChooser},
     world::World,
 };
@@ -721,6 +721,14 @@ impl eframe::App for EguiApp {
             .handle_input(&mut self.view_input, &self.view_settings);
         let frames = self.view_input.frames();
         // let preview = self.view.preview(&self.view_settings);
+
+        let cursor_icon =
+            if self.view.ui_state.is_idle() && self.view.is_hovering_selection(&self.view_input) {
+                CursorIcon::Move
+            } else {
+                CursorIcon::Default
+            };
+        ctx.set_cursor_icon(cursor_icon);
 
         unsafe {
             self.gl.disable(glow::BLEND);

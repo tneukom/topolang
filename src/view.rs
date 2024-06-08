@@ -130,6 +130,11 @@ pub struct SelectingRect {
     pub stop: Point<f64>,
 }
 
+#[derive(Debug, Clone)]
+pub struct MovingSelection {
+    pub previous: Point<i64>,
+}
+
 impl SelectingRect {
     pub fn rect(&self) -> Rect<i64> {
         // end can be smaller than start, so we take the bounds of both points
@@ -137,24 +142,32 @@ impl SelectingRect {
     }
 }
 
-// TODO: Might make sense store the initial selection to avoid rounding
-#[derive(Clone, Debug)]
-pub struct MovingSelection {
-    world_start_mouse: Point<i64>,
-}
-
 #[derive(Debug, Clone)]
 pub enum UiState {
     MoveCamera(MoveCamera),
     Brushing(Brushing),
     SelectingRect(SelectingRect),
+    MovingSelection(MovingSelection),
     Idle,
+}
+
+impl UiState {
+    pub fn is_idle(&self) -> bool {
+        matches!(self, Self::Idle)
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct Selection {
     pub rect: Rect<i64>,
     pub selected: MaterialMap,
+}
+
+impl Selection {
+    pub fn translate(&mut self, offset: Point<i64>) {
+        self.rect = self.rect + offset;
+        self.selected = self.selected.translated(offset);
+    }
 }
 
 pub struct View {
@@ -277,6 +290,51 @@ impl View {
         UiState::SelectingRect(op)
     }
 
+    pub fn handle_moving_selection(
+        &mut self,
+        mut op: MovingSelection,
+        input: &ViewInput,
+        _settings: &ViewSettings,
+    ) -> UiState {
+        if input.left_mouse.is_up() {
+            return UiState::Idle;
+        }
+
+        // Move selection by mouse travelled
+        let current = input.world_mouse.floor().cwise_cast::<i64>();
+        let delta = current - op.previous;
+        self.selection.as_mut().unwrap().translate(delta);
+        op.previous = current;
+        UiState::MovingSelection(op)
+    }
+
+    pub fn begin_selection_action(
+        &mut self,
+        input: &ViewInput,
+        settings: &ViewSettings,
+    ) -> UiState {
+        // If mouse is inside the current selecting we enter the MoveSelection move.
+        if let Some(selection) = &self.selection {
+            if selection
+                .rect
+                .cwise_cast::<f64>()
+                .contains(input.world_mouse)
+            {
+                let op = MovingSelection {
+                    previous: input.world_mouse.floor().cwise_cast(),
+                };
+                return UiState::MovingSelection(op);
+            }
+        }
+
+        // Otherwise we start drawing a new selection rectangle.
+        let op = SelectingRect {
+            start: input.world_mouse,
+            stop: input.world_mouse,
+        };
+        return self.handle_selecting_rect(op, input, settings);
+    }
+
     /// Transition from None state
     pub fn begin_action(&mut self, input: &ViewInput, settings: &ViewSettings) -> UiState {
         if input.move_camera_down() {
@@ -314,11 +372,7 @@ impl View {
             }
             EditMode::SelectRect => {
                 if input.left_mouse.is_down {
-                    let op = SelectingRect {
-                        start: input.world_mouse,
-                        stop: input.world_mouse,
-                    };
-                    return self.handle_selecting_rect(op, input, settings);
+                    return self.begin_selection_action(input, settings);
                 }
             }
         }
@@ -352,12 +406,24 @@ impl View {
             UiState::MoveCamera(op) => self.handle_moving_camera(op, input, settings),
             UiState::Brushing(op) => self.handle_brushing(op, input, settings),
             UiState::SelectingRect(op) => self.handle_selecting_rect(op, input, settings),
+            UiState::MovingSelection(op) => self.handle_moving_selection(op, input, settings),
             UiState::Idle => self.begin_action(input, settings),
         };
     }
 
     pub fn tile_containing(&self, world_point: Point<f64>) -> Point<i64> {
         world_point.floor().cwise_cast()
+    }
+
+    pub fn is_hovering_selection(&self, view_input: &ViewInput) -> bool {
+        if let Some(selection) = &self.selection {
+            selection
+                .rect
+                .cwise_cast::<f64>()
+                .contains(view_input.world_mouse)
+        } else {
+            false
+        }
     }
 
     // /// Preview of the current drawing operation

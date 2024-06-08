@@ -285,7 +285,7 @@ impl<T: Clone> Pixmap<T> {
     }
 
     /// SPEEDUP: Could be done better tile by tile
-    pub fn translated(self, offset: Point<i64>) -> Self {
+    pub fn translated(&self, offset: Point<i64>) -> Self {
         let mut result = Self::new();
         for (index, value) in self.iter() {
             result.set(index + offset, value.clone());
