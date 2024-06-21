@@ -102,15 +102,18 @@ impl ViewPainter {
 
         // Draw selection rectangle and content
         if let Some(selection) = &view.selection {
+            let mut material_map = MaterialMap::new();
+            selection.blit(&mut material_map);
+
             Self::draw_material_map(
                 &mut self.selection_painter,
-                selection.selected.clone(),
+                material_map,
                 &view.camera,
                 &frames,
                 time,
             );
 
-            self.draw_selection_outline(selection.rect, &view.camera, frames, time);
+            self.draw_selection_outline(selection.bounding_rect(), &view.camera, frames, time);
         }
 
         // Draw selection rectangle currently being drawn

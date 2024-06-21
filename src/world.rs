@@ -67,6 +67,11 @@ impl World {
         &self.material_map
     }
 
+    pub fn mut_material_map(&mut self, mut f: impl FnMut(&mut MaterialMap)) {
+        f(&mut self.material_map);
+        self.topology = CachedTopology::empty();
+    }
+
     pub fn bounding_rect(&self) -> Rect<i64> {
         self.material_map.bounding_rect()
     }

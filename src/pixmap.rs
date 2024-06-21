@@ -35,6 +35,7 @@ impl<T> Tile<T> {
             .filter_map(|(index, opt_value)| opt_value.as_ref().map(|value| (index, value)))
     }
 
+    /// Panics if index is out of bounds
     pub fn set(&mut self, index: impl FieldIndex, value: T) -> Option<T> {
         self.field.set(index, Some(value))
     }
@@ -230,21 +231,33 @@ impl<T: Clone> Pixmap<T> {
     }
 
     /// Panics if tile_index is outside of tile_index_bounds
-    fn get_tile_mut(&mut self, tile_index: Point<i64>) -> &mut Tile<T> {
-        let opt_rc_tile = self.tiles.get_mut(tile_index).unwrap();
+    fn get_tile_mut(&mut self, tile_index: Point<i64>) -> Option<&mut Tile<T>> {
+        let opt_rc_tile = self.tiles.get_mut(tile_index)?;
         let rc_tile = opt_rc_tile.get_or_insert_with(|| Rc::new(Tile::new()));
-        Rc::make_mut(rc_tile)
+        Some(Rc::make_mut(rc_tile))
     }
 
-    /// Has to clone the tile that contains the given pixel if other Pixmap reference the tile
+    /// Has to clone the tile that contains the given pixel if other Pixmap reference the tile.
+    /// Panics if the index is out of bounds.
     pub fn set(&mut self, index: impl FieldIndex, value: T) -> Option<T> {
         let (tile_index, pixel_index) = Self::split_index(index.point());
-        self.get_tile_mut(tile_index).set(pixel_index, value)
+        self.get_tile_mut(tile_index)
+            .unwrap()
+            .set(pixel_index, value)
+    }
+
+    pub fn try_set(&mut self, index: impl FieldIndex, value: T) -> Result<Option<T>, T> {
+        let (tile_index, pixel_index) = Self::split_index(index.point());
+        let Some(tile) = self.get_tile_mut(tile_index) else {
+            return Err(value);
+        };
+        // pixel_index should never be out of bounds for a tile.
+        Ok(tile.set(pixel_index, value))
     }
 
     pub fn remove(&mut self, index: impl FieldIndex) -> Option<T> {
         let (tile_index, pixel_index) = Self::split_index(index.point());
-        self.get_tile_mut(tile_index).remove(pixel_index)
+        self.get_tile_mut(tile_index).unwrap().remove(pixel_index)
     }
 
     pub fn map<S>(&self, mut f: impl FnMut(&T) -> S) -> Pixmap<S> {
@@ -350,6 +363,7 @@ impl<T: Clone> Pixmap<T> {
     pub fn blit_if(&mut self, other: &Self, mut pred: impl FnMut(&Option<T>) -> bool) {
         for (other_tile_index, other_tile) in other.enumerate_tiles() {
             self.get_tile_mut(other_tile_index)
+                .unwrap()
                 .blit_if(other_tile, &mut pred);
         }
     }
@@ -367,7 +381,9 @@ impl<T: Clone> Pixmap<T> {
     ) {
         for tile_index in cover.iter_tiles() {
             if let Some(other_tile) = other.get_tile(tile_index) {
-                self.get_tile_mut(tile_index).blit_op(other_tile, &mut op);
+                self.get_tile_mut(tile_index)
+                    .unwrap()
+                    .blit_op(other_tile, &mut op);
             }
         }
     }

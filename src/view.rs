@@ -159,14 +159,43 @@ impl UiState {
 
 #[derive(Debug, Clone)]
 pub struct Selection {
-    pub rect: Rect<i64>,
-    pub selected: MaterialMap,
+    /// The bounding rect of material_map
+    bounding_rect: Rect<i64>,
+
+    material_map: MaterialMap,
+
+    offset: Point<i64>,
 }
 
 impl Selection {
-    pub fn translate(&mut self, offset: Point<i64>) {
-        self.rect = self.rect + offset;
-        self.selected = self.selected.translated(offset);
+    pub fn new(material_map: MaterialMap) -> Self {
+        let rect = material_map.bounding_rect();
+        Self {
+            material_map,
+            bounding_rect: rect,
+            offset: Point(0, 0),
+        }
+    }
+
+    pub fn bounding_rect(&self) -> Rect<i64> {
+        self.bounding_rect + self.offset
+    }
+
+    pub fn with_center_at(self, center: Point<i64>) -> Self {
+        let current_center = self.bounding_rect().center();
+        self.translated(center - current_center)
+    }
+
+    pub fn translated(mut self, offset: Point<i64>) -> Self {
+        self.offset = self.offset + offset;
+        self
+    }
+
+    pub fn blit(&self, target: &mut MaterialMap) {
+        // TODO:SPEEDUP: Should be done in MaterialMap
+        for (index, &material) in self.material_map.iter() {
+            target.try_set(index + self.offset, material).ok();
+        }
     }
 }
 
@@ -176,7 +205,6 @@ pub struct View {
     pub camera: Camera,
 
     pub selection: Option<Selection>,
-    pub clipboard: Option<Selection>,
 
     pub ui_state: UiState,
 }
@@ -190,7 +218,6 @@ impl View {
             camera: Camera::default(),
             ui_state: UiState::Idle,
             selection: None,
-            clipboard: None,
         }
     }
 
@@ -213,7 +240,8 @@ impl View {
     /// If there currently is a selection, cancel it and integrate its content back into the world
     pub fn cancel_selection(&mut self) {
         if let Some(selection) = self.selection.take() {
-            self.world.blit_over(&selection.selected)
+            self.world
+                .mut_material_map(|material_map| selection.blit(material_map));
         }
     }
 
@@ -263,7 +291,11 @@ impl View {
         let change = op.brush.draw_line(Arrow(op.world_mouse, input.world_mouse));
         op.world_mouse = input.world_mouse;
 
-        self.world.blit_over(&change);
+        self.world.mut_material_map(|material_map| {
+            for (&index, &material) in &change {
+                material_map.try_set(index, material).ok();
+            }
+        });
 
         UiState::Brushing(op)
     }
@@ -281,10 +313,7 @@ impl View {
             let selection_rect = op.rect();
             let selection = self.world.material_map().sub_rect(selection_rect);
             self.world.fill_rect(selection_rect, Material::TRANSPARENT);
-            self.selection = Some(Selection {
-                rect: selection_rect,
-                selected: selection,
-            });
+            self.selection = Some(Selection::new(selection));
             return UiState::Idle;
         }
 
@@ -305,7 +334,10 @@ impl View {
         // Move selection by mouse travelled
         let current = input.world_mouse.floor().cwise_cast::<i64>();
         let delta = current - op.previous;
-        self.selection.as_mut().unwrap().translate(delta);
+        self.selection = self
+            .selection
+            .take()
+            .map(|selection| selection.translated(delta));
         op.previous = current;
         UiState::MovingSelection(op)
     }
@@ -318,7 +350,7 @@ impl View {
         // If mouse is inside the current selecting we enter the MoveSelection move.
         if let Some(selection) = &self.selection {
             if selection
-                .rect
+                .bounding_rect()
                 .cwise_cast::<f64>()
                 .contains(input.world_mouse)
             {
@@ -399,6 +431,10 @@ impl View {
     pub fn handle_input(&mut self, input: &mut ViewInput, settings: &ViewSettings) {
         self.handle_camera_input(input);
 
+        if input.escape_key.is_down {
+            self.cancel_selection();
+        }
+
         // if input.delete_key.is_down {
         //     self.delete_selection();
         // }
@@ -420,7 +456,7 @@ impl View {
     pub fn is_hovering_selection(&self, view_input: &ViewInput) -> bool {
         if let Some(selection) = &self.selection {
             selection
-                .rect
+                .bounding_rect()
                 .cwise_cast::<f64>()
                 .contains(view_input.world_mouse)
         } else {
@@ -428,35 +464,27 @@ impl View {
         }
     }
 
-    pub fn clipboard_copy(&mut self) {
-        if let Some(selection) = &self.selection {
-            self.clipboard = Some(selection.clone());
-        }
+    pub fn clipboard_copy(&mut self) -> Option<MaterialMap> {
+        let Some(selection) = &self.selection else {
+            return None;
+        };
+
+        Some(selection.material_map.clone())
     }
 
-    pub fn clipboard_cut(&mut self) {
-        if let Some(selection) = self.selection.take() {
-            self.clipboard = Some(selection);
-        }
+    pub fn clipboard_cut(&mut self) -> Option<MaterialMap> {
+        let Some(selection) = self.selection.take() else {
+            return None;
+        };
+
+        Some(selection.material_map)
     }
 
-    pub fn clipboard_paste(&mut self) {
+    pub fn clipboard_paste(&mut self, input: &ViewInput, material_map: MaterialMap) {
         self.cancel_selection();
-        if let Some(clipboard) = &self.clipboard {
-            self.selection = Some(clipboard.clone());
-        }
+        // Create selection from entry
+        let world_mouse = input.world_mouse.floor().cwise_cast();
+        let selection = Selection::new(material_map).with_center_at(world_mouse);
+        self.selection = Some(selection);
     }
-
-
-
-    // /// Preview of the current drawing operation
-    // pub fn preview(&self, settings: &ViewSettings) -> TileMap {
-    //     let mut tile_map = TileMap::empty();
-    //     match &self.ui_state {
-    //         UiState::Brushing(op) => op.draw(&mut tile_map, settings),
-    //         _ => {}
-    //     }
-    //
-    //     tile_map
-    // }
 }

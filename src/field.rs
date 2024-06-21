@@ -211,11 +211,10 @@ impl RgbaField {
     pub fn to_imageio(&self) -> image::RgbaImage {
         let mut imageio_bitmap = image::RgbaImage::new(self.width() as u32, self.height() as u32);
 
-        for y in 0..self.height() {
-            for x in 0..self.width() {
-                let imageio_rgba = image::Rgba(self[[x, y]].to_array());
-                imageio_bitmap.put_pixel(x as u32, y as u32, imageio_rgba);
-            }
+        for index in self.indices() {
+            let imageio_rgba = image::Rgba(self[index].to_array());
+            let offset = (index - self.bounds.low()).cwise_try_into::<u32>().unwrap();
+            imageio_bitmap.put_pixel(offset.x, offset.y, imageio_rgba);
         }
 
         imageio_bitmap

@@ -1,6 +1,7 @@
+use std::{array, collections::BTreeSet, fmt::Debug, time::UNIX_EPOCH};
+
 use instant::SystemTime;
 use itertools::Itertools;
-use std::{array, collections::BTreeSet, fmt::Debug, rc::Rc, time::UNIX_EPOCH};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum UniqueError {

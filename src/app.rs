@@ -1,4 +1,5 @@
 use anyhow::Context;
+use data_encoding::BASE64;
 use std::{
     collections::HashMap,
     fs,
@@ -9,7 +10,10 @@ use std::{
     sync::{mpsc, Arc},
 };
 
-use egui::{load::SizedTexture, scroll_area::ScrollBarVisibility, style::ScrollStyle, CursorIcon, Sense, TextureOptions, Widget, Event};
+use egui::{
+    load::SizedTexture, scroll_area::ScrollBarVisibility, style::ScrollStyle, CursorIcon, Event,
+    Sense, TextureOptions, Widget,
+};
 use glow::HasContext;
 use image::{
     codecs::gif::{GifEncoder, Repeat},
@@ -27,8 +31,9 @@ use crate::{
     material::Material,
     math::{point::Point, rect::Rect, rgba8::Pico8Palette},
     painting::view_painter::ViewPainter,
+    pixmap::MaterialMap,
     utils::ReflectEnum,
-    view::{EditMode, UiState, View, ViewButton, ViewInput, ViewSettings},
+    view::{EditMode, View, ViewButton, ViewInput, ViewSettings},
     widgets::{BrushChooser, ColorChooser, FileChooser},
     world::World,
 };
@@ -132,6 +137,41 @@ impl GifRecorder {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Clipboard {
+    pub material_map: MaterialMap,
+}
+
+impl Clipboard {
+    const DATA_URL_HEADER: &'static str = "data:image/png;base64,";
+
+    pub fn new(material_map: MaterialMap) -> Self {
+        Self { material_map }
+    }
+
+    pub fn decode(encoded: &str) -> Option<Self> {
+        // Strip DATA_URL_HEADER
+        if encoded.len() <= Self::DATA_URL_HEADER.len() {
+            return None;
+        }
+        let payload = &encoded[Self::DATA_URL_HEADER.len()..];
+        let png = BASE64.decode(payload.as_bytes()).ok()?;
+        let rgba_field = RgbaField::load_from_memory(&png).ok()?;
+        let material_map = rgba_field.into_material().to_pixmap();
+        Some(Self { material_map })
+    }
+
+    pub fn encode(&self) -> String {
+        let rgba_field = self
+            .material_map
+            .to_field(Material::TRANSPARENT)
+            .into_rgba();
+        let png = rgba_field.to_png().unwrap();
+        let base64_png = BASE64.encode(&png);
+        format!("{}{}", Self::DATA_URL_HEADER, base64_png)
+    }
+}
+
 pub struct EguiApp {
     view_painter: ViewPainter,
     start_time: Instant,
@@ -161,6 +201,8 @@ pub struct EguiApp {
 
     channel_receiver: mpsc::Receiver<Vec<u8>>,
     channel_sender: mpsc::SyncSender<Vec<u8>>,
+
+    clipboard: Option<Clipboard>,
 }
 
 impl EguiApp {
@@ -284,6 +326,7 @@ impl EguiApp {
             brush_chooser: BrushChooser::new(ColorChooser::default()),
             interpreter: Interpreter::new(),
             gif_recorder: GifRecorder::new(),
+            clipboard: None,
             channel_sender,
             channel_receiver,
         }
@@ -400,18 +443,49 @@ impl EguiApp {
         });
     }
 
+    pub fn clipboard_put(&mut self, ctx: &egui::Context, material_map: MaterialMap) {
+        let clipboard = Clipboard::new(material_map);
+        let encoded = clipboard.encode();
+        ctx.output_mut(|output| output.copied_text = encoded);
+        self.clipboard = Some(clipboard);
+    }
+
+    pub fn clipboard_copy(&mut self, ctx: &egui::Context) {
+        if let Some(material_map) = self.view.clipboard_copy() {
+            self.clipboard_put(ctx, material_map);
+        }
+    }
+
+    pub fn clipboard_cut(&mut self, ctx: &egui::Context) {
+        if let Some(material_map) = self.view.clipboard_cut() {
+            self.clipboard_put(ctx, material_map);
+        }
+    }
+
+    // pub fn clipboard_paste(&mut self) {
+    //     let Some(clipboard) = &self.clipboard else {
+    //         return;
+    //     };
+    //
+    //     self.view.clipboard_paste(clipboard.clone());
+    // }
+
     pub fn copy_paste_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             if ui.button("Copy").clicked() {
-                self.view.clipboard_copy();
+                self.clipboard_copy(ui.ctx());
             }
 
             if ui.button("Cut").clicked() {
-                self.view.clipboard_cut();
+                self.clipboard_cut(ui.ctx());
             }
 
             if ui.button("Paste").clicked() {
-                self.view.clipboard_paste();
+                if let Some(clipboard) = &self.clipboard {
+                    self.view
+                        .clipboard_paste(&self.view_input, clipboard.material_map.clone());
+                }
+                // TODO: Use ViewportCommand::RequestPaste
             }
         });
     }
@@ -690,6 +764,27 @@ impl eframe::App for EguiApp {
         #[cfg(target_arch = "wasm32")]
         if let Ok(content) = self.channel_receiver.try_recv() {
             self.load_file(&content);
+        }
+
+        // We cannot lock input while called clipboard_copy, clipboard_cut, ...
+        // TODO: Only clone Paste, Copy, Cut events
+        let events = ctx.input(|input| input.events.clone());
+        for event in events {
+            match event {
+                Event::Paste(paste) => {
+                    if let Some(clipboard) = Clipboard::decode(&paste) {
+                        self.view
+                            .clipboard_paste(&self.view_input, clipboard.material_map);
+                    }
+                }
+                Event::Copy => {
+                    self.clipboard_copy(ctx);
+                }
+                Event::Cut => {
+                    self.clipboard_cut(ctx);
+                }
+                _ => {}
+            }
         }
 
         ctx.input(|input| {
