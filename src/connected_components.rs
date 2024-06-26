@@ -113,6 +113,8 @@ pub fn color_components_subset<Id: Eq + Copy, T: Eq + Copy>(
     (regions, region_map)
 }
 
+
+
 pub fn color_components<Id: Eq + Copy, T: Eq + Copy>(
     color_map: &Pixmap<T>,
     free_id: impl FnMut() -> Id,
@@ -194,7 +196,7 @@ mod test {
     // TODO: Make sure color of pixels in components is constant
     use crate::{
         connected_components::{
-            color_components, left_of_border, right_of_border, split_into_cycles, ColorRegion,
+            color_components, ColorRegion, left_of_border, right_of_border, split_into_cycles,
         },
         field::RgbaField,
         math::{
