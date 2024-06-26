@@ -26,8 +26,8 @@ pub struct Tile<T> {
 }
 
 impl<T> Tile<T> {
-    const SIZE: i64 = 64;
-    const BOUNDS: Rect<i64> = Rect::new(Interval::new(0, Self::SIZE), Interval::new(0, Self::SIZE));
+    pub const SIZE: i64 = 64;
+    pub const BOUNDS: Rect<i64> = Rect::new(Interval::new(0, Self::SIZE), Interval::new(0, Self::SIZE));
 
     pub fn iter<'a>(&'a self) -> impl IteratorPlus<(Point<i64>, &T)> + 'a {
         self.field
@@ -51,6 +51,11 @@ impl<T> Tile<T> {
     pub fn into_map<S>(self, mut f: impl FnMut(T) -> S) -> Tile<S> {
         let field = self.field.into_map(|opt| opt.map(&mut f));
         Tile { field }
+    }
+
+    /// Pixel rectangle of the given tile index
+    pub fn tile_rect(tile_index: Point<i64>) -> Rect<i64> {
+        Tile::<T>::BOUNDS + tile_index * Tile::<T>::SIZE
     }
 }
 

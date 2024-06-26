@@ -56,6 +56,10 @@ impl<T> Field<T> {
         self.bounds.height()
     }
 
+    pub fn len(&self) -> usize {
+        (self.bounds.width() * self.bounds().height()) as usize
+    }
+
     pub fn indices(&self) -> impl IteratorPlus<Point<i64>> {
         self.bounds.iter_half_open()
     }
@@ -73,7 +77,7 @@ impl<T> Field<T> {
         self.bounds.contains(index.point())
     }
 
-    fn valid_linear_index_at(&self, index: impl FieldIndex) -> Option<usize> {
+    pub fn linear_index(&self, index: impl FieldIndex) -> Option<usize> {
         if !self.bounds().half_open_contains(index.point()) {
             None
         } else {
@@ -95,18 +99,22 @@ impl<T> Field<T> {
         self.elems.as_slice()
     }
 
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        self.elems.as_mut_slice()
+    }
+
     pub fn get(&self, index: impl FieldIndex) -> Option<&T> {
-        let i = self.valid_linear_index_at(index)?;
+        let i = self.linear_index(index)?;
         Some(&self.elems[i])
     }
 
     pub fn get_mut(&mut self, index: impl FieldIndex) -> Option<&mut T> {
-        let i = self.valid_linear_index_at(index)?;
+        let i = self.linear_index(index)?;
         Some(&mut self.elems[i])
     }
 
     pub fn set(&mut self, index: impl FieldIndex, value: T) -> T {
-        let i = self.valid_linear_index_at(index).unwrap();
+        let i = self.linear_index(index).unwrap();
         std::mem::replace(&mut self.elems[i], value)
     }
 
