@@ -52,6 +52,11 @@ impl<T> Tile<T> {
         let field = self.field.into_map(|opt| opt.map(&mut f));
         Tile { field }
     }
+
+    /// Pixel rectangle of the given tile index
+    pub fn tile_rect(tile_index: Point<i64>) -> Rect<i64> {
+        Tile::<T>::BOUNDS + tile_index * Tile::<T>::SIZE
+    }
 }
 
 impl<T: Clone> Tile<T> {
