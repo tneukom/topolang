@@ -1,9 +1,48 @@
 // #![allow(dead_code)]
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
+use std::time::Instant;
 use log::warn;
 use seamlang::{app::EguiApp, field::RgbaField, math::rgba8::Rgba8};
 use walkdir::WalkDir;
+use seamlang::connected_components::{color_components, ColorRegion};
+use seamlang::field::Field;
+use seamlang::pixmap::{Pixmap, RgbaMap};
+use seamlang::regions::{Pixmap2, pixmap_regions, pixmap_regions2};
+
+pub fn main_benchmark_regions() {
+    let folder = "test_resources/regions";
+    let color_map: Pixmap2<Rgba8> = Field::load(format!("{folder}/b.png")).unwrap().into();
+
+    for _ in 0..100 {
+        let now = Instant::now();
+        let region_map = pixmap_regions2(&color_map);
+        println!("Elapsed = {:.3?}", now.elapsed());
+    }
+}
+
+pub fn main_benchmark_legacy_regions() {
+    fn usize_color_components(
+        color_map: &RgbaMap,
+    ) -> (Vec<ColorRegion<usize, Rgba8>>, Pixmap<usize>) {
+        let mut id: usize = 0;
+        let free_id = || {
+            let result = id;
+            id += 1;
+            result
+        };
+        color_components(color_map, free_id)
+    }
+
+    let folder = "test_resources/regions";
+    let color_map: Pixmap<Rgba8> = Field::load(format!("{folder}/b.png")).unwrap().to_pixmap();
+
+    for _ in 0..100 {
+        let now = Instant::now();
+        let region_map = usize_color_components(&color_map);
+        println!("Legacy method elapsed = {:.3?}", now.elapsed());
+    }
+}
 
 // pub fn main_benchmark() {
 //     use seamlang::{compiler::Compiler, rule::stabilize, topology::Topology};
@@ -104,9 +143,11 @@ pub fn main() {
     {
         env_logger::init();
         warn!("Logging!");
-        main_editor();
+        // main_editor();
         // color_replace();
+
+        main_benchmark_regions();
     }
 
-    // main_benchmark();
+
 }

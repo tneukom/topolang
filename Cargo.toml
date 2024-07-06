@@ -53,5 +53,8 @@ walkdir = "2.5.0"
 # dlv-list = "0.5.1"
 # fastrand = "2.0.1"
 
+#[dev-dependencies]
+#rstest = "0.21.0"
+
 [profile.release]
 debug = 1
