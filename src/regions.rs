@@ -1,7 +1,6 @@
 use crate::{
     field::{Field, FieldIndex},
     math::{
-        generic::EuclidDivRem,
         interval::Interval,
         pixel::Side,
         point::Point,
@@ -132,6 +131,9 @@ pub fn tile_cover(rect: Rect<i64>) -> Rect<i64> {
 
 /// Split pixel index into tile and pixel index
 pub fn split_index(index: impl FieldIndex) -> (Point<i64>, Point<i64>) {
+    // Using bit manipulation for TILE_SIZE == 64
+    const { assert!(TILE_SIZE == 64); }
+
     let index = index.point();
 
     // TODO: Make sure this optimization works
@@ -510,7 +512,7 @@ pub fn pixmap_regions2<T: Clone + Eq>(pixmap: &Pixmap2<T>) -> Pixmap2<usize> {
         id
     });
 
-    for (index, id) in region_map.iter_mut() {
+    for (_index, id) in region_map.iter_mut() {
         *id = union_find.find(*id);
     }
 
@@ -595,7 +597,6 @@ mod test {
         pixmap::Tile,
         regions::{pixmap_regions2, split_index, Pixmap2, TILE_SIZE},
     };
-    use crate::regions::pixmap_regions;
 
     pub fn pixel_touches_tile_boundary(index: Point<i64>) -> bool {
         let (_, pixel_index) = split_index(index);
