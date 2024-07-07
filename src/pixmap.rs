@@ -27,7 +27,8 @@ pub struct Tile<T> {
 
 impl<T> Tile<T> {
     pub const SIZE: i64 = 64;
-    pub const BOUNDS: Rect<i64> = Rect::new(Interval::new(0, Self::SIZE), Interval::new(0, Self::SIZE));
+    pub const BOUNDS: Rect<i64> =
+        Rect::new(Interval::new(0, Self::SIZE), Interval::new(0, Self::SIZE));
 
     pub fn iter<'a>(&'a self) -> impl IteratorPlus<(Point<i64>, &T)> + 'a {
         self.field
