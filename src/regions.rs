@@ -132,7 +132,9 @@ pub fn tile_cover(rect: Rect<i64>) -> Rect<i64> {
 /// Split pixel index into tile and pixel index
 pub fn split_index(index: impl FieldIndex) -> (Point<i64>, Point<i64>) {
     // Using bit manipulation for TILE_SIZE == 64
-    const { assert!(TILE_SIZE == 64); }
+    const {
+        assert!(TILE_SIZE == 64);
+    }
 
     let index = index.point();
 
@@ -184,7 +186,7 @@ impl<'a, T> LowNeighbors<'a, Tile2<T>> {
         Self {
             top: pixmap2.get_tile(tile_index.top_neighbor()),
             left: pixmap2.get_tile(tile_index.left_neighbor()),
-            top_right: pixmap2.get_tile(tile_index.top_right_neighbor()),
+            top_right: pixmap2.get_tile(tile_index.top_left_neighbor()),
         }
     }
 }
@@ -214,7 +216,7 @@ impl<'a, T> LowNeighborhood<'a, T> {
         LowNeighbors {
             top: self.get(index.top_neighbor()),
             left: self.get(index.left_neighbor()),
-            top_right: self.get(index.top_right_neighbor()),
+            top_right: self.get(index.top_left_neighbor()),
         }
     }
 }
@@ -647,7 +649,10 @@ mod test {
         });
 
         let after = before_cell.into_map(|cell| cell.get());
-        // after.to_field(Rgba8::ZERO).save(format!("{folder}/{name}_out.png")).unwrap();
+        // after
+        //     .to_field(Rgba8::ZERO)
+        //     .save(format!("{folder}/{name}_out.png"))
+        //     .unwrap();
 
         let expected: Pixmap2<Rgba8> = Field::load(format!("{folder}/{name}_after.png"))
             .unwrap()
@@ -692,9 +697,9 @@ mod test {
         // convert to Rgba8
         let region_map_rgba = region_map.map(|id| Rgba8::new(*id as u8, 0, 0, 255));
 
-        region_map_rgba
-            .to_field(Rgba8::ZERO)
-            .save(format!("{folder}/b_out.png"))
-            .unwrap();
+        // region_map_rgba
+        //     .to_field(Rgba8::ZERO)
+        //     .save(format!("{folder}/b_out.png"))
+        //     .unwrap();
     }
 }

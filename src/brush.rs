@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     material::Material,
-    math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect}
-    ,
+    math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect},
     utils::IteratorPlus,
 };
 

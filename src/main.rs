@@ -1,14 +1,17 @@
 // #![allow(dead_code)]
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use std::time::Instant;
 use log::warn;
-use seamlang::{app::EguiApp, field::RgbaField, math::rgba8::Rgba8};
+use seamlang::{
+    app::EguiApp,
+    connected_components::{color_components, ColorRegion},
+    field::{Field, RgbaField},
+    math::rgba8::Rgba8,
+    pixmap::{Pixmap, RgbaMap},
+    regions::{pixmap_regions, pixmap_regions2, Pixmap2},
+};
+use std::time::Instant;
 use walkdir::WalkDir;
-use seamlang::connected_components::{color_components, ColorRegion};
-use seamlang::field::Field;
-use seamlang::pixmap::{Pixmap, RgbaMap};
-use seamlang::regions::{Pixmap2, pixmap_regions, pixmap_regions2};
 
 pub fn main_benchmark_regions() {
     let folder = "test_resources/regions";
@@ -143,11 +146,9 @@ pub fn main() {
     {
         env_logger::init();
         warn!("Logging!");
-        // main_editor();
+        main_editor();
         // color_replace();
 
-        main_benchmark_regions();
+        // main_benchmark_regions();
     }
-
-
 }

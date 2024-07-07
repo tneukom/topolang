@@ -746,6 +746,30 @@ pub mod test {
     #[test]
     fn seam_graph_1a() {
         let edges = load_rgb_seam_graph("1a.png");
+
+        // let topo = load_topology("1a.png");
+        // For debugging!
+        // for (region_key, region) in &topo.regions {
+        //     println!(
+        //         "region key = {:?}, color = {:?}",
+        //         region_key, region.material
+        //     );
+        //     for border in &region.boundary {
+        //         println!("  border:");
+        //         for side in &border.cycle {
+        //             println!("    side: {}", side);
+        //             println!(
+        //                 "    right side: {:?}",
+        //                 topo.region_map.get(side.right_pixel())
+        //             );
+        //         }
+        //
+        //         for seam in &border.seams {
+        //             println!("  seam with start={} and stop={}", seam.start, seam.stop);
+        //         }
+        //     }
+        // }
+
         let expected_edges = rgb_edges_from([
             (Rgba8::TRANSPARENT, Rgba8::VOID),
             (Rgba8::RED, Rgba8::TRANSPARENT),

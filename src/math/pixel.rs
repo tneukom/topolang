@@ -1,3 +1,10 @@
+/// The centers of a hexagon grid form a lattice but the corners do not! However, the corners
+/// can be split into two sets each of which forms a lattice. Corners are more cumbersome to handle
+/// than cells and sides and terminology is less clear.
+/// Order on sides is not very intuitive, a more useful order might be by (corner, out direction).
+/// Interesting links:
+/// https://en.wikipedia.org/wiki/Lattice_(group)
+/// https://www.redblobgames.com/grids/hexagons/
 use std::{
     fmt::{Debug, Display, Formatter},
     ops::Add,
@@ -9,65 +16,65 @@ use crate::math::point::Point;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SideName {
     Left,
-    BottomLeft,
     Bottom,
+    BottomRight,
     Right,
-    TopRight,
     Top,
+    TopLeft,
 }
 
 impl SideName {
     pub const fn opposite(self) -> Self {
         match self {
             Self::Top => Self::Bottom,
+            Self::TopLeft => Self::BottomRight,
             Self::Left => Self::Right,
-            Self::BottomLeft => Self::TopRight,
             Self::Bottom => Self::Top,
+            Self::BottomRight => Self::TopLeft,
             Self::Right => Self::Left,
-            Self::TopRight => Self::BottomLeft,
         }
     }
 
     pub const fn next_ccw(self) -> Self {
         match self {
-            Self::Top => Self::Left,
-            Self::Left => Self::BottomLeft,
-            Self::BottomLeft => Self::Bottom,
-            Self::Bottom => Self::Right,
-            Self::Right => Self::TopRight,
-            Self::TopRight => Self::Top,
+            Self::Top => Self::TopLeft,
+            Self::TopLeft => Self::Left,
+            Self::Left => Self::Bottom,
+            Self::Bottom => Self::BottomRight,
+            Self::BottomRight => Self::Right,
+            Self::Right => Self::Top,
         }
     }
 
     pub const fn previous_ccw(self) -> Self {
         match self {
-            Self::Top => Self::TopRight,
-            Self::Left => Self::Top,
-            Self::BottomLeft => Self::Left,
-            Self::Bottom => Self::BottomLeft,
-            Self::Right => Self::Bottom,
-            Self::TopRight => Self::Right,
+            Self::Top => Self::Right,
+            Self::TopLeft => Self::Top,
+            Self::Left => Self::TopLeft,
+            Self::Bottom => Self::Left,
+            Self::BottomRight => Self::Bottom,
+            Self::Right => Self::BottomRight,
         }
     }
 
     pub fn unicode_symbol(self) -> char {
         match self {
-            SideName::Top => '←',
-            SideName::Left => '↓',
-            SideName::BottomLeft => '↘',
-            SideName::Bottom => '→',
-            SideName::Right => '↑',
-            SideName::TopRight => '↖',
+            Self::Top => '←',
+            Self::TopLeft => '↙',
+            Self::Left => '↓',
+            Self::Bottom => '→',
+            Self::BottomRight => '↗',
+            Self::Right => '↑',
         }
     }
 
     pub const ALL: [SideName; 6] = [
-        Self::Top,
         Self::Left,
-        Self::BottomLeft,
         Self::Bottom,
+        Self::BottomRight,
         Self::Right,
-        Self::TopRight,
+        Self::Top,
+        Self::TopLeft,
     ];
 }
 
@@ -83,45 +90,45 @@ impl Point<i64> {
         Self::new(self.x, self.y - 1)
     }
 
-    pub const fn left_neighbor(self) -> Self {
-        Self::new(self.x - 1, self.y)
+    pub const fn top_left_neighbor(self) -> Self {
+        Self::new(self.x - 1, self.y - 1)
     }
 
-    pub const fn bottom_left_neighbor(self) -> Self {
-        Self::new(self.x - 1, self.y + 1)
+    pub const fn left_neighbor(self) -> Self {
+        Self::new(self.x - 1, self.y)
     }
 
     pub const fn bottom_neighbor(self) -> Self {
         Self::new(self.x, self.y + 1)
     }
 
-    pub const fn right_neighbor(self) -> Self {
-        Self::new(self.x + 1, self.y)
+    pub const fn bottom_right_neighbor(self) -> Self {
+        Self::new(self.x + 1, self.y + 1)
     }
 
-    pub const fn top_right_neighbor(self) -> Self {
-        Self::new(self.x + 1, self.y - 1)
+    pub const fn right_neighbor(self) -> Self {
+        Self::new(self.x + 1, self.y)
     }
 
     pub const fn neighbor(self, side: SideName) -> Self {
         match side {
             SideName::Top => self.top_neighbor(),
+            SideName::TopLeft => self.top_left_neighbor(),
             SideName::Left => self.left_neighbor(),
-            SideName::BottomLeft => self.bottom_left_neighbor(),
             SideName::Bottom => self.bottom_neighbor(),
+            SideName::BottomRight => self.bottom_right_neighbor(),
             SideName::Right => self.right_neighbor(),
-            SideName::TopRight => self.top_right_neighbor(),
         }
     }
 
     pub const fn neighbors(self) -> [Self; 6] {
         [
             self.top_neighbor(),
+            self.top_left_neighbor(),
             self.left_neighbor(),
-            self.bottom_left_neighbor(),
             self.bottom_neighbor(),
+            self.bottom_right_neighbor(),
             self.right_neighbor(),
-            self.top_right_neighbor(),
         ]
     }
 
@@ -129,24 +136,24 @@ impl Point<i64> {
         Side::new(self, SideName::Top)
     }
 
-    pub const fn left_side(self) -> Side {
-        Side::new(self, SideName::Left)
+    pub const fn top_left_side(self) -> Side {
+        Side::new(self, SideName::TopLeft)
     }
 
-    pub const fn bottom_left_side(self) -> Side {
-        Side::new(self, SideName::BottomLeft)
+    pub const fn left_side(self) -> Side {
+        Side::new(self, SideName::Left)
     }
 
     pub const fn bottom_side(self) -> Side {
         Side::new(self, SideName::Bottom)
     }
 
-    pub const fn right_side(self) -> Side {
-        Side::new(self, SideName::Right)
+    pub const fn bottom_right_side(self) -> Side {
+        Side::new(self, SideName::BottomRight)
     }
 
-    pub const fn top_right_side(self) -> Side {
-        Side::new(self, SideName::TopRight)
+    pub const fn right_side(self) -> Side {
+        Side::new(self, SideName::Right)
     }
 
     pub const fn side_ccw(self, side_name: SideName) -> Side {
@@ -156,11 +163,11 @@ impl Point<i64> {
     pub const fn sides_ccw(self) -> [Side; 6] {
         [
             self.top_side(),
+            self.top_left_side(),
             self.left_side(),
-            self.bottom_left_side(),
             self.bottom_side(),
+            self.bottom_right_side(),
             self.right_side(),
-            self.top_right_side(),
         ]
     }
 
@@ -187,11 +194,11 @@ impl Point<i64> {
         [
             self,
             self.top_neighbor(),
+            self.top_left_neighbor(),
             self.left_neighbor(),
-            self.bottom_left_neighbor(),
             self.bottom_neighbor(),
+            self.bottom_right_neighbor(),
             self.right_neighbor(),
-            self.top_right_neighbor(),
         ]
     }
 }
@@ -295,23 +302,18 @@ impl Corner {
         Self { pixel, name }
     }
 
-    /// Stop corner of top right side
-    pub const fn top_right_side_stop(pixel: Pixel) -> Self {
-        Self::new(pixel, CornerName::TopStart)
-    }
-
     /// Stop corner of top side
     pub const fn top_side_stop(pixel: Pixel) -> Self {
         Self::new(pixel, CornerName::TopStop)
     }
 
-    /// Stop corner of left side
-    pub const fn left_side_stop(pixel: Pixel) -> Self {
-        Self::new(pixel.bottom_left_neighbor(), CornerName::TopStart)
+    /// Stop corner of the top left side
+    pub const fn top_left_side_stop(pixel: Pixel) -> Self {
+        Self::new(pixel.left_neighbor(), CornerName::TopStart)
     }
 
-    /// Stop corner of bottom left side
-    pub const fn bottom_left_side_stop(pixel: Pixel) -> Self {
+    /// Stop corner of left side
+    pub const fn left_side_stop(pixel: Pixel) -> Self {
         Self::new(pixel.bottom_neighbor(), CornerName::TopStop)
     }
 
@@ -320,27 +322,35 @@ impl Corner {
         Self::new(pixel.bottom_neighbor(), CornerName::TopStart)
     }
 
+    // Stop corner of bottom right side
+    pub const fn bottom_right_side_stop(pixel: Pixel) -> Self {
+        Self::new(pixel.bottom_right_neighbor(), CornerName::TopStop)
+    }
+
     /// Stop corner of right side
     pub const fn right_side_stop(pixel: Pixel) -> Self {
-        Self::new(pixel.right_neighbor(), CornerName::TopStop)
+        Self::new(pixel, CornerName::TopStart)
     }
 
     /// See docs/corner_normalization.png
     pub const fn side_stop(side: Side) -> Self {
         match side.name {
             SideName::Top => Self::top_side_stop(side.left_pixel),
+            SideName::TopLeft => Self::top_left_side_stop(side.left_pixel),
             SideName::Left => Self::left_side_stop(side.left_pixel),
-            SideName::BottomLeft => Self::bottom_left_side_stop(side.left_pixel),
             SideName::Bottom => Self::bottom_side_stop(side.left_pixel),
+            SideName::BottomRight => Self::bottom_right_side_stop(side.left_pixel),
             SideName::Right => Self::right_side_stop(side.left_pixel),
-            SideName::TopRight => Self::top_right_side_stop(side.left_pixel),
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::math::pixel::{Pixel, Side, SideName};
+    use crate::math::{
+        pixel::{Pixel, Side, SideName},
+        point::Point,
+    };
 
     const PIXELS: [Pixel; 3] = [Pixel::new(0, 0), Pixel::new(-2, 4), Pixel::new(9, 17)];
 
@@ -392,76 +402,89 @@ mod test {
             // top side
             assert_eq!(
                 pixel.top_side().stop_corner(),
-                pixel.left_neighbor().right_side().stop_corner()
+                pixel.top_neighbor().bottom_side().start_corner()
             );
             assert_eq!(
                 pixel.top_side().stop_corner(),
-                pixel.top_neighbor().bottom_left_side().stop_corner()
+                pixel.top_left_neighbor().bottom_right_side().stop_corner()
+            );
+
+            // top left side
+            assert_eq!(
+                pixel.top_left_side().stop_corner(),
+                pixel.left_neighbor().right_side().stop_corner()
+            );
+            assert_eq!(
+                pixel.top_left_side().stop_corner(),
+                pixel.top_left_neighbor().bottom_side().stop_corner()
             );
 
             // left side
             assert_eq!(
                 pixel.left_side().stop_corner(),
-                pixel.left_neighbor().bottom_side().stop_corner()
+                pixel.left_neighbor().bottom_right_side().stop_corner()
             );
             assert_eq!(
                 pixel.left_side().stop_corner(),
-                pixel.bottom_left_neighbor().top_right_side().stop_corner()
-            );
-
-            // bottom left side
-            assert_eq!(
-                pixel.bottom_left_side().stop_corner(),
                 pixel.bottom_neighbor().top_side().stop_corner()
-            );
-            assert_eq!(
-                pixel.bottom_left_side().stop_corner(),
-                pixel.bottom_left_neighbor().right_side().stop_corner()
             );
 
             // bottom side
             assert_eq!(
                 pixel.bottom_side().stop_corner(),
-                pixel.right_neighbor().left_side().stop_corner()
+                pixel.bottom_right_neighbor().top_left_side().stop_corner()
             );
             assert_eq!(
                 pixel.bottom_side().stop_corner(),
-                pixel.bottom_neighbor().top_right_side().stop_corner()
+                pixel.bottom_neighbor().right_side().stop_corner()
+            );
+
+            // bottom right side
+            assert_eq!(
+                pixel.bottom_right_side().stop_corner(),
+                pixel.right_neighbor().left_side().stop_corner()
+            );
+            assert_eq!(
+                pixel.bottom_right_side().stop_corner(),
+                pixel.bottom_right_neighbor().top_side().stop_corner()
             );
 
             // right side
             assert_eq!(
                 pixel.right_side().stop_corner(),
-                pixel.right_neighbor().top_side().stop_corner()
+                pixel.right_neighbor().top_left_side().stop_corner()
             );
             assert_eq!(
                 pixel.right_side().stop_corner(),
-                pixel.top_right_neighbor().bottom_left_side().stop_corner()
-            );
-
-            // top right side
-            assert_eq!(
-                pixel.top_right_side().stop_corner(),
                 pixel.top_neighbor().bottom_side().stop_corner()
-            );
-            assert_eq!(
-                pixel.top_right_side().stop_corner(),
-                pixel.top_right_neighbor().left_side().stop_corner()
             );
         }
     }
 
-    // TODO: Make static assert if possible
+    /// The smallest side of a pixel p must be smaller than all sides of pixels q where q >= p.
     #[test]
-    fn side_ordering() {
-        let pixel = Pixel::new(0, 0);
+    fn side_pixel_order() {
+        let p = Pixel::new(0, 0);
+        let &min_side = p.sides_ccw().iter().min().unwrap();
+        let neighbors = [
+            p.right_neighbor(),
+            p.bottom_neighbor(),
+            p.bottom_right_neighbor(),
+        ];
+        for neighbor in neighbors {
+            for side in neighbor.sides_ccw() {
+                assert!(min_side < side);
+            }
+        }
+    }
 
-        let ccw_sides = pixel.sides_ccw();
-        assert!(ccw_sides.iter().all(|&side| pixel.left_side() <= side));
-
-        let cw_sides = pixel.sides_cw();
-        assert!(cw_sides
-            .iter()
-            .all(|&side| pixel.top_side().reversed() <= side));
+    /// The start corner of the smallest ccw side should be equal to the start corner of the
+    /// smallest cw side.
+    #[test]
+    fn min_side_cw_ccw() {
+        let p = Pixel::new(0, 0);
+        let &ccw_min_side = p.sides_ccw().iter().min().unwrap();
+        let &cw_min_side = p.sides_cw().iter().min().unwrap();
+        assert_eq!(ccw_min_side.start_corner(), cw_min_side.start_corner());
     }
 }

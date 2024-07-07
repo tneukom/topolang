@@ -113,8 +113,6 @@ pub fn color_components_subset<Id: Eq + Copy, T: Eq + Copy>(
     (regions, region_map)
 }
 
-
-
 pub fn color_components<Id: Eq + Copy, T: Eq + Copy>(
     color_map: &Pixmap<T>,
     free_id: impl FnMut() -> Id,
@@ -123,17 +121,15 @@ pub fn color_components<Id: Eq + Copy, T: Eq + Copy>(
 }
 
 // TODO: Use iterator instead of Vec<Side>
-/// Requires border to be ccw, starting with left side and stopping with top side
 pub fn left_of_border(border: &Vec<Side>) -> Vec<Pixel> {
     assert!(!border.is_empty());
-    assert_eq!(border.first().unwrap().name, SideName::Left);
-    assert_eq!(border.last().unwrap().name, SideName::Top);
 
     let mut left_right_sides: Vec<_> = border
         .iter()
         .copied()
         .filter(|side| side.name == SideName::Left || side.name == SideName::Right)
         .collect();
+
     left_right_sides.sort();
 
     let mut area = Vec::new();
@@ -148,8 +144,8 @@ pub fn left_of_border(border: &Vec<Side>) -> Vec<Pixel> {
     area
 }
 
-/// Split a set of sides into cycles. If a cycle is ccw it starts with a left side, if it is
-/// cw it starts with a bottom side.
+/// Split a set of sides into cycles. If a cycle is ccw it starts with a top left side, if it is
+/// cw it starts with a bottom right side.
 /// `[cycle.first() | cycle in cycles]` is ordered from small to large. This means the
 /// first cycle is the outer cycle.
 pub fn split_into_cycles<'a>(mut sides: BTreeSet<Side>) -> Vec<Vec<Side>> {
@@ -167,9 +163,7 @@ pub fn split_into_cycles<'a>(mut sides: BTreeSet<Side>) -> Vec<Vec<Side>> {
                     continue 'outer;
                 }
             }
-            // See side_ordering test in pixel.rs
-            assert!([SideName::Left, SideName::Bottom].contains(&cycle.first().unwrap().name));
-            // No continuing side still in sides, so the cycle is finished.
+
             break;
         }
 
@@ -196,7 +190,7 @@ mod test {
     // TODO: Make sure color of pixels in components is constant
     use crate::{
         connected_components::{
-            color_components, ColorRegion, left_of_border, right_of_border, split_into_cycles,
+            color_components, left_of_border, right_of_border, split_into_cycles, ColorRegion,
         },
         field::RgbaField,
         math::{
@@ -251,6 +245,24 @@ mod test {
         let border = &borders[0];
         let left_of_border = left_of_border(border);
         assert_eq!(area, left_of_border.into_iter().collect());
+    }
+
+    /// The cycle from a border and the reverse of the border should start at the same corner.
+    /// See also regarding this: min_side_cw_ccw test in pixel.rs
+    #[test]
+    fn compatible_reverse_borders() {
+        let sides_ccw: BTreeSet<_> = Pixel::new(0, 0).sides_ccw().into_iter().collect();
+        let cycles_ccw = split_into_cycles(sides_ccw);
+        assert_eq!(cycles_ccw.len(), 1);
+
+        let sides_cw: BTreeSet<_> = Pixel::new(0, 0).sides_cw().into_iter().collect();
+        let cycles_cw = split_into_cycles(sides_cw);
+        assert_eq!(cycles_cw.len(), 1);
+
+        assert_eq!(
+            cycles_cw[0][0].start_corner(),
+            cycles_ccw[0][0].start_corner()
+        );
     }
 
     #[test]
@@ -391,5 +403,23 @@ mod test {
     #[test]
     fn components_7a() {
         assert_proper_components("7a.png", 6);
+    }
+
+    #[test]
+    fn border_1() {
+        let folder = "test_resources/connected_components/border";
+        let path = format!("{folder}/1.png");
+        let color_map = RgbaField::load(path).unwrap().to_pixmap();
+        let (regions, _) = usize_color_components(&color_map);
+        for region in regions {
+            println!("region:");
+            let cycles = split_into_cycles(region.sides);
+            for cycle in cycles {
+                println!("  cycle:");
+                for side in cycle {
+                    println!("    side: {}", side);
+                }
+            }
+        }
     }
 }

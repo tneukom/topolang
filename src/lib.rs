@@ -20,13 +20,13 @@ pub mod painting;
 pub mod palettes;
 pub mod pattern;
 pub mod pixmap;
+pub mod regions;
 pub mod rule;
 pub mod topology;
 pub mod utils;
 pub mod view;
 pub mod widgets;
 pub mod world;
-pub mod regions;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
