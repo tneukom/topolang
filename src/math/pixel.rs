@@ -347,10 +347,7 @@ impl Corner {
 
 #[cfg(test)]
 mod test {
-    use crate::math::{
-        pixel::{Pixel, Side, SideName},
-        point::Point,
-    };
+    use crate::math::pixel::{Pixel, Side, SideName};
 
     const PIXELS: [Pixel; 3] = [Pixel::new(0, 0), Pixel::new(-2, 4), Pixel::new(9, 17)];
 

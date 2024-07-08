@@ -1,15 +1,19 @@
 use crate::{
     field::{Field, FieldIndex},
     math::{
+        arrow::Arrow,
         interval::Interval,
-        pixel::Side,
+        pixel::{Side, SideName},
         point::Point,
         rect::{Rect, RectBounds},
         rgba8::Rgba8,
     },
     utils::IteratorPlus,
 };
-use petgraph::unionfind::UnionFind;
+use arrayvec::ArrayVec;
+use itertools::Itertools;
+use partitions::PartitionVec;
+use smallvec::{smallvec, SmallVec};
 use std::{cell::Cell, collections::BTreeMap, ops::Deref, rc::Rc};
 
 /// PartialEq for Rc<T: Eq> checks pointer equality first, see
@@ -494,7 +498,318 @@ impl From<Field<Rgba8>> for Pixmap2<Rgba8> {
     }
 }
 
+pub fn field_regions<T: Clone + Eq>(field: &Field<T>) -> Field<usize> {
+    let mut partitions: PartitionVec<Point<i64>> = PartitionVec::new();
+    let mut regions: Field<usize> = Field::filled(field.bounds(), 0);
+
+    for (pixel, value) in field.enumerate() {
+        let region = partitions.len();
+        regions[pixel] = region;
+        partitions.push(pixel);
+
+        for side in [SideName::TopLeft, SideName::Top, SideName::Left] {
+            let neighbor_index = pixel.neighbor(side);
+            if field.get(pixel) == field.get(neighbor_index) {
+                let &neighbor_region = regions.get(neighbor_index).unwrap();
+                partitions.union(region, neighbor_region);
+            }
+        }
+    }
+
+    for (region, set) in partitions.all_sets().enumerate() {
+        for (_, &pixel) in set {
+            regions[pixel] = region;
+        }
+    }
+
+    regions
+}
+
+pub fn field_regions2<T: Clone + Eq>(field: &Field<T>) -> Field<usize> {
+    use petgraph::unionfind::UnionFind;
+
+    let mut union_find = UnionFind::new(field.len());
+    let mut regions: Field<usize> = Field::filled(field.bounds(), 0);
+
+    let mut region: usize = 0;
+    for (pixel, value) in field.enumerate() {
+        regions[pixel] = region;
+
+        for side in [SideName::TopLeft, SideName::Top, SideName::Left] {
+            let neighbor_index = pixel.neighbor(side);
+            if Some(value) == field.get(neighbor_index) {
+                let &neighbor_region = regions.get(neighbor_index).unwrap();
+                union_find.union(region, neighbor_region);
+            }
+        }
+
+        region += 1;
+    }
+
+    for region in regions.iter_mut() {
+        *region = union_find.find(*region);
+    }
+
+    regions
+}
+
+pub fn field_regions3<T: Clone + Eq>(field: &Field<T>) -> Field<usize> {
+    use petgraph::unionfind::UnionFind;
+
+    let mut union_find = UnionFind::new(field.len());
+    let mut regions: Field<usize> = Field::filled(field.bounds(), 0);
+
+    let mut region_counter: usize = 0;
+    for (pixel, value) in field.enumerate() {
+        let mut region: Option<usize> = None;
+
+        for side in [SideName::TopLeft, SideName::Top, SideName::Left] {
+            let neighbor_index = pixel.neighbor(side);
+
+            if Some(value) == field.get(neighbor_index) {
+                let &neighbor_region = regions.get(neighbor_index).unwrap();
+                if let Some(region) = region {
+                    if region != neighbor_region {
+                        union_find.union(region, neighbor_region);
+                    }
+                } else {
+                    region = Some(neighbor_region);
+                }
+            }
+        }
+
+        if region == None {
+            region = Some(region_counter);
+            region_counter += 1;
+        }
+    }
+
+    for region in regions.iter_mut() {
+        *region = union_find.find(*region);
+    }
+
+    regions
+}
+
+pub fn iter_indices_with_neighbors(width: i64, height: i64) -> impl IteratorPlus<(i64, [i64; 3])> {
+    (0..width * height).map(move |i| {
+        let top_left = i - width - 1;
+        let top = i - width;
+        let left = i - 1;
+        (i, [left, top, top_left])
+    })
+}
+
+pub fn iter_indices_with_neighbors2(
+    width: usize,
+    height: usize,
+) -> impl IteratorPlus<(usize, SmallVec<[usize; 3]>)> {
+    let index = move |x: usize, y: usize| y * width + x;
+
+    (0..height).cartesian_product(0..width).map(move |(x, y)| {
+        if x == 0 && y == 0 {
+            (index(x, y), smallvec![])
+        } else if x == 0 {
+            (index(x, y), smallvec![index(x, y - 1)])
+        } else if y == 0 {
+            (index(x, y), smallvec![index(x - 1, y)])
+        } else {
+            (
+                index(x, y),
+                smallvec![index(x - 1, y), index(x - 1, y), index(x - 1, y - 1)],
+            )
+        }
+    })
+}
+
+pub fn field_at<T: Copy>(field: &Field<T>, i: i64) -> Option<T> {
+    let i_usize: usize = i.try_into().ok()?;
+    let &value = field.as_slice().get(i_usize)?;
+    Some(value)
+
+    // let &value = field.as_slice().get(i as usize)?;
+    // Some(value)
+}
+
+pub fn field_regions4<T: Copy + Eq>(field: &Field<T>) -> Field<usize> {
+    use petgraph::unionfind::UnionFind;
+
+    let mut union_find = UnionFind::new(field.len());
+    let mut regions: Field<usize> = Field::filled(field.bounds(), 0);
+
+    let mut region_counter: usize = 0;
+    for (i, neighbors) in
+        iter_indices_with_neighbors(field.bounds().width(), field.bounds().height())
+    {
+        let mut region: Option<usize> = None;
+        let value = field_at(field, i).unwrap();
+
+        for neighbor_i in neighbors {
+            let neighbor = field_at(field, neighbor_i);
+            if Some(value) == neighbor {
+                let neighbor_region = field_at(&regions, neighbor_i).unwrap();
+
+                if let Some(region) = region {
+                    if region != neighbor_region {
+                        union_find.union(region, neighbor_region);
+                    }
+                } else {
+                    region = Some(neighbor_region);
+                }
+            }
+        }
+
+        if region == None {
+            region = Some(region_counter);
+            region_counter += 1;
+        }
+    }
+
+    for region in regions.iter_mut() {
+        *region = union_find.find(*region);
+    }
+
+    regions
+}
+
+pub fn field_regions4b<T: Copy + Eq>(colors: &Field<T>) -> Field<usize> {
+    use disjoint_sets::UnionFind;
+
+    let mut union_find = UnionFind::new(0);
+    let mut regions: Field<usize> = Field::filled(colors.bounds(), 0);
+
+    for (center, neighbors) in
+        iter_indices_with_neighbors2(colors.width() as usize, colors.height() as usize)
+    {
+        let mut center_region: Option<usize> = None;
+        let center_color = colors.as_slice()[center];
+
+        for neighbor in neighbors {
+            let neighbor_color = colors.as_slice()[neighbor];
+            if center_color == neighbor_color {
+                let neighbor_region = regions.as_slice()[neighbor];
+
+                if let Some(center_region) = center_region {
+                    union_find.union(center_region, neighbor_region);
+                } else {
+                    center_region = Some(neighbor_region);
+                }
+            }
+        }
+
+        regions.as_mut_slice()[center] = center_region.unwrap_or_else(|| union_find.alloc());
+    }
+
+    for region in regions.iter_mut() {
+        *region = union_find.find(*region);
+    }
+
+    regions
+}
+
+pub fn field_regions5<T: Copy + Eq>(field: &Field<T>) -> Field<usize> {
+    let mut partitions: PartitionVec<usize> = PartitionVec::new();
+    let mut regions: Field<usize> = Field::filled(field.bounds(), 0);
+
+    let mut region_counter: usize = 0;
+    for (i, neighbors) in
+        iter_indices_with_neighbors(field.bounds().width(), field.bounds().height())
+    {
+        let mut region: Option<usize> = None;
+        let value = field_at(field, i).unwrap();
+
+        for neighbor_i in neighbors {
+            let neighbor = field_at(field, neighbor_i);
+            if Some(value) == neighbor {
+                let neighbor_region = field_at(&regions, neighbor_i).unwrap();
+
+                if let Some(region) = region {
+                    if region != neighbor_region {
+                        partitions.union(region, neighbor_region);
+                    }
+                } else {
+                    region = Some(neighbor_region);
+                }
+            }
+        }
+
+        if region == None {
+            region = Some(region_counter);
+            partitions.push(region_counter);
+            region_counter += 1;
+        }
+    }
+
+    let mut reprs = vec![0; region_counter];
+    for (union_region, set) in partitions.all_sets().enumerate() {
+        for (_, &index) in set {
+            reprs[index] = union_region;
+        }
+    }
+
+    for region in regions.iter_mut() {
+        *region = reprs[*region];
+    }
+
+    regions
+}
+
+// pub fn field_regions7<T: Copy + Eq>(field: &Field<T>) -> Field<usize> {
+//     let mut partitions: PartitionVec<()> = PartitionVec::new();
+//
+//     for (i, neighbors) in iter_indices_with_neighbors(field.bounds().width(), field.bounds().height()) {
+//         let value = field_at(field, i);
+//         partitions.push(());
+//         for neighbor_i in neighbors {
+//             if value == field_at(field, neighbor_i) {
+//                 partitions.union(i as usize, neighbor_i as usize);
+//             }
+//         }
+//     }
+//
+//     let mut regions = vec![0; field.len()];
+//     for (union_region, set) in partitions.all_sets().enumerate() {
+//         for (index, _) in set {
+//             regions[index] = union_region;
+//         }
+//     }
+//
+//     Field::from_linear(field.bounds(), regions)
+// }
+
+// pub fn field_regions7<T: Copy + Eq>(field: &Field<T>) -> Field<usize> {
+//     let mut union_find = UnionFind::new(field.len());
+//
+//     for (i, neighbors) in iter_indices_with_neighbors(field.bounds().width(), field.bounds().height()) {
+//         let value = field_at(field, i);
+//         for neighbor_i in neighbors {
+//             if value == field_at(field, neighbor_i) {
+//                 union_find.union(i as usize, neighbor_i as usize);
+//             }
+//         }
+//     }
+//
+//     // Compact labels
+//     let mut labels = union_find.into_labeling();
+//     let mut remap = vec![usize::MAX; field.len()];
+//     let mut label_counter = 0;
+//     for (i, label) in labels.iter_mut().enumerate() {
+//         if remap[*label] ==  usize::MAX {
+//             remap[*label] = label_counter;
+//             *label = label_counter;
+//             label_counter += 1;
+//         } else {
+//             *label = remap[*label];
+//         }
+//     }
+//
+//
+//     Field::from_linear(field.bounds(), union_find.into_labeling())
+// }
+
 pub fn pixmap_regions2<T: Clone + Eq>(pixmap: &Pixmap2<T>) -> Pixmap2<usize> {
+    use petgraph::unionfind::UnionFind;
+
     let mut union_find = UnionFind::new(pixmap.count());
     let mut counter: usize = 0;
     let mut region_map = pixmap.build_with_neighbors(|value, neighbors, region_neighbors| {
@@ -522,6 +837,8 @@ pub fn pixmap_regions2<T: Clone + Eq>(pixmap: &Pixmap2<T>) -> Pixmap2<usize> {
 }
 
 pub fn pixmap_regions<T: Clone + Eq>(pixmap: &Pixmap2<T>) -> Pixmap2<(T, usize)> {
+    use petgraph::unionfind::UnionFind;
+
     // assign initial region id
     let mut id: usize = 0;
     let region_map = pixmap.map(|value| {

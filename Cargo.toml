@@ -48,6 +48,8 @@ instant = { version = "0.1.13", features = ["wasm-bindgen"] }
 rfd = "0.14.1"
 static_assertions = "1.1.0"
 walkdir = "2.5.0"
+partitions = "0.2.4"
+disjoint-sets = "0.4.2"
 
 #slotmap = "1.0.7"
 # dlv-list = "0.5.1"
