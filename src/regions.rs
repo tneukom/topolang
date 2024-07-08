@@ -1,7 +1,6 @@
 use crate::{
     field::{Field, FieldIndex},
     math::{
-        arrow::Arrow,
         interval::Interval,
         pixel::{Side, SideName},
         point::Point,
@@ -10,7 +9,6 @@ use crate::{
     },
     utils::IteratorPlus,
 };
-use arrayvec::ArrayVec;
 use itertools::Itertools;
 use partitions::PartitionVec;
 use smallvec::{smallvec, SmallVec};
@@ -707,35 +705,36 @@ pub fn field_regions4b<T: Copy + Eq>(colors: &Field<T>) -> Field<usize> {
     regions
 }
 
-pub fn field_regions5<T: Copy + Eq>(field: &Field<T>) -> Field<usize> {
+pub fn field_regions5<T: Copy + Eq>(colors: &Field<T>) -> Field<usize> {
     let mut partitions: PartitionVec<usize> = PartitionVec::new();
-    let mut regions: Field<usize> = Field::filled(field.bounds(), 0);
+    let mut regions: Field<usize> = Field::filled(colors.bounds(), 0);
 
     let mut region_counter: usize = 0;
-    for (i, neighbors) in
-        iter_indices_with_neighbors(field.bounds().width(), field.bounds().height())
+
+    for (center, neighbors) in
+        iter_indices_with_neighbors2(colors.width() as usize, colors.height() as usize)
     {
-        let mut region: Option<usize> = None;
-        let value = field_at(field, i).unwrap();
+        let mut center_region: Option<usize> = None;
+        let center_color = colors.as_slice()[center];
 
-        for neighbor_i in neighbors {
-            let neighbor = field_at(field, neighbor_i);
-            if Some(value) == neighbor {
-                let neighbor_region = field_at(&regions, neighbor_i).unwrap();
+        for neighbor in neighbors {
+            let neighbor_color = colors.as_slice()[neighbor];
+            if center_color == neighbor_color {
+                let neighbor_region = regions.as_slice()[neighbor];
 
-                if let Some(region) = region {
-                    if region != neighbor_region {
-                        partitions.union(region, neighbor_region);
-                    }
+                if let Some(center_region) = center_region {
+                    partitions.union(center_region, neighbor_region);
                 } else {
-                    region = Some(neighbor_region);
+                    center_region = Some(neighbor_region);
                 }
             }
         }
 
-        if region == None {
-            region = Some(region_counter);
+        if let Some(center_region) = center_region {
+            regions.as_mut_slice()[center] = center_region;
+        } else {
             partitions.push(region_counter);
+            regions.as_mut_slice()[center] = region_counter;
             region_counter += 1;
         }
     }
