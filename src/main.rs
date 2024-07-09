@@ -8,14 +8,10 @@ use seamlang::{
     field::{Field, RgbaField},
     math::rgba8::Rgba8,
     pixmap::{Pixmap, RgbaMap},
-    regions::{
-        field_regions, field_regions2, field_regions4, field_regions4b,
-        field_regions5, pixmap_regions, pixmap_regions2, Pixmap2,
-    },
+    regions::{field_regions, pixmap_regions, Pixmap2},
 };
 use std::time::{Duration, Instant};
 use walkdir::WalkDir;
-use seamlang::regions::{field_regions2b, field_regions2c, field_regions2d, field_regions2q, field_regions4c};
 
 pub fn main_benchmark_field_regions() {
     let folder = "test_resources/regions";
@@ -24,7 +20,7 @@ pub fn main_benchmark_field_regions() {
     let mut total_elapsed = Duration::from_millis(0);
     for _ in 0..1000 {
         let now = Instant::now();
-        let region_map = field_regions2(&color_map);
+        let _region_map = field_regions(&color_map);
         let elapsed = now.elapsed();
         total_elapsed += elapsed;
         println!("Elapsed = {:.3?}", now.elapsed());
@@ -37,7 +33,7 @@ pub fn main_benchmark_field_regions() {
     // field_regions4: 1.563s
     // field_regions5: 7.782s
 
-    let region_map = field_regions2(&color_map);
+    let region_map = field_regions(&color_map);
     let region_map_rgba = region_map.map(|id| Rgba8::new(*id as u8, 0, 0, 255));
     region_map_rgba.save(format!("{folder}/b_out.png")).unwrap();
 }
@@ -48,7 +44,7 @@ pub fn main_benchmark_regions() {
 
     for _ in 0..100 {
         let now = Instant::now();
-        let region_map = pixmap_regions2(&color_map);
+        let _region_map = pixmap_regions(&color_map);
         println!("Elapsed = {:.3?}", now.elapsed());
     }
 }
@@ -71,7 +67,7 @@ pub fn main_benchmark_legacy_regions() {
 
     for _ in 0..100 {
         let now = Instant::now();
-        let region_map = usize_color_components(&color_map);
+        let _region_map = usize_color_components(&color_map);
         println!("Legacy method elapsed = {:.3?}", now.elapsed());
     }
 }
