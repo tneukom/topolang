@@ -9,9 +9,10 @@ use std::{
     fmt::{Debug, Display, Formatter},
     ops::Add,
 };
-
+use std::collections::BTreeSet;
 /// See pixel_pattern.jpg, sides_and_corners.jpg
 use crate::math::point::Point;
+use crate::math::rect::Rect;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SideName {
@@ -279,6 +280,21 @@ impl Debug for Side {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         Display::fmt(self, f)
     }
+}
+
+/// Very slow, cache the result!
+pub fn rect_boundary_sides(rect: Rect<i64>) -> BTreeSet<Side> {
+    // XOR of all sides gives the outer sides
+    let mut sides = BTreeSet::new();
+    for pixel in rect.iter_half_open() {
+        for side in pixel.sides_ccw() {
+            if !sides.remove(&side) {
+                // side wasn't contained in sides, we add it
+                sides.insert(side);
+            }
+        }
+    }
+    sides
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

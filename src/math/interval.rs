@@ -1,8 +1,11 @@
-use crate::math::generic::{Cast, ConstZero, Num};
 use std::{
     hash::{Hash, Hasher},
     ops::{Add, Mul, Sub},
 };
+use std::ops::{Range, RangeInclusive};
+
+use crate::math::generic::{Cast, ConstZero, Num};
+use crate::utils::IteratorPlus;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Interval<T> {
@@ -188,6 +191,23 @@ impl<T: Num> Interval<T> {
     pub fn center(self) -> T {
         assert!(!self.is_empty());
         (self.high + self.low) / T::TWO
+    }
+}
+
+impl<T> Interval<T>
+where
+    T: Clone,
+    Range<T>: Clone + Iterator<Item = T>,
+    RangeInclusive<T>: Clone + Iterator<Item = T>,
+{
+    /// All whole number points in [low, high)
+    pub fn iter_half_open(self) -> impl IteratorPlus<T> {
+        (self.low..self.high)
+    }
+
+    /// All whole number points in [low, high]
+    pub fn iter_closed(self) -> impl IteratorPlus<T> {
+        (self.low..=self.high)
     }
 }
 

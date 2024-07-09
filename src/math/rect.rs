@@ -672,14 +672,12 @@ impl From<egui::Rect> for Rect<f32> {
     }
 }
 
-/// Iterators on Rect<usize>, could be extended to any integer types
 impl<T> Rect<T>
 where
     T: Clone,
     Range<T>: Clone + Iterator<Item = T>,
     RangeInclusive<T>: Clone + Iterator<Item = T>,
 {
-    /// FIXME: Use impl trait alias when stable
     /// All whole number points in [x.low, x.high) x [y.low, y.high)
     pub fn iter_half_open(self) -> impl IteratorPlus<Point<T>> {
         (self.y.low..self.y.high)
@@ -687,7 +685,6 @@ where
             .map(|(y, x)| Point::new(x, y))
     }
 
-    /// FIXME: Use impl trait alias when stable
     /// All whole number points in [x.low, x.high] x [y.low, y.high]
     pub fn iter_closed(self) -> impl IteratorPlus<Point<T>> {
         (self.y.low..=self.y.high)

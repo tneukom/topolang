@@ -55,3 +55,31 @@ add(&Point<T>, &Point<T>), see https://godbolt.org/z/ceTPbMKh9.
 https://www.reddit.com/r/rust/comments/16hx79e/when_does_vecinto_itermapcollect_reallocate_and/
 
 https://doc.rust-lang.org/nightly/src/alloc/vec/in_place_collect.rs.html
+
+# Global constants for complex types (like HashMap)
+
+- https://users.rust-lang.org/t/is-there-a-way-to-create-a-constant-map-in-rust/8358
+
+## lazy-static
+- https://github.com/rust-lang-nursery/lazy-static.rs
+- https://crates.io/crates/lazy_static
+- https://rust-lang-nursery.github.io/rust-cookbook/mem/global_static.html
+
+## OnceLock
+Lock is needed for multithreaded constants
+https://doc.rust-lang.org/std/sync/struct.OnceLock.html
+
+Performance: Requires an atomic compare to check if it already initialized (really?).
+
+## LazyLock
+https://doc.rust-lang.org/nightly/std/sync/struct.LazyLock.html
+Not stable
+
+## static-init
+- https://www.reddit.com/r/rust/comments/mq34ay/new_static_init_crate_release_safe_mutable/
+- Regarding webassembly: https://www.reddit.com/r/rust/comments/mq34ay/comment/guimfu6/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
+
+## Use thread_local!
+Might be faster but is cumbersome because we can only get a reference with the
+global.with() function. It cannot give us a `'static` reference because that
+could outlive the current thread.

@@ -1,3 +1,8 @@
+use std::{cell::Cell, collections::BTreeMap, ops::Deref, rc::Rc, sync::OnceLock};
+
+use petgraph::unionfind::UnionFind;
+
+use crate::math::pixel::rect_boundary_sides;
 /// Unionfind crates
 /// https://crates.io/crates/union-find
 /// https://crates.io/crates/disjoint-sets
@@ -17,8 +22,6 @@ use crate::{
     },
     utils::IteratorPlus,
 };
-use petgraph::unionfind::UnionFind;
-use std::{cell::Cell, collections::BTreeMap, ops::Deref, rc::Rc};
 
 /// PartialEq for Rc<T: Eq> checks pointer equality first, see
 /// https://github.com/rust-lang/rust/blob/ec1b69852f0c24ae833a74303800db2229b6653e/library/alloc/src/rc.rs#L2254
@@ -70,6 +73,7 @@ impl<T> Tile2<T> {
         self.field.iter().all(|item| item.is_none())
     }
 }
+
 
 impl<T: Clone> Tile2<T> {
     pub fn filled(value: T) -> Self {
@@ -124,9 +128,19 @@ pub fn tile_rect(tile_index: Point<i64>) -> Rect<i64> {
     TILE_BOUNDS + tile_index * TILE_SIZE
 }
 
+/// Contains interior and boundary sides
 pub fn iter_sides_in_rect(rect: Rect<i64>) -> impl IteratorPlus<Side> {
     let pixel_iter = rect.iter_half_open();
     pixel_iter.flat_map(|pixel| pixel.sides_ccw().into_iter())
+}
+
+pub fn zero_tile_boundary_sides() -> &'static [Side] {
+    static SIDES: OnceLock<Vec<Side>> = OnceLock::new();
+    let sides = SIDES.get_or_init(|| {
+        let set = rect_boundary_sides(tile_rect(Point(0, 0)));
+        set.into_iter().collect()
+    });
+    sides.as_slice()
 }
 
 /// Returned rect contains indices of tiles that cover rect.
@@ -173,60 +187,8 @@ pub struct Neighborhood<'a, T> {
     tile_index: Point<i64>,
 
     /// Neighbor tiles of tile_index
+    // TODO: Use [[]]
     tiles: Field<Option<&'a Tile2<T>>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct SideNeighbors<'a, T> {
-    pub side: Side,
-    pub left: Option<&'a T>,
-    pub right: Option<&'a T>,
-}
-
-pub struct LowNeighbors<'a, T> {
-    top: Option<&'a T>,
-    left: Option<&'a T>,
-    top_right: Option<&'a T>,
-}
-
-impl<'a, T> LowNeighbors<'a, Tile2<T>> {
-    pub fn tile_neighbors(pixmap2: &'a Pixmap2<T>, tile_index: Point<i64>) -> Self {
-        Self {
-            top: pixmap2.get_tile(tile_index.top_neighbor()),
-            left: pixmap2.get_tile(tile_index.left_neighbor()),
-            top_right: pixmap2.get_tile(tile_index.top_left_neighbor()),
-        }
-    }
-}
-
-struct LowNeighborhood<'a, T> {
-    tiles: [[Option<&'a Tile2<T>>; 3]; 2],
-}
-
-impl<'a, T> LowNeighborhood<'a, T> {
-    pub fn new(main: &'a Tile2<T>, neighbors: &LowNeighbors<'a, Tile2<T>>) -> Self {
-        let tiles = [
-            [None, neighbors.top, neighbors.top_right],
-            [neighbors.left, Some(main), None],
-        ];
-        Self { tiles }
-    }
-
-    pub fn get(&self, index: Point<i64>) -> Option<&'a T> {
-        let (tile_index, pixel_index) = split_index(index);
-        assert!(tile_index.x >= -1 && tile_index.x < 2);
-        assert!(tile_index.y >= -1 && tile_index.y < 1);
-        let tile = self.tiles[(tile_index.y + 1) as usize][(tile_index.x + 1) as usize]?;
-        tile.get(pixel_index)
-    }
-
-    pub fn get_neighbors(&self, index: Point<i64>) -> LowNeighbors<'a, T> {
-        LowNeighbors {
-            top: self.get(index.top_neighbor()),
-            left: self.get(index.left_neighbor()),
-            top_right: self.get(index.top_left_neighbor()),
-        }
-    }
 }
 
 impl<'a, T: Clone> Neighborhood<'a, T> {
@@ -248,13 +210,88 @@ impl<'a, T: Clone> Neighborhood<'a, T> {
         tile.get(pixel_index)
     }
 
-    pub fn into_iter_side_neighbors(self) -> impl IteratorPlus<SideNeighbors<'a, T>> {
+    /// Panics if index is out of bounds
+    pub fn side_neighbors(&self, side: Side) -> SideNeighbors<&'a T> {
+        let left = self.get(side.left_pixel);
+        let right = self.get(side.right_pixel());
+        SideNeighbors { side, left, right }
+    }
+
+    pub fn into_iter_side_neighbors(self) -> impl IteratorPlus<SideNeighbors<&'a T>> {
         self.iter_sides().map(move |side| {
             let left = self.get(side.left_pixel);
             let right = self.get(side.right_pixel());
             SideNeighbors { side, left, right }
         })
     }
+}
+
+// struct Neighborhood2<'a, T> {
+//     /// Neighborhood of this tile
+//     center_index: Point<i64>,
+//
+//     tiles: [[Option<&'a Tile2<T>>; 3]; 3],
+// }
+//
+// impl<'a, T> Neighborhood2<'a, T> {
+//     pub fn new(pixmap: &'a Pixmap2<T>, center_index: Point<i64>) -> Self {
+//
+//         let bounds = Rect::low_size(tile_index - Point(1, 1), Point(3, 3));
+//         let tiles = Field::from_map(bounds, |tile_index| pixmap.get_tile(tile_index));
+//         Self { tile_index, tiles }
+//     }
+//
+//     pub fn iter_sides(&self) -> impl IteratorPlus<Side> {
+//         let tile_rect = tile_rect(self.tile_index);
+//         iter_sides_in_rect(tile_rect)
+//     }
+//
+//     /// Panics if index is out of bounds
+//     pub fn get(&self, index: impl FieldIndex) -> Option<&'a T> {
+//         let (tile_index, pixel_index) = split_index(index);
+//         let tile = self.tiles[tile_index]?;
+//         tile.get(pixel_index)
+//     }
+//
+//     pub fn into_iter_side_neighbors(self) -> impl IteratorPlus<SideNeighbors<'a, T>> {
+//         self.iter_sides().map(move |side| {
+//             let left = self.get(side.left_pixel);
+//             let right = self.get(side.right_pixel());
+//             SideNeighbors { side, left, right }
+//         })
+//     }
+//
+//
+//     pub fn new(main: &'a Tile2<T>, neighbors: &LowNeighbors<'a, Tile2<T>>) -> Self {
+//         let tiles = [
+//             [None, neighbors.top, neighbors.top_right],
+//             [neighbors.left, Some(main), None],
+//         ];
+//         Self { tiles }
+//     }
+//
+//     pub fn get(&self, index: Point<i64>) -> Option<&'a T> {
+//         let (tile_index, pixel_index) = split_index(index);
+//         assert!(tile_index.x >= -1 && tile_index.x < 2);
+//         assert!(tile_index.y >= -1 && tile_index.y < 1);
+//         let tile = self.tiles[(tile_index.y + 1) as usize][(tile_index.x + 1) as usize]?;
+//         tile.get(pixel_index)
+//     }
+//
+//     pub fn get_neighbors(&self, index: Point<i64>) -> LowNeighbors<'a, T> {
+//         LowNeighbors {
+//             top: self.get(index.top_neighbor()),
+//             left: self.get(index.left_neighbor()),
+//             top_right: self.get(index.top_left_neighbor()),
+//         }
+//     }
+// }
+
+#[derive(Debug, Clone)]
+pub struct SideNeighbors<T> {
+    pub side: Side,
+    pub left: Option<T>,
+    pub right: Option<T>,
 }
 
 #[derive(Debug, Clone)]
@@ -395,84 +432,22 @@ impl<T: Clone> Pixmap2<T> {
     }
 
     /// Iterate over all sides of set pixels with their left and right neighbors.
-    pub fn iter_side_neighbors(&self) -> impl Iterator<Item = SideNeighbors<T>> {
+    pub fn iter_side_neighbors(&self) -> impl Iterator<Item = SideNeighbors<&T>> {
         self.iter_neighborhoods()
             .flat_map(|neighborhood| neighborhood.into_iter_side_neighbors())
     }
 
-    pub fn build_tiles_with_neighbors<S>(
-        &self,
-        mut f: impl FnMut(&Tile2<T>, LowNeighbors<Tile2<T>>, LowNeighbors<Tile2<S>>) -> Tile2<S>,
-    ) -> Pixmap2<S> {
-        let mut result_map: Pixmap2<S> = Pixmap2::new();
+    pub fn iter_tile_interface_sides(&self) -> impl Iterator<Item = SideNeighbors<&T>> {
+        let zero_tile_sides = zero_tile_boundary_sides();
 
-        for (&tile_index, tile) in &self.tiles {
-            let neighbors = LowNeighbors::tile_neighbors(self, tile_index);
-            let result_neighbors = LowNeighbors::tile_neighbors(&result_map, tile_index);
-
-            let result_tile = f(tile.deref(), neighbors, result_neighbors);
-            result_map.tiles.insert(tile_index, Rc::new(result_tile));
-        }
-
-        result_map
-    }
-
-    pub fn build_with_neighbors<S>(
-        &self,
-        mut f: impl FnMut(&T, LowNeighbors<T>, LowNeighbors<S>) -> S,
-    ) -> Pixmap2<S> {
-        self.build_tiles_with_neighbors(|tile, tile_neighbors, result_tile_neighbors| {
-            let mut result_tile = Tile2::new();
-
-            for (pixel_index, value) in tile.iter() {
-                let result = {
-                    let result_neighbors =
-                        LowNeighborhood::new(&result_tile, &result_tile_neighbors)
-                            .get_neighbors(pixel_index);
-
-                    let neighbors =
-                        LowNeighborhood::new(tile, &tile_neighbors).get_neighbors(pixel_index);
-
-                    f(value, neighbors, result_neighbors)
-                };
-                result_tile.set(pixel_index, result);
-            }
-
-            result_tile
+        self.tiles.keys().flat_map(|&tile_index| {
+            let offset = tile_index * TILE_SIZE;
+            let neighborhood = Neighborhood::new(self, tile_index);
+            zero_tile_sides
+                .iter()
+                .map(move |&zero_side| neighborhood.side_neighbors(zero_side + offset))
         })
     }
-
-    // pub fn map_with_neighbors<S>(
-    //     &self,
-    //     mut f: impl FnMut(&T, LowNeighbors<T>, LowNeighbors<S>) -> S,
-    // ) -> Pixmap2<S> {
-    //     let mut result_map: Pixmap2<S> = Pixmap2::new();
-    //
-    //     for (&tile_index, tile) in &self.tiles {
-    //         let tile_neighbors = LowNeighbors::tile_neighbors(self, tile_index);
-    //         let neighborhood = LowNeighborhood::new(tile.as_ref(), &tile_neighbors);
-    //         let result_tile_neighbors = LowNeighbors::tile_neighbors(&result_map, tile_index);
-    //
-    //         let mut result_tile = Tile2::new();
-    //
-    //         for (pixel_index, value) in tile.iter() {
-    //             let result = {
-    //                 let result_neighborhood =
-    //                     LowNeighborhood::new(&result_tile, &result_tile_neighbors);
-    //                 let result_neighbors = result_neighborhood.get_neighbors(pixel_index);
-    //
-    //                 let neighbors = neighborhood.get_neighbors(pixel_index);
-    //
-    //                 f(value, neighbors, result_neighbors)
-    //             };
-    //             result_tile.set(pixel_index, result);
-    //         }
-    //
-    //         result_map.tiles.insert(tile_index, Rc::new(result_tile));
-    //     }
-    //
-    //     result_map
-    // }
 }
 
 impl<T: PartialEq + Clone> PartialEq for Pixmap2<T> {
@@ -502,6 +477,7 @@ impl From<Field<Rgba8>> for Pixmap2<Rgba8> {
     }
 }
 
+/// Maps the given labels to [0,...,n] where n is the number of distinct labels.
 fn compact_labels(labels: &mut Vec<usize>) {
     let mut remap = vec![usize::MAX; labels.len()];
     let mut label_counter = 0;
@@ -515,6 +491,7 @@ fn compact_labels(labels: &mut Vec<usize>) {
     }
 }
 
+/// Returns connected components of `field`
 pub fn field_regions<T: Clone + Eq>(field: &Field<T>) -> Field<usize> {
     let mut union_find = UnionFind::new(field.len());
 
@@ -535,34 +512,6 @@ pub fn field_regions<T: Clone + Eq>(field: &Field<T>) -> Field<usize> {
     Field::from_linear(field.bounds(), labeling)
 }
 
-pub fn pixmap_regions2<T: Clone + Eq>(pixmap: &Pixmap2<T>) -> Pixmap2<usize> {
-    use petgraph::unionfind::UnionFind;
-
-    let mut union_find = UnionFind::new(pixmap.count());
-    let mut counter: usize = 0;
-    let mut region_map = pixmap.build_with_neighbors(|value, neighbors, region_neighbors| {
-        let id = counter;
-        counter += 1;
-
-        if neighbors.top == Some(value) {
-            union_find.union(id, *region_neighbors.top.unwrap());
-        }
-        if neighbors.left == Some(value) {
-            union_find.union(id, *region_neighbors.left.unwrap());
-        }
-        if neighbors.top_right == Some(value) {
-            union_find.union(id, *region_neighbors.top_right.unwrap());
-        }
-
-        id
-    });
-
-    for (_index, id) in region_map.iter_mut() {
-        *id = union_find.find(*id);
-    }
-
-    region_map
-}
 
 pub fn pixmap_regions<T: Clone + Eq>(pixmap: &Pixmap2<T>) -> Pixmap2<(T, usize)> {
     use petgraph::unionfind::UnionFind;
@@ -606,7 +555,7 @@ mod test {
         field::Field,
         math::{generic::EuclidDivRem, pixel::Side, point::Point, rect::Rect, rgba8::Rgba8},
         pixmap::Tile,
-        regions::{pixmap_regions2, split_index, Pixmap2, TILE_SIZE},
+        regions::{split_index, Pixmap2, TILE_SIZE},
     };
 
     pub fn pixel_touches_tile_boundary(index: Point<i64>) -> bool {
@@ -695,20 +644,20 @@ mod test {
         }
     }
 
-    #[test]
-    fn regions() {
-        let folder = "test_resources/regions";
-
-        let color_map: Pixmap2<Rgba8> = Field::load(format!("{folder}/b.png")).unwrap().into();
-
-        let region_map = pixmap_regions2(&color_map);
-
-        // convert to Rgba8
-        let region_map_rgba = region_map.map(|id| Rgba8::new(*id as u8, 0, 0, 255));
-
-        // region_map_rgba
-        //     .to_field(Rgba8::ZERO)
-        //     .save(format!("{folder}/b_out.png"))
-        //     .unwrap();
-    }
+    // #[test]
+    // fn regions() {
+    //     let folder = "test_resources/regions";
+    //
+    //     let color_map: Pixmap2<Rgba8> = Field::load(format!("{folder}/b.png")).unwrap().into();
+    //
+    //     let region_map = pixmap_regions2(&color_map);
+    //
+    //     // convert to Rgba8
+    //     let region_map_rgba = region_map.map(|id| Rgba8::new(*id as u8, 0, 0, 255));
+    //
+    //     // region_map_rgba
+    //     //     .to_field(Rgba8::ZERO)
+    //     //     .save(format!("{folder}/b_out.png"))
+    //     //     .unwrap();
+    // }
 }
