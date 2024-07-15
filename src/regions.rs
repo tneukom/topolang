@@ -1,5 +1,16 @@
-use crate::math::pixel::rect_boundary_sides;
-use std::borrow::Borrow;
+use crate::{
+    field::{Field, FieldIndex},
+    math::{
+        interval::Interval,
+        pixel::{rect_boundary_sides, Side, SideName},
+        point::Point,
+        rect::{Rect, RectBounds},
+        rgba8::Rgba8,
+    },
+    union_find::UnionFind,
+    utils::IteratorPlus,
+};
+use std::{borrow::Borrow, time::Instant};
 /// Unionfind crates
 /// https://crates.io/crates/union-find
 /// https://crates.io/crates/disjoint-sets
@@ -9,19 +20,6 @@ use std::borrow::Borrow;
 ///
 /// https://docs.rs/petgraph/latest/src/petgraph/unionfind.rs.html#16-27
 use std::{cell::Cell, collections::BTreeMap, ops::Deref, rc::Rc, sync::OnceLock};
-use std::time::Instant;
-use crate::{
-    field::{Field, FieldIndex},
-    math::{
-        interval::Interval,
-        pixel::{Side, SideName},
-        point::Point,
-        rect::{Rect, RectBounds},
-        rgba8::Rgba8,
-    },
-    union_find::UnionFind,
-    utils::IteratorPlus,
-};
 
 /// PartialEq for Rc<T: Eq> checks pointer equality first, see
 /// https://github.com/rust-lang/rust/blob/ec1b69852f0c24ae833a74303800db2229b6653e/library/alloc/src/rc.rs#L2254
@@ -598,6 +596,64 @@ impl CompactLabels {
     }
 }
 
+trait NeighborsFn<T: Copy> {
+    fn call<const N: usize>(&mut self, field: &Field<T>, center: usize, neighbors: [usize; N]);
+
+    fn for_each(&mut self, field: &Field<T>) {
+        let width = field.width() as usize;
+        let height = field.height() as usize;
+
+        // Top pixels
+        for x in 1..width {
+            let center = x;
+            self.call(field, center, [center - 1]);
+        }
+
+        // Left pixels
+        for y in 1..height {
+            let center = y * width;
+            self.call(field, center, [center - width])
+        }
+
+        // Interior pixels
+        for y in 1..height {
+            for x in 1..width {
+                let center = y * width + x;
+                self.call(
+                    field,
+                    center,
+                    [center - 1, center - width, center - width - 1],
+                );
+            }
+        }
+    }
+}
+
+struct BuildUnionFind {
+    union_find: UnionFind,
+}
+
+impl<T: Eq + Copy> NeighborsFn<T> for BuildUnionFind {
+    fn call<const N: usize>(&mut self, field: &Field<T>, center: usize, neighbors: [usize; N]) {
+        let center_value = field.as_slice()[center];
+        for neighbor in neighbors {
+            let neighbor_value = field.as_slice()[neighbor];
+            if neighbor_value == center_value {
+                self.union_find.union(center, neighbor);
+            }
+        }
+    }
+}
+
+#[inline(never)]
+pub fn field_regions_fast<T: Copy + Eq>(field: &Field<T>) -> Field<usize> {
+    let union_find = UnionFind::new(field.len());
+    let mut build_union_find = BuildUnionFind { union_find };
+    build_union_find.for_each(field);
+    let labeling = build_union_find.union_find.into_roots();
+    Field::from_linear(field.bounds(), labeling)
+}
+
 /// Returns connected components of `field`
 #[inline(never)]
 pub fn field_regions<T: Clone + Eq>(field: &Field<T>) -> Field<usize> {
@@ -631,8 +687,8 @@ pub fn mask_field<T: Clone, S>(field: &Field<T>, mask: &Field<Option<S>>) -> Fie
 }
 
 #[inline(never)]
-pub fn tile_regions<T: Clone + Eq>(tile: &Tile2<T>) -> (Tile2<usize>, usize) {
-    let mut region_field = field_regions(&tile.field);
+pub fn tile_regions<T: Copy + Eq>(tile: &Tile2<T>) -> (Tile2<usize>, usize) {
+    let mut region_field = field_regions_fast(&tile.field);
     let mut region_field = mask_field(&mut region_field, &tile.field);
 
     // TODO: Reuse CompactLabels so we don't allocate each time
@@ -641,7 +697,7 @@ pub fn tile_regions<T: Clone + Eq>(tile: &Tile2<T>) -> (Tile2<usize>, usize) {
     (Tile2::from_field(region_field), compact_labels.counter)
 }
 
-pub fn pixmap_regions99<T: Clone + Eq>(color_map: &Pixmap2<T>) -> Pixmap2<usize> {
+pub fn pixmap_regions99<T: Copy + Eq>(color_map: &Pixmap2<T>) -> Pixmap2<usize> {
     // Map pixmap tile wise (not regarding interface between tiles)
     let mut n_total_regions = 0;
     let region_map_tiles: BTreeMap<_, _> = color_map

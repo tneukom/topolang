@@ -12,7 +12,7 @@ use seamlang::{
 };
 use std::time::{Duration, Instant};
 use walkdir::WalkDir;
-use seamlang::regions::{CompactLabels, pixmap_regions99};
+use seamlang::regions::{CompactLabels, field_regions_fast, pixmap_regions99};
 
 pub fn main_benchmark_field_regions() {
     let folder = "test_resources/regions";
@@ -22,9 +22,9 @@ pub fn main_benchmark_field_regions() {
     let mut compact_labels = CompactLabels::new(color_map.len());
     for _ in 0..1000 {
         let now = Instant::now();
-        let mut region_map = field_regions(&color_map);
-        compact_labels.clear();
-        compact_labels.compact(region_map.iter_mut());
+        let mut region_map = field_regions_fast(&color_map);
+        // compact_labels.clear();
+        // compact_labels.compact(region_map.iter_mut());
 
         let elapsed = now.elapsed();
         total_elapsed += elapsed;
@@ -38,7 +38,7 @@ pub fn main_benchmark_field_regions() {
     // field_regions4: 1.563s
     // field_regions5: 7.782s
 
-    let mut region_map = field_regions(&color_map);
+    let mut region_map = field_regions_fast(&color_map);
     compact_labels.clear();
     compact_labels.compact(region_map.iter_mut());
     let region_map_rgba = region_map.map(|id| Rgba8::new(*id as u8, 0, 0, 255));
@@ -51,7 +51,7 @@ pub fn main_benchmark_pixmap_regions() {
     let color_map = color_field.into();
 
     let mut total_elapsed = Duration::from_millis(0);
-    for _ in 0..1000 {
+    for _ in 0..500 {
         let now = Instant::now();
         let mut region_map = pixmap_regions99(&color_map);
         let elapsed = now.elapsed();
