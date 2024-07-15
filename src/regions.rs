@@ -9,7 +9,7 @@ use std::borrow::Borrow;
 ///
 /// https://docs.rs/petgraph/latest/src/petgraph/unionfind.rs.html#16-27
 use std::{cell::Cell, collections::BTreeMap, ops::Deref, rc::Rc, sync::OnceLock};
-
+use std::time::Instant;
 use crate::{
     field::{Field, FieldIndex},
     math::{
@@ -557,6 +557,7 @@ pub struct CompactLabels {
 
 /// Maps the given labels to [0,...,n] where n is the number of distinct labels.
 impl CompactLabels {
+    #[inline(never)]
     pub fn new(max_label: usize) -> Self {
         Self {
             remap: vec![usize::MAX; max_label],
@@ -564,6 +565,7 @@ impl CompactLabels {
         }
     }
 
+    #[inline(never)]
     pub fn clear(&mut self) {
         self.counter = 0;
         for i in 0..self.remap.len() {
@@ -579,12 +581,14 @@ impl CompactLabels {
         self.remap[label]
     }
 
+    #[inline(never)]
     pub fn compact<'a>(&mut self, labels: impl IntoIterator<Item = &'a mut usize>) {
         for label in labels {
             *label = self.remap(*label);
         }
     }
 
+    #[inline(never)]
     pub fn compact_masked<'a>(&mut self, labels: impl IntoIterator<Item = &'a mut Option<usize>>) {
         for label in labels {
             if let Some(label) = label {
@@ -595,6 +599,7 @@ impl CompactLabels {
 }
 
 /// Returns connected components of `field`
+#[inline(never)]
 pub fn field_regions<T: Clone + Eq>(field: &Field<T>) -> Field<usize> {
     // TODO: Reuse UnionFind so we don't allocate each time
     let mut union_find = UnionFind::new(field.len());
@@ -615,6 +620,7 @@ pub fn field_regions<T: Clone + Eq>(field: &Field<T>) -> Field<usize> {
     Field::from_linear(field.bounds(), labeling)
 }
 
+#[inline(never)]
 pub fn mask_field<T: Clone, S>(field: &Field<T>, mask: &Field<Option<S>>) -> Field<Option<T>> {
     let elems = field
         .iter()
@@ -624,6 +630,7 @@ pub fn mask_field<T: Clone, S>(field: &Field<T>, mask: &Field<Option<S>>) -> Fie
     Field::from_linear(field.bounds(), elems)
 }
 
+#[inline(never)]
 pub fn tile_regions<T: Clone + Eq>(tile: &Tile2<T>) -> (Tile2<usize>, usize) {
     let mut region_field = field_regions(&tile.field);
     let mut region_field = mask_field(&mut region_field, &tile.field);
@@ -655,6 +662,7 @@ pub fn pixmap_regions99<T: Clone + Eq>(color_map: &Pixmap2<T>) -> Pixmap2<usize>
     };
 
     // Build UnionFind
+    let now = Instant::now();
     let mut union_find = UnionFind::new(n_total_regions);
     for &tile_index in color_map.tiles.keys() {
         let color_neighborhood = Neighborhood::from_pixmap(color_map, tile_index);
@@ -683,6 +691,7 @@ pub fn pixmap_regions99<T: Clone + Eq>(color_map: &Pixmap2<T>) -> Pixmap2<usize>
     for (_, region_id) in region_map.iter_mut() {
         *region_id = roots[*region_id]
     }
+    println!("Merging elapsed = {:.3?}", now.elapsed());
 
     region_map
 }

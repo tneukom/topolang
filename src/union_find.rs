@@ -8,6 +8,7 @@ pub struct UnionFind {
 }
 
 impl UnionFind {
+    #[inline(never)]
     pub fn new(size: usize) -> Self {
         UnionFind {
             parents: (0..size).collect(),
@@ -19,6 +20,7 @@ impl UnionFind {
         &self.parents
     }
 
+    #[inline(never)]
     pub fn reset(&mut self) {
         for i in 0..self.parents.len() {
             self.parents[i] = i;
@@ -65,12 +67,14 @@ impl UnionFind {
     }
 
     /// The parent of each element is its root
+    /// #[inline(never)]
     pub fn force(&mut self) {
         for element in 0..self.parents.len() {
             self.parents[element] = self.find(element);
         }
     }
 
+    #[inline(never)]
     pub fn into_roots(mut self) -> Vec<usize> {
         self.force();
         self.parents

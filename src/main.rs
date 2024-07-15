@@ -203,6 +203,8 @@ pub fn main() {
         // main_editor();
         // color_replace();
 
+        // main_benchmark_legacy_regions();
         main_benchmark_pixmap_regions();
+        // main_benchmark_field_regions();
     }
 }

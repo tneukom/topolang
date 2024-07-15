@@ -288,7 +288,7 @@ pub fn rect_boundary_sides(rect: Rect<i64>) -> BTreeSet<Side> {
     let mut sides = BTreeSet::new();
     for pixel in rect.iter_half_open() {
         for side in pixel.sides_ccw() {
-            if !sides.remove(&side) {
+            if !sides.remove(&side.reversed()) {
                 // side wasn't contained in sides, we add it
                 sides.insert(side);
             }
