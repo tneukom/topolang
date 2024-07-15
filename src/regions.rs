@@ -1,8 +1,5 @@
-use std::{cell::Cell, collections::BTreeMap, ops::Deref, rc::Rc, sync::OnceLock};
-
-use petgraph::unionfind::UnionFind;
-
 use crate::math::pixel::rect_boundary_sides;
+use std::borrow::Borrow;
 /// Unionfind crates
 /// https://crates.io/crates/union-find
 /// https://crates.io/crates/disjoint-sets
@@ -11,6 +8,8 @@ use crate::math::pixel::rect_boundary_sides;
 /// Has clear function
 ///
 /// https://docs.rs/petgraph/latest/src/petgraph/unionfind.rs.html#16-27
+use std::{cell::Cell, collections::BTreeMap, ops::Deref, rc::Rc, sync::OnceLock};
+
 use crate::{
     field::{Field, FieldIndex},
     math::{
@@ -20,6 +19,7 @@ use crate::{
         rect::{Rect, RectBounds},
         rgba8::Rgba8,
     },
+    union_find::UnionFind,
     utils::IteratorPlus,
 };
 
@@ -35,6 +35,11 @@ pub struct Tile2<T> {
 impl<T> Tile2<T> {
     pub fn new() -> Self {
         let field = Field::from_map(TILE_BOUNDS, |_| None);
+        Self { field }
+    }
+
+    pub fn from_field(field: Field<Option<T>>) -> Self {
+        assert_eq!(field.bounds(), TILE_BOUNDS);
         Self { field }
     }
 
@@ -73,7 +78,6 @@ impl<T> Tile2<T> {
         self.field.iter().all(|item| item.is_none())
     }
 }
-
 
 impl<T: Clone> Tile2<T> {
     pub fn filled(value: T) -> Self {
@@ -143,6 +147,15 @@ pub fn zero_tile_boundary_sides() -> &'static [Side] {
     sides.as_slice()
 }
 
+/// Contains only boundary sides
+pub fn iter_tile_boundary_sides(tile_index: Point<i64>) -> impl IteratorPlus<Side> {
+    let zero_tile_sides = zero_tile_boundary_sides();
+    let offset = tile_index * TILE_SIZE;
+    zero_tile_sides
+        .iter()
+        .map(move |&zero_side| zero_side + offset)
+}
+
 /// Returned rect contains indices of tiles that cover rect.
 pub fn tile_cover(rect: Rect<i64>) -> Rect<i64> {
     let low = tile_index(rect.low());
@@ -192,10 +205,19 @@ pub struct Neighborhood<'a, T> {
 }
 
 impl<'a, T: Clone> Neighborhood<'a, T> {
-    pub fn new(pixmap: &'a Pixmap2<T>, tile_index: Point<i64>) -> Self {
+    pub fn new(
+        tiles: &'a BTreeMap<Point<i64>, impl Borrow<Tile2<T>>>,
+        tile_index: Point<i64>,
+    ) -> Self {
         let bounds = Rect::low_size(tile_index - Point(1, 1), Point(3, 3));
-        let tiles = Field::from_map(bounds, |tile_index| pixmap.get_tile(tile_index));
+        let tiles = Field::from_map(bounds, |tile_index| {
+            tiles.get(&tile_index).map(Borrow::borrow)
+        });
         Self { tile_index, tiles }
+    }
+
+    pub fn from_pixmap(pixmap: &'a Pixmap2<T>, tile_index: Point<i64>) -> Self {
+        Self::new(&pixmap.tiles, tile_index)
     }
 
     pub fn iter_sides(&self) -> impl IteratorPlus<Side> {
@@ -224,6 +246,44 @@ impl<'a, T: Clone> Neighborhood<'a, T> {
             SideNeighbors { side, left, right }
         })
     }
+
+    // /// Iterate tile with their neighborhoods
+    // pub fn iter_neighborhoods<Tile>(
+    //     tiles: &'a BTreeMap<Point<i64>, Tile>,
+    // ) -> impl IteratorPlus<Self>
+    // where
+    //     Tile: Borrow<Tile2<T>>,
+    // {
+    //     tiles.keys().map(|&tile_index| Self::new(tiles, tile_index))
+    // }
+    //
+    // /// Iterate over all sides of set pixels with their left and right neighbors.
+    // pub fn iter_side_neighbors<Tile>(
+    //     tiles: &'a BTreeMap<Point<i64>, Tile>,
+    // ) -> impl Iterator<Item = SideNeighbors<&T>>
+    // where
+    //     Tile: Borrow<Tile2<T>>,
+    // {
+    //     Self::iter_neighborhoods(tiles)
+    //         .flat_map(|neighborhood| neighborhood.into_iter_side_neighbors())
+    // }
+    //
+    // pub fn iter_tile_interface_sides<Tile>(
+    //     tiles: &'a BTreeMap<Point<i64>, Tile>,
+    // ) -> impl Iterator<Item = SideNeighbors<&T>>
+    // where
+    //     Tile: Borrow<Tile2<T>>,
+    // {
+    //     let zero_tile_sides = zero_tile_boundary_sides();
+    //
+    //     tiles.keys().flat_map(|&tile_index| {
+    //         let offset = tile_index * TILE_SIZE;
+    //         let neighborhood = Self::new(tiles, tile_index);
+    //         zero_tile_sides
+    //             .iter()
+    //             .map(move |&zero_side| neighborhood.side_neighbors(zero_side + offset))
+    //     })
+    // }
 }
 
 // struct Neighborhood2<'a, T> {
@@ -317,8 +377,11 @@ impl<T> Pixmap2<T> {
         })
     }
 
+    /// Panics if we cannot get a mutable reference to any of the tiles (we can get a mutable
+    /// reference if the ref count is one).
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (Point<i64>, &mut T)> {
         self.tiles.iter_mut().flat_map(|(&tile_index, tile)| {
+            // Panics if the ref count of tile is not one.
             let tile_mut = Rc::get_mut(tile).unwrap();
             tile_mut.iter_mut().map(move |(offset_index, value)| {
                 (combine_indices(tile_index, offset_index), value)
@@ -424,11 +487,25 @@ impl<T: Clone> Pixmap2<T> {
         field
     }
 
+    // /// Iterate tile with their neighborhoods
+    // pub fn iter_neighborhoods(&self) -> impl IteratorPlus<Neighborhood<T>> {
+    //     Neighborhood::iter_neighborhoods(&self.tiles)
+    // }
+    //
+    // /// Iterate over all sides of set pixels with their left and right neighbors.
+    // pub fn iter_side_neighbors(&self) -> impl Iterator<Item = SideNeighbors<&T>> {
+    //     Neighborhood::iter_side_neighbors(&self.tiles)
+    // }
+    //
+    // pub fn iter_tile_interface_sides(&self) -> impl Iterator<Item = SideNeighbors<&T>> {
+    //     Neighborhood::iter_tile_interface_sides(&self.tiles)
+    // }
+
     /// Iterate tile with their neighborhoods
     pub fn iter_neighborhoods(&self) -> impl IteratorPlus<Neighborhood<T>> {
         self.tiles
             .keys()
-            .map(|&tile_index| Neighborhood::new(self, tile_index))
+            .map(|&tile_index| Neighborhood::from_pixmap(self, tile_index))
     }
 
     /// Iterate over all sides of set pixels with their left and right neighbors.
@@ -438,14 +515,10 @@ impl<T: Clone> Pixmap2<T> {
     }
 
     pub fn iter_tile_interface_sides(&self) -> impl Iterator<Item = SideNeighbors<&T>> {
-        let zero_tile_sides = zero_tile_boundary_sides();
-
         self.tiles.keys().flat_map(|&tile_index| {
-            let offset = tile_index * TILE_SIZE;
-            let neighborhood = Neighborhood::new(self, tile_index);
-            zero_tile_sides
-                .iter()
-                .map(move |&zero_side| neighborhood.side_neighbors(zero_side + offset))
+            let neighborhood = Neighborhood::from_pixmap(self, tile_index);
+            // TODO: iter_tile_boundary_sides uses a global variable therefore atomic compare
+            iter_tile_boundary_sides(tile_index).map(move |side| neighborhood.side_neighbors(side))
         })
     }
 }
@@ -477,22 +550,53 @@ impl From<Field<Rgba8>> for Pixmap2<Rgba8> {
     }
 }
 
-/// Maps the given labels to [0,...,n] where n is the number of distinct labels.
-fn compact_labels(labels: &mut Vec<usize>) {
-    let mut remap = vec![usize::MAX; labels.len()];
-    let mut label_counter = 0;
+pub struct CompactLabels {
+    remap: Vec<usize>,
+    counter: usize,
+}
 
-    for label in labels {
-        if remap[*label] == usize::MAX {
-            remap[*label] = label_counter;
-            label_counter += 1;
+/// Maps the given labels to [0,...,n] where n is the number of distinct labels.
+impl CompactLabels {
+    pub fn new(max_label: usize) -> Self {
+        Self {
+            remap: vec![usize::MAX; max_label],
+            counter: 0,
         }
-        *label = remap[*label];
+    }
+
+    pub fn clear(&mut self) {
+        self.counter = 0;
+        for i in 0..self.remap.len() {
+            self.remap[i] = usize::MAX;
+        }
+    }
+
+    pub fn remap(&mut self, label: usize) -> usize {
+        if self.remap[label] == usize::MAX {
+            self.remap[label] = self.counter;
+            self.counter += 1;
+        }
+        self.remap[label]
+    }
+
+    pub fn compact<'a>(&mut self, labels: impl IntoIterator<Item = &'a mut usize>) {
+        for label in labels {
+            *label = self.remap(*label);
+        }
+    }
+
+    pub fn compact_masked<'a>(&mut self, labels: impl IntoIterator<Item = &'a mut Option<usize>>) {
+        for label in labels {
+            if let Some(label) = label {
+                *label = self.remap(*label);
+            }
+        }
     }
 }
 
 /// Returns connected components of `field`
 pub fn field_regions<T: Clone + Eq>(field: &Field<T>) -> Field<usize> {
+    // TODO: Reuse UnionFind so we don't allocate each time
     let mut union_find = UnionFind::new(field.len());
 
     for (center, value) in field.enumerate() {
@@ -507,11 +611,81 @@ pub fn field_regions<T: Clone + Eq>(field: &Field<T>) -> Field<usize> {
         }
     }
 
-    let mut labeling = union_find.into_labeling();
-    compact_labels(&mut labeling);
+    let labeling = union_find.into_roots();
     Field::from_linear(field.bounds(), labeling)
 }
 
+pub fn mask_field<T: Clone, S>(field: &Field<T>, mask: &Field<Option<S>>) -> Field<Option<T>> {
+    let elems = field
+        .iter()
+        .zip(mask.iter())
+        .map(|(el, mask_el)| mask_el.as_ref().map(|_| el.clone()))
+        .collect();
+    Field::from_linear(field.bounds(), elems)
+}
+
+pub fn tile_regions<T: Clone + Eq>(tile: &Tile2<T>) -> (Tile2<usize>, usize) {
+    let mut region_field = field_regions(&tile.field);
+    let mut region_field = mask_field(&mut region_field, &tile.field);
+
+    // TODO: Reuse CompactLabels so we don't allocate each time
+    let mut compact_labels = CompactLabels::new(region_field.len());
+    compact_labels.compact_masked(region_field.iter_mut());
+    (Tile2::from_field(region_field), compact_labels.counter)
+}
+
+pub fn pixmap_regions99<T: Clone + Eq>(color_map: &Pixmap2<T>) -> Pixmap2<usize> {
+    // Map pixmap tile wise (not regarding interface between tiles)
+    let mut n_total_regions = 0;
+    let region_map_tiles: BTreeMap<_, _> = color_map
+        .tiles
+        .iter()
+        .map(|(&tile_index, tile)| {
+            let (mut region_tile, n_regions) = tile_regions(tile);
+            // Offset region ids
+            for (_, region) in region_tile.iter_mut() {
+                *region += n_total_regions;
+            }
+            n_total_regions += n_regions;
+            (tile_index, Rc::new(region_tile))
+        })
+        .collect();
+    let mut region_map = Pixmap2 {
+        tiles: region_map_tiles,
+    };
+
+    // Build UnionFind
+    let mut union_find = UnionFind::new(n_total_regions);
+    for &tile_index in color_map.tiles.keys() {
+        let color_neighborhood = Neighborhood::from_pixmap(color_map, tile_index);
+        let region_neighborhood = Neighborhood::from_pixmap(&region_map, tile_index);
+
+        // TODO: iter_tile_boundary_sides uses a global variable, therefore atomic compare
+        for side in iter_tile_boundary_sides(tile_index) {
+            let color_neighbors = color_neighborhood.side_neighbors(side);
+            if let (Some(left_color), Some(right_color)) =
+                (color_neighbors.left, color_neighbors.right)
+            {
+                if left_color == right_color {
+                    let region_neighbors = region_neighborhood.side_neighbors(side);
+                    let &left_region = region_neighbors.left.unwrap();
+                    let &right_region = region_neighbors.right.unwrap();
+                    union_find.union(left_region, right_region);
+                }
+            }
+        }
+    }
+
+    let mut roots = union_find.into_roots();
+    let mut compact_labels = CompactLabels::new(n_total_regions);
+    compact_labels.compact(&mut roots);
+
+    for (_, region_id) in region_map.iter_mut() {
+        *region_id = roots[*region_id]
+    }
+
+    region_map
+}
 
 pub fn pixmap_regions<T: Clone + Eq>(pixmap: &Pixmap2<T>) -> Pixmap2<(T, usize)> {
     use petgraph::unionfind::UnionFind;
@@ -555,7 +729,7 @@ mod test {
         field::Field,
         math::{generic::EuclidDivRem, pixel::Side, point::Point, rect::Rect, rgba8::Rgba8},
         pixmap::Tile,
-        regions::{split_index, Pixmap2, TILE_SIZE},
+        regions::{pixmap_regions99, split_index, Pixmap2, TILE_SIZE},
     };
 
     pub fn pixel_touches_tile_boundary(index: Point<i64>) -> bool {
@@ -642,6 +816,20 @@ mod test {
 
             assert_eq!(pixmap.to_field(Rgba8::ZERO), field);
         }
+    }
+
+    #[test]
+    fn pixmap2_regions() {
+        let folder = "test_resources/regions";
+        let color_field = Field::load(format!("{folder}/c.png")).unwrap();
+        let color_map = color_field.into();
+
+        let mut region_map = pixmap_regions99(&color_map);
+        let region_field = region_map.to_field(255);
+        let region_field_rgba = region_field.map(|id| Rgba8::new(*id as u8, 0, 0, 255));
+        region_field_rgba
+            .save(format!("{folder}/c_out.png"))
+            .unwrap();
     }
 
     // #[test]

@@ -12,15 +12,20 @@ use seamlang::{
 };
 use std::time::{Duration, Instant};
 use walkdir::WalkDir;
+use seamlang::regions::{CompactLabels, pixmap_regions99};
 
 pub fn main_benchmark_field_regions() {
     let folder = "test_resources/regions";
     let color_map = Field::load(format!("{folder}/b.png")).unwrap();
 
     let mut total_elapsed = Duration::from_millis(0);
+    let mut compact_labels = CompactLabels::new(color_map.len());
     for _ in 0..1000 {
         let now = Instant::now();
-        let _region_map = field_regions(&color_map);
+        let mut region_map = field_regions(&color_map);
+        compact_labels.clear();
+        compact_labels.compact(region_map.iter_mut());
+
         let elapsed = now.elapsed();
         total_elapsed += elapsed;
         println!("Elapsed = {:.3?}", now.elapsed());
@@ -33,9 +38,33 @@ pub fn main_benchmark_field_regions() {
     // field_regions4: 1.563s
     // field_regions5: 7.782s
 
-    let region_map = field_regions(&color_map);
+    let mut region_map = field_regions(&color_map);
+    compact_labels.clear();
+    compact_labels.compact(region_map.iter_mut());
     let region_map_rgba = region_map.map(|id| Rgba8::new(*id as u8, 0, 0, 255));
     region_map_rgba.save(format!("{folder}/b_out.png")).unwrap();
+}
+
+pub fn main_benchmark_pixmap_regions() {
+    let folder = "test_resources/regions";
+    let color_field = Field::load(format!("{folder}/b.png")).unwrap();
+    let color_map = color_field.into();
+
+    let mut total_elapsed = Duration::from_millis(0);
+    for _ in 0..1000 {
+        let now = Instant::now();
+        let mut region_map = pixmap_regions99(&color_map);
+        let elapsed = now.elapsed();
+        total_elapsed += elapsed;
+        println!("Elapsed = {:.3?}", now.elapsed());
+    }
+
+    let mut region_map = pixmap_regions99(&color_map);
+    let region_field = region_map.to_field(255);
+    let region_field_rgba = region_field.map(|id| Rgba8::new(*id as u8, 0, 0, 255));
+    region_field_rgba
+        .save(format!("{folder}/b_out.png"))
+        .unwrap();
 }
 
 pub fn main_benchmark_regions() {
@@ -174,6 +203,6 @@ pub fn main() {
         // main_editor();
         // color_replace();
 
-        main_benchmark_field_regions();
+        main_benchmark_pixmap_regions();
     }
 }

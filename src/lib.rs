@@ -27,6 +27,7 @@ pub mod utils;
 pub mod view;
 pub mod widgets;
 pub mod world;
+mod union_find;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]

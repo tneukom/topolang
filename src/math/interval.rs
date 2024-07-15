@@ -202,12 +202,12 @@ where
 {
     /// All whole number points in [low, high)
     pub fn iter_half_open(self) -> impl IteratorPlus<T> {
-        (self.low..self.high)
+        self.low..self.high
     }
 
     /// All whole number points in [low, high]
     pub fn iter_closed(self) -> impl IteratorPlus<T> {
-        (self.low..=self.high)
+        self.low..=self.high
     }
 }
 
