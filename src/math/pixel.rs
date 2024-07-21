@@ -1,3 +1,7 @@
+/// See pixel_pattern.jpg, sides_and_corners.jpg
+use crate::math::point::Point;
+use crate::math::rect::Rect;
+use std::collections::BTreeSet;
 /// The centers of a hexagon grid form a lattice but the corners do not! However, the corners
 /// can be split into two sets each of which forms a lattice. Corners are more cumbersome to handle
 /// than cells and sides and terminology is less clear.
@@ -9,10 +13,6 @@ use std::{
     fmt::{Debug, Display, Formatter},
     ops::Add,
 };
-use std::collections::BTreeSet;
-/// See pixel_pattern.jpg, sides_and_corners.jpg
-use crate::math::point::Point;
-use crate::math::rect::Rect;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SideName {
@@ -284,17 +284,10 @@ impl Debug for Side {
 
 /// Very slow, cache the result!
 pub fn rect_boundary_sides(rect: Rect<i64>) -> BTreeSet<Side> {
-    // XOR of all sides gives the outer sides
-    let mut sides = BTreeSet::new();
-    for pixel in rect.iter_half_open() {
-        for side in pixel.sides_ccw() {
-            if !sides.remove(&side.reversed()) {
-                // side wasn't contained in sides, we add it
-                sides.insert(side);
-            }
-        }
-    }
-    sides
+    rect.iter_half_open()
+        .flat_map(Pixel::sides_ccw)
+        .filter(|side| !rect.half_open_contains(side.right_pixel()))
+        .collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -363,7 +356,12 @@ impl Corner {
 
 #[cfg(test)]
 mod test {
-    use crate::math::pixel::{Pixel, Side, SideName};
+    use crate::math::{
+        pixel::{Pixel, Side, SideName},
+        rect::Rect,
+    };
+
+    use super::rect_boundary_sides;
 
     const PIXELS: [Pixel; 3] = [Pixel::new(0, 0), Pixel::new(-2, 4), Pixel::new(9, 17)];
 
@@ -499,5 +497,22 @@ mod test {
         let &ccw_min_side = p.sides_ccw().iter().min().unwrap();
         let &cw_min_side = p.sides_cw().iter().min().unwrap();
         assert_eq!(ccw_min_side.start_corner(), cw_min_side.start_corner());
+    }
+
+    /// Test rect_boundary_sides
+    #[test]
+    fn test_rect_boundary_sides() {
+        let rects: [Rect<i64>; 3] = [
+            Rect::low_size([0, 0], [1, 1]),
+            Rect::low_size([-1, 1], [2, 1]),
+            Rect::low_size([-2, 2], [5, 7]),
+        ];
+
+        for rect in rects {
+            for side in rect_boundary_sides(rect) {
+                assert!(rect.half_open_contains(side.left_pixel));
+                assert!(!rect.half_open_contains(side.right_pixel()));
+            }
+        }
     }
 }
