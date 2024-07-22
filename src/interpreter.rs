@@ -5,8 +5,10 @@ use crate::{
     material::Material,
     math::{pixel::Pixel, rgba8::Rgba8},
     pattern::{NullTrace, Search},
+    pixmap::MaterialMap,
     rule::Rule,
     topology::{BorderKey, RegionKey, Topology},
+    utils::IntoT,
     world::World,
 };
 
@@ -31,8 +33,7 @@ impl Interpreter {
         // Load rule_frame pattern from file
         let rule_frame_pixmap = RgbaField::load_from_memory(include_bytes!("rule_frame.png"))
             .unwrap()
-            .into_material()
-            .to_pixmap()
+            .intot::<MaterialMap>()
             .without(&Self::RULE_FRAME_VOID_MATERIAL);
         let rule_frame = Topology::new(&rule_frame_pixmap);
 

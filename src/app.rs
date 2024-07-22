@@ -32,7 +32,7 @@ use crate::{
     math::{point::Point, rect::Rect, rgba8::Pico8Palette},
     painting::view_painter::ViewPainter,
     pixmap::MaterialMap,
-    utils::ReflectEnum,
+    utils::{IntoT, ReflectEnum},
     view::{EditMode, View, ViewButton, ViewInput, ViewSettings},
     widgets::{BrushChooser, ColorChooser, FileChooser},
     world::World,
@@ -157,7 +157,7 @@ impl Clipboard {
         let payload = &encoded[Self::DATA_URL_HEADER.len()..];
         let png = BASE64.decode(payload.as_bytes()).ok()?;
         let rgba_field = RgbaField::load_from_memory(&png).ok()?;
-        let material_map = rgba_field.into_material().to_pixmap();
+        let material_map = rgba_field.into_material().into();
         Some(Self { material_map })
     }
 
@@ -255,7 +255,7 @@ impl EguiApp {
         let world_color_map = RgbaField::load_from_memory(world_image_bytes)
             .unwrap()
             .into_material()
-            .to_pixmap();
+            .into();
         let world = World::from_material_map(world_color_map);
         // let world = Topology::from_bitmap_path("test_resources/compiler/gate/world.png").unwrap();
         let view = View::new(world);
@@ -737,7 +737,7 @@ impl EguiApp {
             warn!("Failed to load png file!");
             return;
         };
-        let world = World::from_material_map(rgba_field.into());
+        let world = rgba_field.intot::<MaterialMap>().into();
         self.view = View::new(world);
     }
 

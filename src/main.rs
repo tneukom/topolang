@@ -8,11 +8,10 @@ use seamlang::{
     field::{Field, RgbaField},
     math::rgba8::Rgba8,
     pixmap::{Pixmap, RgbaMap},
-    regions::{field_regions, pixmap_regions, Pixmap2},
+    regions::{field_regions_fast, pixmap_regions, CompactLabels},
 };
 use std::time::{Duration, Instant};
 use walkdir::WalkDir;
-use seamlang::regions::{CompactLabels, field_regions_fast, pixmap_regions99};
 
 pub fn main_benchmark_field_regions() {
     let folder = "test_resources/regions";
@@ -22,7 +21,7 @@ pub fn main_benchmark_field_regions() {
     let mut compact_labels = CompactLabels::new(color_map.len());
     for _ in 0..1000 {
         let now = Instant::now();
-        let mut region_map = field_regions_fast(&color_map);
+        let region_map = field_regions_fast(&color_map);
         // compact_labels.clear();
         // compact_labels.compact(region_map.iter_mut());
 
@@ -48,34 +47,23 @@ pub fn main_benchmark_field_regions() {
 pub fn main_benchmark_pixmap_regions() {
     let folder = "test_resources/regions";
     let color_field = Field::load(format!("{folder}/b.png")).unwrap();
-    let color_map = color_field.into();
+    let color_map: RgbaMap = color_field.into();
 
     let mut total_elapsed = Duration::from_millis(0);
     for _ in 0..500 {
         let now = Instant::now();
-        let mut region_map = pixmap_regions99(&color_map);
+        let region_map = pixmap_regions(&color_map);
         let elapsed = now.elapsed();
         total_elapsed += elapsed;
         println!("Elapsed = {:.3?}", now.elapsed());
     }
 
-    let mut region_map = pixmap_regions99(&color_map);
+    let region_map = pixmap_regions(&color_map);
     let region_field = region_map.to_field(255);
     let region_field_rgba = region_field.map(|id| Rgba8::new(*id as u8, 0, 0, 255));
     region_field_rgba
         .save(format!("{folder}/b_out.png"))
         .unwrap();
-}
-
-pub fn main_benchmark_regions() {
-    let folder = "test_resources/regions";
-    let color_map: Pixmap2<Rgba8> = Field::load(format!("{folder}/b.png")).unwrap().into();
-
-    for _ in 0..100 {
-        let now = Instant::now();
-        let _region_map = pixmap_regions(&color_map);
-        println!("Elapsed = {:.3?}", now.elapsed());
-    }
 }
 
 pub fn main_benchmark_legacy_regions() {
@@ -92,7 +80,7 @@ pub fn main_benchmark_legacy_regions() {
     }
 
     let folder = "test_resources/regions";
-    let color_map: Pixmap<Rgba8> = Field::load(format!("{folder}/b.png")).unwrap().to_pixmap();
+    let color_map: Pixmap<Rgba8> = Field::load(format!("{folder}/b.png")).unwrap().into();
 
     for _ in 0..100 {
         let now = Instant::now();
@@ -203,8 +191,10 @@ pub fn main() {
         // main_editor();
         // color_replace();
 
-        // main_benchmark_legacy_regions();
         main_benchmark_pixmap_regions();
+
+        // main_benchmark_legacy_regions();
+        // main_benchmark_pixmap_regions();
         // main_benchmark_field_regions();
     }
 }

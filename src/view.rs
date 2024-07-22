@@ -159,26 +159,16 @@ impl UiState {
 
 #[derive(Debug, Clone)]
 pub struct Selection {
-    /// The bounding rect of material_map
-    bounding_rect: Rect<i64>,
-
     material_map: MaterialMap,
-
-    offset: Point<i64>,
 }
 
 impl Selection {
     pub fn new(material_map: MaterialMap) -> Self {
-        let rect = material_map.bounding_rect();
-        Self {
-            material_map,
-            bounding_rect: rect,
-            offset: Point(0, 0),
-        }
+        Self { material_map }
     }
 
     pub fn bounding_rect(&self) -> Rect<i64> {
-        self.bounding_rect + self.offset
+        self.material_map.bounding_rect()
     }
 
     pub fn with_center_at(self, center: Point<i64>) -> Self {
@@ -187,15 +177,13 @@ impl Selection {
     }
 
     pub fn translated(mut self, offset: Point<i64>) -> Self {
-        self.offset = self.offset + offset;
+        self.material_map = self.material_map.translated(offset);
         self
     }
 
     pub fn blit(&self, target: &mut MaterialMap) {
         // TODO:SPEEDUP: Should be done in MaterialMap
-        for (index, &material) in self.material_map.iter() {
-            target.try_set(index + self.offset, material).ok();
-        }
+        target.blit_over(&self.material_map);
     }
 }
 
@@ -293,7 +281,7 @@ impl View {
 
         self.world.mut_material_map(|material_map| {
             for (&index, &material) in &change {
-                material_map.try_set(index, material).ok();
+                material_map.set(index, material);
             }
         });
 

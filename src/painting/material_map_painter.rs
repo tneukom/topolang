@@ -1,17 +1,25 @@
 use std::sync::Arc;
 
 use crate::{
-    field::RgbaField,
+    field::{Field, RgbaField},
     material::Material,
-    math::{affine_map::AffineMap, rect::Rect, rgba8::Rgba8},
+    math::{affine_map::AffineMap, point::Point, rect::Rect, rgba8::Rgba8},
     painting::{
         gl_texture::{Filter, GlTexture},
         rect_painter::{DrawRect, RectPainter},
     },
-    pixmap::{MaterialMap, RgbaMap, Tile},
+    pixmap,
+    pixmap::{MaterialMap, Tile},
 };
 
+enum Diff {
+    Modified,
+    Added,
+    Removed,
+}
+
 pub struct MaterialMapPainter {
+    clear_tile: Field<Rgba8>,
     color_map: MaterialMap,
     rect_painter: RectPainter,
     texture: GlTexture,
@@ -25,37 +33,83 @@ impl MaterialMapPainter {
         texture.texture_image(&bitmap);
 
         let color_map = MaterialMap::new();
+        let clear_tile = Tile::new().fill_none(Material::TRANSPARENT).into_rgba();
 
         Self {
+            clear_tile,
             color_map,
             texture,
             rect_painter: RectPainter::new(gl),
         }
     }
 
-    pub unsafe fn update(&mut self, material_map: MaterialMap) {
-        for tile_index in RgbaMap::tile_indices() {
-            let current_tile = self.color_map.get_rc_tile(tile_index);
-            let new_tile = material_map.get_rc_tile(tile_index);
-            if MaterialMap::tile_ptr_eq(current_tile, new_tile) {
-                continue;
-            }
+    fn diffs(before: &MaterialMap, after: &MaterialMap) -> Vec<(Point<i64>, Diff)> {
+        let mut diffs = Vec::new();
 
-            let tile_offset = RgbaMap::tile_rect(tile_index).low();
-            let color_field = if let Some(new_tile) = new_tile {
-                new_tile
-                    .fill_none(Material::TRANSPARENT)
-                    .map_into::<Rgba8>()
+        for (&tile_index, before_tile) in &before.tiles {
+            let after_tile = after.tiles.get(&tile_index);
+            if let Some(after_tile) = after_tile {
+                if before_tile != after_tile {
+                    diffs.push((tile_index, Diff::Modified));
+                }
             } else {
-                // TODO: Directly use Field<Rgba8> of appropriate size, cache
-                Tile::new()
+                diffs.push((tile_index, Diff::Removed));
+            }
+        }
+
+        for &tile_index in after.tiles.keys() {
+            let before_tile = before.tiles.get(&tile_index);
+            if before_tile.is_none() {
+                diffs.push((tile_index, Diff::Added));
+            }
+        }
+
+        diffs
+    }
+
+    pub unsafe fn update(&mut self, material_map: MaterialMap) {
+        let diffs = Self::diffs(&self.color_map, &material_map);
+
+        for (tile_index, _) in diffs {
+            let after_tile = material_map.tiles.get(&tile_index);
+
+            // let color_field = if let Some(new_tile) = new_tile {
+            //     new_tile
+            //         .fill_none(Material::TRANSPARENT)
+            //         .map_into::<Rgba8>()
+            // } else {
+            //     // TODO: Directly use Field<Rgba8> of appropriate size, cache
+            //     Tile::new()
+            //         .fill_none(Material::TRANSPARENT)
+            //         .map_into::<Rgba8>()
+            // };
+
+            let color_field = match after_tile {
+                // TODO: Store empty Field<Rgba8>
+                None => &self.clear_tile,
+                Some(after_tile) => &after_tile
                     .fill_none(Material::TRANSPARENT)
-                    .map_into::<Rgba8>()
+                    .map_into::<Rgba8>(),
             };
 
             // blit sub texture
-            self.texture.texture_sub_image(tile_offset, &color_field);
+            let tile_offset = pixmap::tile_rect(tile_index).low();
+            self.texture.texture_sub_image(tile_offset, color_field);
         }
+
+        // for tile_index in RgbaMap::tile_indices() {
+        //     let current_tile = self.color_map.get_rc_tile(tile_index);
+        //     let new_tile = material_map.get_rc_tile(tile_index);
+        //     if MaterialMap::tile_ptr_eq(current_tile, new_tile) {
+        //         continue;
+        //     }
+        //
+        //     let tile_offset = RgbaMap::tile_rect(tile_index).low();
+        //
+        //
+        //     // blit sub texture
+        //     self.texture.texture_sub_image(tile_offset, &color_field);
+        // }
 
         self.color_map = material_map;
     }

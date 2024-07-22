@@ -1,11 +1,12 @@
 use std::{
     hash::{Hash, Hasher},
-    ops::{Add, Mul, Sub},
+    ops::{Add, Mul, Range, RangeInclusive, Sub},
 };
-use std::ops::{Range, RangeInclusive};
 
-use crate::math::generic::{Cast, ConstZero, Num};
-use crate::utils::IteratorPlus;
+use crate::{
+    math::generic::{Cast, ConstZero, Num},
+    utils::IteratorPlus,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Interval<T> {

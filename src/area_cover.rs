@@ -1,9 +1,10 @@
+use std::collections::BTreeSet;
+
 use crate::{
     math::{point::Point, rect::Rect},
-    pixmap::Pixmap,
+    pixmap,
     utils::IteratorPlus,
 };
-use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AreaCover {
@@ -28,7 +29,7 @@ impl AreaCover {
     }
 
     pub fn add(&mut self, index: Point<i64>) -> bool {
-        let (tile_index, _) = Pixmap::<()>::split_index(index);
+        let (tile_index, _) = pixmap::split_index(index);
         let did_insert = self.tiles.insert(tile_index);
 
         // TODO:SPEEDUP: bounds_with(...) does more work than necessary here.

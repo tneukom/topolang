@@ -292,7 +292,7 @@ mod test {
     fn test_right_of_border(filename: &str) {
         let folder = "test_resources/connected_components/right_of_border";
         let path = format!("{folder}/{filename}");
-        let color_map = RgbaField::load(path).unwrap().to_pixmap();
+        let color_map: RgbaMap = RgbaField::load(path).unwrap().into();
         let red_area = pixmap_color_area(&color_map, &Rgba8::RED);
         let blue_area = pixmap_color_area(&color_map, &Rgba8::BLUE);
 
@@ -330,7 +330,7 @@ mod test {
         // Load bitmap
         let folder = "test_resources/connected_components";
         let path = format!("{folder}/{filename}");
-        let color_map = RgbaField::load(path).unwrap().to_pixmap();
+        let color_map: RgbaMap = RgbaField::load(path).unwrap().into();
 
         // Compute regions
         let (regions, region_map) = usize_color_components(&color_map);
@@ -409,7 +409,7 @@ mod test {
     fn border_1() {
         let folder = "test_resources/connected_components/border";
         let path = format!("{folder}/1.png");
-        let color_map = RgbaField::load(path).unwrap().to_pixmap();
+        let color_map: RgbaMap = RgbaField::load(path).unwrap().into();
         let (regions, _) = usize_color_components(&color_map);
         for region in regions {
             println!("region:");

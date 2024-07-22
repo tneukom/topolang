@@ -23,11 +23,11 @@ pub mod pixmap;
 pub mod regions;
 pub mod rule;
 pub mod topology;
+mod union_find;
 pub mod utils;
 pub mod view;
 pub mod widgets;
 pub mod world;
-mod union_find;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]

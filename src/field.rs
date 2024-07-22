@@ -1,14 +1,14 @@
-use image::{Rgba, RgbaImage};
 use std::{
     io::Cursor,
     ops::{Index, IndexMut},
     path::Path,
 };
 
+use image::{Rgba, RgbaImage};
+
 use crate::{
     material::Material,
     math::{point::Point, rect::Rect, rgba8::Rgba8},
-    pixmap::Pixmap,
     utils::IteratorPlus,
 };
 
@@ -176,10 +176,6 @@ impl<T: Clone> Field<T> {
 
     pub fn clipped(&self, bounds: Rect<i64>) -> Self {
         self.sub(bounds.intersect(self.bounds))
-    }
-
-    pub fn to_pixmap(&self) -> Pixmap<T> {
-        Pixmap::from_field(self)
     }
 }
 
