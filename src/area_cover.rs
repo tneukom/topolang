@@ -8,8 +8,7 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AreaCover {
-    // TODO: Use a bit set on tiles? 64 * 64 bits = 512 bytes or 64 usize
-    //   setting bits would def be faster.
+    // TODO: Use Vec<Point<i64>>
     tiles: BTreeSet<Point<i64>>,
 
     /// Important: The upper bound is inclusive to make incremental update easier

@@ -230,11 +230,6 @@ impl<'a, T: Clone> Neighborhood<'a, T> {
         Self::new(&pixmap.tiles, tile_index)
     }
 
-    pub fn iter_sides(&self) -> impl IteratorPlus<Side> {
-        let tile_rect = tile_rect(self.tile_index);
-        iter_sides_in_rect(tile_rect)
-    }
-
     /// Panics if index is out of bounds
     pub fn get(&self, index: impl FieldIndex) -> Option<&'a T> {
         let (tile_index, pixel_index) = split_index(index);
@@ -242,26 +237,35 @@ impl<'a, T: Clone> Neighborhood<'a, T> {
         tile.get(pixel_index)
     }
 
-    /// Panics if index is out of bounds
-    pub fn side_neighbors(&self, side: Side) -> SideNeighbors<&'a T> {
-        let left = self.get(side.left_pixel);
+    /// Panics if left side None
+    pub fn side_neighbors(&self, side: Side) -> Option<SideNeighbors<&'a T>> {
+        let left = self.get(side.left_pixel)?;
         let right = self.get(side.right_pixel());
-        SideNeighbors { side, left, right }
+        Some(SideNeighbors { left, right })
     }
 
-    pub fn into_iter_side_neighbors(self) -> impl IteratorPlus<SideNeighbors<&'a T>> {
-        self.iter_sides().map(move |side| {
-            let left = self.get(side.left_pixel);
-            let right = self.get(side.right_pixel());
-            SideNeighbors { side, left, right }
+    /// Iterate over the ccw sides of all pixels that are not None.
+    pub fn into_iter_side_neighbors(self) -> impl IteratorPlus<(Side, SideNeighbors<&'a T>)> {
+        let center_tile = self.tiles[self.tile_index].unwrap();
+
+        center_tile.iter().flat_map(move |(sub_index, value)| {
+            let pixel = combine_indices(self.tile_index, sub_index);
+
+            pixel
+                .sides_ccw()
+                .map(|side| {
+                    let right = self.get(side.right_pixel());
+                    let neighbors = SideNeighbors { left: value, right };
+                    (side, neighbors)
+                })
+                .into_iter()
         })
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct SideNeighbors<T> {
-    pub side: Side,
-    pub left: Option<T>,
+    pub left: T,
     pub right: Option<T>,
 }
 
@@ -507,19 +511,20 @@ impl<T: Clone> Pixmap<T> {
             .map(|&tile_index| Neighborhood::from_pixmap(self, tile_index))
     }
 
-    /// Iterate over all sides of set pixels with their left and right neighbors.
-    pub fn iter_side_neighbors(&self) -> impl Iterator<Item = SideNeighbors<&T>> {
+    /// Iterate over the CCW sides of all pixels with values
+    pub fn iter_side_neighbors(&self) -> impl Iterator<Item = (Side, SideNeighbors<&T>)> {
         self.iter_neighborhoods()
             .flat_map(|neighborhood| neighborhood.into_iter_side_neighbors())
     }
 
-    pub fn iter_tile_interface_sides(&self) -> impl Iterator<Item = SideNeighbors<&T>> {
-        self.tiles.keys().flat_map(|&tile_index| {
-            let neighborhood = Neighborhood::from_pixmap(self, tile_index);
-            // TODO: iter_tile_boundary_sides uses a global variable therefore atomic compare
-            iter_tile_boundary_sides(tile_index).map(move |side| neighborhood.side_neighbors(side))
-        })
-    }
+    // TODO:REMOVE
+    // pub fn iter_tile_interface_sides(&self) -> impl Iterator<Item = SideNeighbors<&T>> {
+    //     self.tiles.keys().flat_map(|&tile_index| {
+    //         let neighborhood = Neighborhood::from_pixmap(self, tile_index);
+    //         // TODO: iter_tile_boundary_sides uses a global variable therefore atomic compare
+    //         iter_tile_boundary_sides(tile_index).map(move |side| neighborhood.side_neighbors(side))
+    //     })
+    // }
 
     pub fn translated(&self, offset: Point<i64>) -> Self {
         let mut result = Self::new();

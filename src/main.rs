@@ -58,7 +58,7 @@ pub fn main_benchmark_pixmap_regions() {
         println!("Elapsed = {:.3?}", now.elapsed());
     }
 
-    let region_map = pixmap_regions(&color_map);
+    let (region_map, _) = pixmap_regions(&color_map);
     let region_field = region_map.to_field(255);
     let region_field_rgba = region_field.map(|id| Rgba8::new(*id as u8, 0, 0, 255));
     region_field_rgba

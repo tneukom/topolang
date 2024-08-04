@@ -185,19 +185,19 @@ pub fn right_of_border(border: &Vec<Side>) -> Vec<Pixel> where
 
 #[cfg(test)]
 mod test {
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeMap, BTreeSet};
 
     // TODO: Make sure color of pixels in components is constant
     use crate::{
         connected_components::{
             color_components, left_of_border, right_of_border, split_into_cycles, ColorRegion,
         },
-        field::RgbaField,
+        field::{Field, RgbaField},
         math::{
             pixel::{Pixel, Side},
             rgba8::Rgba8,
         },
-        pixmap::{Pixmap, RgbaMap},
+        pixmap::{iter_sides_in_rect, Pixmap, RgbaMap},
     };
 
     fn usize_color_components(
