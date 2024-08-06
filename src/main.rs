@@ -4,11 +4,13 @@
 use log::warn;
 use seamlang::{
     app::EguiApp,
-    connected_components::{color_components, ColorRegion},
     field::{Field, RgbaField},
+    interpreter::Interpreter,
     math::rgba8::Rgba8,
-    pixmap::{Pixmap, RgbaMap},
+    pixmap::{MaterialMap, RgbaMap},
     regions::{field_regions_fast, pixmap_regions, CompactLabels},
+    utils::IntoT,
+    world::World,
 };
 use std::time::{Duration, Instant};
 use walkdir::WalkDir;
@@ -66,54 +68,32 @@ pub fn main_benchmark_pixmap_regions() {
         .unwrap();
 }
 
-pub fn main_benchmark_legacy_regions() {
-    fn usize_color_components(
-        color_map: &RgbaMap,
-    ) -> (Vec<ColorRegion<usize, Rgba8>>, Pixmap<usize>) {
-        let mut id: usize = 0;
-        let free_id = || {
-            let result = id;
-            id += 1;
-            result
-        };
-        color_components(color_map, free_id)
-    }
+pub fn main_benchmark() {
+    let folder = "test_resources/compiler/b/";
+    let original_world = RgbaField::load(format!("{folder}/world.png"))
+        .unwrap()
+        .intot::<MaterialMap>()
+        .intot::<World>();
 
-    let folder = "test_resources/regions";
-    let color_map: Pixmap<Rgba8> = Field::load(format!("{folder}/b.png")).unwrap().into();
+    let interpreter = Interpreter::new();
 
     for _ in 0..100 {
+        use std::time::Instant;
+
+        let mut world = original_world.clone();
+
         let now = Instant::now();
-        let _region_map = usize_color_components(&color_map);
-        println!("Legacy method elapsed = {:.3?}", now.elapsed());
+        let mut steps = 0usize;
+        loop {
+            steps += 1;
+            let changed = interpreter.step(&mut world);
+            if !changed {
+                break;
+            }
+        }
+        println!("steps = {}, elapsed = {:.3?}", steps, now.elapsed());
     }
 }
-
-// pub fn main_benchmark() {
-//     use seamlang::{compiler::Compiler, rule::stabilize, topology::Topology};
-//
-//     let folder = "test_resources/compiler/b/";
-//     let world = Topology::from_bitmap_path(format!("{folder}/world.png")).unwrap();
-//
-//     let compiler = Compiler::new().unwrap();
-//
-//     for _ in 0..100 {
-//         use std::time::Instant;
-//
-//         let mut world = world.clone();
-//
-//         let now = Instant::now();
-//         let rules = compiler.compile(&mut world).unwrap();
-//         println!("Compiled elapsed = {:.3?}", now.elapsed());
-//
-//         let now = Instant::now();
-//         let application_count = stabilize(&mut world, &rules);
-//         println!(
-//             "Run, application_count = {application_count}, elapsed = {:.3?}",
-//             now.elapsed()
-//         );
-//     }
-// }
 
 pub fn color_replace() {
     for entry in WalkDir::new("./").into_iter().filter_map(Result::ok) {
@@ -188,10 +168,11 @@ pub fn main() {
     {
         env_logger::init();
         warn!("Logging!");
+        main_benchmark();
         // main_editor();
         // color_replace();
 
-        main_benchmark_pixmap_regions();
+        // main_benchmark_pixmap_regions();
 
         // main_benchmark_legacy_regions();
         // main_benchmark_pixmap_regions();

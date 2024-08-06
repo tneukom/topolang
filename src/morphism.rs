@@ -113,24 +113,25 @@ impl Morphism {
     //
     // }
 
-    /// Returns true if the left side is equal to the right side plus an offset.
-    pub fn is_translation_of(
-        lhs: RegionKey,
-        lhs_topo: &Topology,
-        rhs: RegionKey,
-        rhs_topo: &Topology,
-    ) -> bool {
-        let offset = lhs_topo[lhs].bounding_rect().low() - rhs_topo[rhs].bounding_rect().low();
-
-        let lhs_offset_interior = lhs_topo
-            .iter_region_interior(lhs)
-            .map(|pixel| pixel + offset);
-
-        let rhs_interior = rhs_topo.iter_region_interior(rhs);
-
-        // Assumes iteration order is same independent of translations.
-        Iterator::eq(lhs_offset_interior, rhs_interior)
-    }
+    // /// Returns true if the left side is equal to the right side plus an offset.
+    // pub fn is_translation_of(
+    //     lhs: RegionKey,
+    //     lhs_topo: &Topology,
+    //     rhs: RegionKey,
+    //     rhs_topo: &Topology,
+    // ) -> bool {
+    //     let offset =
+    //     let offset = lhs_topo[lhs].bounding_rect().low() - rhs_topo[rhs].bounding_rect().low();
+    //
+    //     let lhs_offset_interior = lhs_topo
+    //         .iter_region_interior(lhs)
+    //         .map(|pixel| pixel + offset);
+    //
+    //     let rhs_interior = rhs_topo.iter_region_interior(rhs);
+    //
+    //     // Assumes iteration order is same independent of translations.
+    //     Iterator::eq(lhs_offset_interior, rhs_interior)
+    // }
 
     /// Rigid regions are mapped to regions with exactly the same shape
     #[inline(never)]
@@ -138,9 +139,14 @@ impl Morphism {
         self.region_map
             .iter()
             .all(|(&region_key, &phi_region_key)| {
-                // If region is rigid, phi_region must be a translation of region
-                !dom[region_key].material.is_rigid()
-                    || Self::is_translation_of(region_key, dom, phi_region_key, codom)
+                let region = &dom[region_key];
+                let phi_region = &codom[phi_region_key];
+                if region.material.is_rigid() {
+                    // If region is rigid, phi_region must be a translation of region
+                    region.boundary.is_translation_of(&phi_region.boundary)
+                } else {
+                    true
+                }
             })
     }
 

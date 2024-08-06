@@ -1,14 +1,3 @@
-/// Unionfind crates
-/// https://crates.io/crates/union-find
-/// https://crates.io/crates/disjoint-sets
-///
-/// https://crates.io/crates/partitions
-/// Has clear function
-///
-/// https://docs.rs/petgraph/latest/src/petgraph/unionfind.rs.html#16-27
-use std::time::Instant;
-use std::{collections::BTreeMap, rc::Rc};
-
 use crate::{
     area_cover::AreaCover,
     field::Field,
@@ -19,6 +8,15 @@ use crate::{
     pixmap::{iter_tile_boundary_sides, Neighborhood, Pixmap, Tile},
     union_find::UnionFind,
 };
+/// Unionfind crates
+/// https://crates.io/crates/union-find
+/// https://crates.io/crates/disjoint-sets
+///
+/// https://crates.io/crates/partitions
+/// Has clear function
+///
+/// https://docs.rs/petgraph/latest/src/petgraph/unionfind.rs.html#16-27
+use std::{collections::BTreeMap, rc::Rc};
 
 pub struct CompactLabels {
     remap: Vec<usize>,
@@ -175,6 +173,7 @@ pub fn tile_regions<T: Copy + Eq>(tile: &Tile<T>) -> (Tile<usize>, usize) {
 }
 
 /// Returns the region map and the number of regions
+#[inline(never)]
 pub fn pixmap_regions<T: Copy + Eq>(color_map: &Pixmap<T>) -> (Pixmap<usize>, Vec<AreaCover>) {
     // Map pixmap tile wise (not regarding interface between tiles)
 
@@ -206,7 +205,6 @@ pub fn pixmap_regions<T: Copy + Eq>(color_map: &Pixmap<T>) -> (Pixmap<usize>, Ve
     };
 
     // Build UnionFind to merge tiled regions that are connected
-    let now = Instant::now();
     let mut union_find = UnionFind::new(region_to_tile.len());
     for &tile_index in color_map.tiles.keys() {
         let color_neighborhood = Neighborhood::from_pixmap(color_map, tile_index);
@@ -240,38 +238,53 @@ pub fn pixmap_regions<T: Copy + Eq>(color_map: &Pixmap<T>) -> (Pixmap<usize>, Ve
     let mut area_covers = vec![AreaCover::new(); n_regions];
     for (region_id, &tile_index) in region_to_tile.iter().enumerate() {
         let merged_region_id = roots[region_id];
-        area_covers[merged_region_id].add(tile_index);
+        area_covers[merged_region_id].add_tile(tile_index);
     }
-
-    println!("Merging elapsed = {:.3?}", now.elapsed());
 
     (region_map, area_covers)
 }
 
-#[derive(Debug, Clone)]
-pub struct RegionBoundary {
-    pub sides: BTreeMap<Side, Option<usize>>,
-}
+pub type RegionBoundary = BTreeMap<Side, Option<usize>>;
 
-impl RegionBoundary {
-    pub fn new() -> Self {
-        Self {
-            sides: BTreeMap::new(),
-        }
-    }
-}
-
+#[inline(never)]
 pub fn region_boundaries(region_map: &Pixmap<usize>, n_regions: usize) -> Vec<RegionBoundary> {
     let mut boundaries = vec![RegionBoundary::new(); n_regions];
 
     for (side, neighbors) in region_map.iter_side_neighbors() {
         let boundary = &mut boundaries[*neighbors.left];
         if Some(neighbors.left) != neighbors.right {
-            boundary.sides.insert(side, neighbors.right.cloned());
+            boundary.insert(side, neighbors.right.cloned());
         }
     }
 
     boundaries
+}
+
+/// Split a set of sides into cycles. Each cycle starts with its smallest side. The list of cycles
+/// is ordered by the first side in each cycle. This means the first cycle is the outer cycle.
+pub fn split_boundary_into_cycles<T>(mut sides: BTreeMap<Side, T>) -> Vec<Vec<(Side, T)>> {
+    let mut cycles = Vec::new();
+
+    while let Some((mut side, color)) = sides.pop_first() {
+        // Extract cycle
+        let mut cycle = vec![(side, color)];
+        'outer: loop {
+            for next_side in side.continuing_sides() {
+                // There is always exactly one continuing side
+                if let Some(next_color) = sides.remove(&next_side) {
+                    cycle.push((next_side, next_color));
+                    side = next_side;
+                    continue 'outer;
+                }
+            }
+
+            break;
+        }
+
+        cycles.push(cycle);
+    }
+
+    cycles
 }
 
 #[cfg(test)]
@@ -284,7 +297,7 @@ mod test {
         utils::IntoT,
     };
     use itertools::Itertools;
-    use std::collections::{btree_map::Entry, BTreeMap};
+    use std::collections::BTreeMap;
 
     pub fn pixel_touches_tile_boundary(index: Point<i64>) -> bool {
         let (_, pixel_index) = split_index(index);
@@ -425,7 +438,7 @@ mod test {
         // Compare each region boundary with reference implementation
         for (region_id, boundary) in boundaries.iter().enumerate() {
             let expected_boundary = boundary_of(&region_map, &region_id);
-            assert_eq!(boundary.sides, expected_boundary);
+            assert_eq!(boundary, &expected_boundary);
         }
     }
 

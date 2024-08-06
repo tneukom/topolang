@@ -204,6 +204,7 @@ pub fn combine_indices(tile_index: Point<i64>, offset_index: Point<i64>) -> Poin
 }
 
 /// 3 by 3 grid of Tile references for fast lookups
+/// TODO: Use tiles: [[...; 3]; 3] and make Copy, might make implementing iterators easier
 #[derive(Debug, Clone)]
 pub struct Neighborhood<'a, T> {
     /// Neighborhood of this tile
@@ -476,8 +477,9 @@ impl<T: Clone> Pixmap<T> {
             let tile_rect = tile_rect(tile_index);
             for pixel_index in tile_rect.iter_half_open() {
                 if let Some(linear_index) = field.linear_index(pixel_index) {
-                    field.as_mut_slice()[linear_index] =
-                        tile.get(pixel_index - tile_rect.low()).unwrap().clone();
+                    if let Some(value) = tile.get(pixel_index - tile_rect.low()) {
+                        field.as_mut_slice()[linear_index] = value.clone()
+                    }
                 }
             }
         }

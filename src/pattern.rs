@@ -7,7 +7,7 @@ use crate::{
     material::Material,
     math::pixel::Corner,
     morphism::Morphism,
-    topology::{RegionKey, Seam, SeamMaterials, Topology},
+    topology::{RegionKey, Seam, SeamMaterials, StrongRegionKey, Topology},
 };
 
 /// Returns all seams (including non-atomic ones) in topo
@@ -20,7 +20,7 @@ pub fn generalized_seams(topo: &Topology, left_material: Material) -> Vec<Seam> 
             continue;
         }
 
-        for border in &region.boundary {
+        for border in &region.boundary.borders {
             for i in 0..border.seams.len() {
                 // All seams that go around exactly once are equivalent, so we only include one.
                 let len = if i == 0 {
@@ -193,7 +193,7 @@ impl Unassigned {
 pub struct Search<'a> {
     pub world: &'a Topology,
     pub pattern: &'a Topology,
-    pub hidden: Option<&'a BTreeSet<RegionKey>>,
+    pub hidden: Option<&'a BTreeSet<StrongRegionKey>>,
 }
 
 impl<'a> Search<'a> {
@@ -227,7 +227,8 @@ impl<'a> Search<'a> {
         if let Some(hidden) = self.hidden {
             // Mapping to hidden regions is not allowed
             for (_, &phi_region) in &phi.region_map {
-                if hidden.contains(&phi_region) {
+                let phi_region_strong_key = self.world[phi_region].arbitrary_interior_pixel();
+                if hidden.contains(&phi_region_strong_key) {
                     trace.failed("Matched isolated Region");
                     return;
                 }
@@ -378,23 +379,24 @@ mod test {
     const PATTERN_FRAME_MATERIAL: Material = Material::new(Rgba8::MAGENTA);
 
     #[inline(never)]
-    pub fn extract_pattern(pixmap: &mut MaterialMap) -> MaterialMap {
-        let topo = Topology::new(&pixmap);
+    pub fn extract_pattern(material_map: &mut MaterialMap) -> MaterialMap {
+        let topo = Topology::new(material_map.clone());
 
         let frame = topo
             .regions
             .values()
             .find(|&region| region.material == PATTERN_FRAME_MATERIAL)
             .unwrap();
-        assert_eq!(frame.boundary.len(), 2);
+        assert_eq!(frame.boundary.borders.len(), 2);
 
         let inner_border = frame
             .boundary
+            .borders
             .iter()
             .find(|border| !border.is_outer)
             .unwrap();
 
-        pixmap.extract_right_of_border(inner_border)
+        material_map.extract_right_of_border(inner_border)
     }
 
     fn pixmap_with_void_from_path(path: &str) -> MaterialMap {
@@ -436,16 +438,16 @@ mod test {
 
     fn assert_pattern_match(pattern_path: &str, world_path: &str, n_solutions: usize) {
         let folder = "test_resources/patterns";
-        let pixmap = RgbaField::load(format!("{folder}/{pattern_path}"))
+        let pattern_material_map = RgbaField::load(format!("{folder}/{pattern_path}"))
             .unwrap()
             .intot::<MaterialMap>()
             .without(&Material::VOID);
-        let pattern = Topology::new(&pixmap);
+        let pattern = Topology::new(pattern_material_map);
 
         let world_material_map = RgbaField::load(format!("{folder}/{world_path}"))
             .unwrap()
             .into();
-        let world = Topology::new(&world_material_map);
+        let world = Topology::new(world_material_map);
 
         let trace = NullTrace::new();
         // let trace = CoutTrace::new();

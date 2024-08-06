@@ -1,19 +1,15 @@
+use itertools::Itertools;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     fmt,
-    fmt::{Display, Formatter},
+    fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
     ops::{Index, IndexMut},
-    sync::atomic::{AtomicUsize, Ordering},
 };
-
-use itertools::Itertools;
 
 use crate::{
     area_cover::AreaCover,
-    connected_components::{
-        color_components_subset, left_of_border, right_of_border, split_into_cycles,
-    },
+    connected_components::{left_of_border, right_of_border},
     material::Material,
     math::{
         pixel::{Corner, Pixel, Side},
@@ -21,6 +17,7 @@ use crate::{
         rect::Rect,
     },
     pixmap::{MaterialMap, Pixmap},
+    regions::{pixmap_regions, region_boundaries, split_boundary_into_cycles},
     utils::{IteratorPlus, UndirectedEdge, UndirectedGraph},
 };
 
@@ -86,30 +83,35 @@ pub struct SeamMaterials {
     pub right: Option<Material>,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
-pub struct RegionKey {
-    key: usize,
-}
+// #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
+// pub struct RegionKey {
+//     key: usize,
+// }
+//
+// impl Display for RegionKey {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+//         write!(f, "RegionKey({})", self.key)
+//     }
+// }
+//
+// impl RegionKey {
+//     pub fn unused() -> Self {
+//         static COUNTER: AtomicUsize = AtomicUsize::new(1);
+//         Self {
+//             key: COUNTER.fetch_add(1, Ordering::Relaxed),
+//         }
+//     }
+// }
 
-impl Display for RegionKey {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "RegionKey({})", self.key)
-    }
-}
+// TODO: RegionKey should be Pixel
+pub type RegionKey = usize;
 
-impl RegionKey {
-    pub fn unused() -> Self {
-        static COUNTER: AtomicUsize = AtomicUsize::new(1);
-        Self {
-            key: COUNTER.fetch_add(1, Ordering::Relaxed),
-        }
-    }
-}
+pub type StrongRegionKey = Pixel;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Border {
     /// First side is minimum side of cycle, contains at least one item
-    pub cycle: Vec<Side>,
+    pub cycle: Vec<(Side, Option<RegionKey>)>,
 
     /// Start side of first seam is first side in cycle, contains at least one item
     pub seams: Vec<Seam>,
@@ -118,29 +120,68 @@ pub struct Border {
 }
 
 impl Border {
+    pub fn sides(&self) -> impl DoubleEndedIterator<Item = Side> + Clone + '_ {
+        self.cycle.iter().map(|(side, _)| *side)
+    }
+
     /// All pixels that are left of `self`
     pub fn left_pixels(&self) -> Vec<Pixel> {
-        left_of_border(&self.cycle)
+        left_of_border(self.sides())
     }
 
     /// All pixels that are right of `self`
     pub fn right_pixels(&self) -> Vec<Pixel> {
-        right_of_border(&self.cycle)
+        right_of_border(self.sides())
     }
 
-    pub fn translate(&mut self, offset: Point<i64>) {
-        for side in &mut self.cycle {
-            *side = *side + offset;
+    /// self + offset == other
+    pub fn eq_with_translation(&self, other: &Self, offset: Point<i64>) -> bool {
+        if self.cycle.len() != other.cycle.len() {
+            return true;
         }
 
-        for seam in &mut self.seams {
-            *seam = seam.translated(offset);
-        }
+        self.sides()
+            .zip(other.sides())
+            .all(|(self_side, other_side)| self_side + offset == other_side)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Boundary {
+    pub borders: Vec<Border>,
+}
+
+impl Boundary {
+    pub fn new(borders: Vec<Border>) -> Self {
+        assert!(!borders.is_empty());
+        assert!(borders[0].is_outer);
+        Self { borders }
     }
 
-    pub fn translated(mut self, offset: Point<i64>) -> Self {
-        self.translate(offset);
-        self
+    pub fn arbitrary_interior_pixel(&self) -> Pixel {
+        self.top_left_interior_pixel()
+    }
+
+    pub fn top_left_interior_pixel(&self) -> Pixel {
+        let first_border = &self.borders[0];
+        assert!(first_border.is_outer);
+        first_border.cycle[0].0.left_pixel
+    }
+
+    /// Returns true if the left side is equal to the right side plus an offset, ignores material.
+    pub fn is_translation_of(&self, other: &Self) -> bool {
+        if self.borders.len() != other.borders.len() {
+            return false;
+        }
+
+        // self + offset == other
+        let offset = self.top_left_interior_pixel() - other.top_left_interior_pixel();
+        self.borders
+            .iter()
+            .zip(&other.borders)
+            .all(|(self_border, other_border)| {
+                self_border.eq_with_translation(other_border, offset)
+            })
     }
 }
 
@@ -148,7 +189,7 @@ impl Border {
 #[derive(Debug, Clone)]
 pub struct Region {
     /// First item is outer Border
-    pub boundary: Vec<Border>,
+    pub boundary: Boundary,
 
     pub cover: AreaCover,
 
@@ -157,25 +198,17 @@ pub struct Region {
 
 impl Region {
     pub fn iter_seams(&self) -> impl IteratorPlus<&Seam> {
-        self.boundary.iter().flat_map(|border| border.seams.iter())
-    }
-
-    pub fn iter_boundary_sides<'a>(&'a self) -> impl IteratorPlus<Side> + 'a {
         self.boundary
+            .borders
             .iter()
-            .flat_map(|border| border.cycle.iter())
-            .copied()
+            .flat_map(|border| border.seams.iter())
     }
 
-    pub fn translate(&mut self, offset: Point<i64>) {
-        for border in &mut self.boundary {
-            border.translate(offset);
-        }
-    }
-
-    pub fn translated(mut self, offset: Point<i64>) -> Self {
-        self.translate(offset);
-        self
+    pub fn iter_boundary_sides(&self) -> impl IteratorPlus<Side> + '_ {
+        self.boundary
+            .borders
+            .iter()
+            .flat_map(|border| border.sides())
     }
 
     /// Pixels touching border on the left side, each pixel might appear more than once.
@@ -183,15 +216,19 @@ impl Region {
         self.iter_boundary_sides().map(|side| side.left_pixel())
     }
 
-    pub fn bounding_rect(&self) -> Rect<i64> {
-        self.cover.bounding_rect()
+    pub fn arbitrary_interior_pixel(&self) -> Pixel {
+        self.boundary.arbitrary_interior_pixel()
+    }
+
+    pub fn top_left_interior_pixel(&self) -> Pixel {
+        self.boundary.top_left_interior_pixel()
     }
 }
 
 /// Ignores `area_bounds` field
 impl PartialEq for Region {
     fn eq(&self, other: &Self) -> bool {
-        self.material == other.material && self.boundary == other.boundary
+        self.boundary == other.boundary
     }
 }
 
@@ -201,7 +238,6 @@ impl Eq for Region {}
 /// Ignores `area_bounds` field
 impl Hash for Region {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.material.hash(state);
         self.boundary.hash(state);
     }
 }
@@ -269,13 +305,16 @@ pub struct FillRegion {
 
 #[derive(Debug, Clone)]
 pub struct Topology {
-    pub regions: BTreeMap<RegionKey, Region>,
+    pub material_map: MaterialMap,
 
     pub region_map: Pixmap<RegionKey>,
 
+    // TODO: Make Vec<Region>
+    pub regions: BTreeMap<RegionKey, Region>,
+
     /// Maps the start side of a seam to (region key, border index, seam index)
     pub seam_indices: BTreeMap<Side, SeamIndex>,
-    // pub change_log: Vec<Change>
+
     bounding_rect: Rect<i64>,
 }
 
@@ -285,115 +324,79 @@ impl Topology {
     }
 
     #[inline(never)]
-    pub fn new(material_map: &MaterialMap) -> Self {
-        Self::new_subset(material_map, material_map.keys())
-    }
+    pub fn new(material_map: MaterialMap) -> Self {
+        let (region_map, area_covers) = pixmap_regions(&material_map);
+        let n_regions = area_covers.len();
 
-    #[inline(never)]
-    pub fn new_subset(material_map: &MaterialMap, subset: impl IntoIterator<Item = Pixel>) -> Self {
-        let (pre_regions, region_map) =
-            color_components_subset(material_map, subset, RegionKey::unused);
+        let mut regions: BTreeMap<usize, Region> = BTreeMap::new();
 
-        let mut regions: BTreeMap<RegionKey, Region> = BTreeMap::new();
+        let region_boundaries = region_boundaries(&region_map, n_regions);
 
-        for pre_region in pre_regions {
-            // Each cycle in the sides is a border
-            let mut boundary = Vec::new();
-
-            for (i_border, cycle) in split_into_cycles(pre_region.sides).into_iter().enumerate() {
-                let seams =
-                    split_cycle_into_seams(&cycle, |side| material_map.get(side.right_pixel()));
+        for (region_id, (pre_boundary, area_cover)) in
+            region_boundaries.into_iter().zip(area_covers).enumerate()
+        {
+            let mut borders = Vec::new();
+            for (i_border, cycle) in split_boundary_into_cycles(pre_boundary)
+                .into_iter()
+                .enumerate()
+            {
+                // Each cycle is a border
+                let seams = split_cycle_into_seams(&cycle);
 
                 let border = Border {
                     cycle,
                     seams,
                     is_outer: i_border == 0,
                 };
-                boundary.push(border);
+                borders.push(border);
             }
 
+            let boundary = Boundary::new(borders);
+
             let region = Region {
-                boundary,
-                cover: pre_region.cover,
-                material: pre_region.color,
+                material: material_map[boundary.arbitrary_interior_pixel()],
+                boundary: boundary,
+                cover: area_cover,
             };
-            regions.insert(pre_region.id, region);
+            regions.insert(region_id, region);
         }
 
-        Self::from_regions(regions, region_map)
-    }
-
-    /// Seams are not recomputed, make sure to pass valid Seams!
-    #[inline(never)]
-    fn from_regions(regions: BTreeMap<RegionKey, Region>, region_map: Pixmap<RegionKey>) -> Self {
+        // Build seam indices from regions
         let mut seam_indices: BTreeMap<Side, SeamIndex> = BTreeMap::new();
 
-        for (&region_key, region) in &regions {
-            for (i_border, border) in region.boundary.iter().enumerate() {
+        for (&region_id, region) in &regions {
+            for (i_border, border) in region.boundary.borders.iter().enumerate() {
                 for (i_seam, &seam) in border.seams.iter().enumerate() {
-                    let seam_index = SeamIndex::new(region_key, i_border, i_seam);
+                    let seam_index = SeamIndex::new(region_id, i_border, i_seam);
                     seam_indices.insert(seam.start, seam_index);
                 }
             }
         }
 
-        let bounding_rect = region_map.bounding_rect();
-
-        Topology {
+        Self {
+            bounding_rect: material_map.bounding_rect(),
+            material_map,
             region_map,
             regions,
             seam_indices,
-            bounding_rect,
         }
     }
 
-    fn remove_seam(&mut self, seam: &Seam) -> Option<SeamIndex> {
-        self.seam_indices.remove(&seam.start)
-    }
-
-    pub fn remove_region(&mut self, key: RegionKey) -> Option<Region> {
-        if let Some(region) = self.regions.remove(&key) {
-            for seam in region.iter_seams() {
-                self.remove_seam(seam);
-            }
-            Some(region)
-        } else {
-            None
-        }
-    }
-
-    /// Undefined behaviour if region overlaps existing regions
-    fn insert_region(&mut self, key: RegionKey, region: Region) {
-        for (i_border, border) in region.boundary.iter().enumerate() {
-            for (i_seam, seam) in border.seams.iter().enumerate() {
-                let seam_index = SeamIndex::new(key, i_border, i_seam);
-                let existing = self.seam_indices.insert(seam.start, seam_index);
-                assert!(existing.is_none());
-            }
-        }
-
-        self.regions.insert(key, region);
-    }
-
-    pub fn translated(self, offset: Point<i64>) -> Self {
-        let mut regions = self.regions;
-        for region in regions.values_mut() {
-            region.translate(offset);
-        }
-        let region_map = self.region_map.translated(offset);
-        Self::from_regions(regions, region_map)
+    pub fn translated(&self, offset: Point<i64>) -> Self {
+        Self::new(self.material_map.translated(offset))
     }
 
     pub fn iter_borders(&self) -> impl IteratorPlus<&Border> {
         self.regions
             .values()
-            .flat_map(|region| region.boundary.iter())
+            .flat_map(|region| region.boundary.borders.iter())
     }
 
     pub fn iter_borders_with_key(&self) -> impl IteratorPlus<(BorderKey, &Border)> {
         self.regions.iter().flat_map(|(&region_key, region)| {
             region
                 .boundary
+                .borders
                 .iter()
                 .enumerate()
                 .map(move |(i_border, border)| (BorderKey::new(region_key, i_border), border))
@@ -435,8 +438,7 @@ impl Topology {
     }
 
     pub fn material_left_of(&self, seam: &Seam) -> Material {
-        let left_key = self.left_of(seam);
-        self[left_key].material
+        self.material_map[seam.start.left_pixel]
     }
 
     /// Not every seam has a region on the right, it can be empty space
@@ -447,21 +449,20 @@ impl Topology {
     }
 
     pub fn material_right_of(&self, seam: &Seam) -> Option<Material> {
-        let right_key = self.right_of(seam)?;
-        Some(self[right_key].material)
+        self.material_map.get(seam.start.right_pixel()).cloned()
     }
 
     /// Only fails if seam is not self.contains_seam(seam)
     pub fn next_seam(&self, seam: &Seam) -> &Seam {
         let seam_index = self.seam_indices[&seam.start];
-        let border = &self.regions[&seam_index.region_key].boundary[seam_index.i_border];
+        let border = &self.regions[&seam_index.region_key].boundary.borders[seam_index.i_border];
         &border.seams[(seam_index.i_seam + seam.len) % border.seams.len()]
     }
 
     /// Only fails if seam is not self.contains_seam(seam)
     pub fn previous_seam(&self, seam: &Seam) -> &Seam {
         let seam_index = self.seam_indices[&seam.start];
-        let border = &self.regions[&seam_index.region_key].boundary[seam_index.i_border];
+        let border = &self.regions[&seam_index.region_key].boundary.borders[seam_index.i_border];
         &border.seams[(seam_index.i_seam - 1 + border.seams.len()) % border.seams.len()]
     }
 
@@ -498,19 +499,19 @@ impl Topology {
         lhs.is_loop() && rhs.is_loop() && self.seam_border(lhs) == self.seam_border(rhs)
     }
 
-    /// WARNING: Expensive
-    pub fn material_map(&self) -> MaterialMap {
-        self.region_map
-            .map(|region_id| self.regions[region_id].material)
-    }
-
     pub fn iter_region_interior<'a>(
         &'a self,
         region_key: RegionKey,
     ) -> impl IteratorPlus<Pixel> + 'a {
+        // TODO: Fix
         let region = &self.regions[&region_key];
+        // self.region_map
+        //     .iter_cover(&region.cover)
+        //     .filter(move |(_, &iter_region_key)| iter_region_key == region_key)
+        //     .map(|kv| kv.0)
+
         self.region_map
-            .iter_cover(&region.cover)
+            .iter()
             .filter(move |(_, &iter_region_key)| iter_region_key == region_key)
             .map(|kv| kv.0)
     }
@@ -521,7 +522,7 @@ impl Topology {
 
     pub fn border_containing_side(&self, side: &Side) -> Option<(BorderKey, &Border)> {
         self.iter_borders_with_key()
-            .find(|(_, border)| border.cycle.contains(side))
+            .find(|(_, border)| border.sides().contains(side))
     }
 
     /// Whole are is one single component
@@ -539,51 +540,12 @@ impl Topology {
     /// Undefined behaviour if border is not part of self.
     #[inline(never)]
     pub fn topology_right_of_border(&self, border: &Border) -> Self {
-        let region_map = self.region_map.right_of_border(border);
-        // TODO:SPEEDUP: Should be possible to do this faster some way
-        let region_keys: BTreeSet<_> = region_map.values().copied().collect();
-
-        let mut regions = BTreeMap::new();
-        for region_key in region_keys {
-            regions.insert(region_key, self.regions[&region_key].clone());
-        }
-
-        Self::from_regions(regions, region_map)
-    }
-
-    #[inline(never)]
-    pub fn sub_topology(&self, sub_regions: &BTreeSet<RegionKey>) -> Self {
-        let region_map = self
-            .region_map
-            .filter(|region_key| sub_regions.contains(region_key));
-
-        let regions = sub_regions
-            .iter()
-            .map(|&key| (key, self[key].clone()))
-            .collect();
-
-        Self::from_regions(regions, region_map)
+        Self::new(self.material_map.right_of_border(border))
     }
 
     /// Remove all regions of the given material
     pub fn without_material(self, material: Material) -> Self {
-        let sub_regions: BTreeSet<_> = self
-            .regions
-            .iter()
-            .filter_map(|(&key, region)| {
-                if region.material == material {
-                    // discard this region, we need to make sure it does not border void
-                    assert!(region
-                        .iter_seams()
-                        .all(|seam| self.material_right_of(seam).is_some()));
-                    None
-                } else {
-                    Some(key)
-                }
-            })
-            .collect();
-
-        self.sub_topology(&sub_regions)
+        Self::new(self.material_map.without(&material))
     }
 
     /// Blit the given region to the material_map with the given material.
@@ -644,7 +606,7 @@ impl Index<BorderKey> for Topology {
     type Output = Border;
 
     fn index(&self, key: BorderKey) -> &Self::Output {
-        &self.regions[&key.region_key].boundary[key.i_border]
+        &self.regions[&key.region_key].boundary.borders[key.i_border]
     }
 }
 
@@ -654,7 +616,7 @@ impl Display for Topology {
 
         for (region_key, region) in self.regions.iter() {
             writeln!(f, "Component {region_key:?}")?;
-            for (i_border, border) in region.boundary.iter().enumerate() {
+            for (i_border, border) in region.boundary.borders.iter().enumerate() {
                 writeln!(f, "{indent}Border {i_border}")?;
                 for seam in &border.seams {
                     writeln!(f, "{indent}{indent}{seam}")?;
@@ -666,40 +628,40 @@ impl Display for Topology {
     }
 }
 
-impl From<&MaterialMap> for Topology {
-    fn from(material_map: &MaterialMap) -> Self {
+impl From<MaterialMap> for Topology {
+    fn from(material_map: MaterialMap) -> Self {
         Self::new(material_map)
     }
 }
 
-impl From<MaterialMap> for Topology {
-    fn from(material_map: MaterialMap) -> Self {
-        Self::from(&material_map)
-    }
-}
-
-/// Split a side cycle into segments based on a function f: Side -> T
-/// Each segment has constant f
-pub fn split_cycle_into_seams<T: Eq>(cycle: &Vec<Side>, f: impl Fn(Side) -> T) -> Vec<Seam> {
+/// Split a side cycle into segments of constant value.
+pub fn split_cycle_into_seams<T: Eq + Copy + Debug>(cycle: &Vec<(Side, T)>) -> Vec<Seam> {
     assert!(!cycle.is_empty());
 
-    let discontinuities: Vec<_> = cycle
+    // List pairs (side, value), (side', value') where value != value'
+    let steps: Vec<((Side, T), (Side, T))> = cycle
         .iter()
+        .copied()
         .circular_tuple_windows()
-        .filter(|(&lhs, &rhs)| f(lhs) != f(rhs))
+        .filter(|((_, lhs_value), (_, rhs_value))| lhs_value != rhs_value)
         .collect();
 
-    if discontinuities.is_empty() {
+    if steps.is_empty() {
         // TODO: Reverse cycle should give same seam
         vec![Seam::new_atom(
-            *cycle.first().unwrap(),
-            *cycle.last().unwrap(),
+            cycle.first().unwrap().0,
+            cycle.last().unwrap().0,
         )]
     } else {
-        discontinuities
+        steps
             .iter()
             .circular_tuple_windows()
-            .map(|((_, &lhs), (&rhs, _))| Seam::new_atom(lhs, rhs))
+            .map(|(lhs_step, rhs_step)| {
+                let (start_side, start_value) = lhs_step.1;
+                let (stop_side, stop_value) = rhs_step.0;
+                assert_eq!(start_value, stop_value);
+                Seam::new_atom(start_side, stop_side)
+            })
             .collect()
     }
 }
@@ -717,7 +679,7 @@ pub mod test {
     fn load_topology(filename: &str) -> Topology {
         let path = format!("test_resources/topology/{filename}");
         let material_map = RgbaField::load(path).unwrap().into();
-        Topology::new(&material_map)
+        Topology::new(material_map)
     }
 
     fn load_rgb_seam_graph(filename: &str) -> UndirectedGraph<Option<Material>> {

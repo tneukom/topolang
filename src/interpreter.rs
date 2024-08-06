@@ -7,14 +7,15 @@ use crate::{
     pattern::{NullTrace, Search},
     pixmap::MaterialMap,
     rule::Rule,
-    topology::{BorderKey, RegionKey, Topology},
+    topology::{BorderKey, Region, StrongRegionKey, Topology},
     utils::IntoT,
     world::World,
 };
 
 pub struct CompiledRule {
-    /// All regions in the Rule frame, before and after. These elements should be hidden during Rule execution.
-    source: Vec<RegionKey>,
+    /// All regions in the Rule frame, before and after. These elements should be hidden during Rule
+    /// execution. Contains an arbitrary pixel of each region.
+    source: Vec<StrongRegionKey>,
 
     rule: Rule,
 }
@@ -35,7 +36,7 @@ impl Interpreter {
             .unwrap()
             .intot::<MaterialMap>()
             .without(&Self::RULE_FRAME_VOID_MATERIAL);
-        let rule_frame = Topology::new(&rule_frame_pixmap);
+        let rule_frame = Topology::new(rule_frame_pixmap);
 
         // Side on the before border (inner border of the frame)
         let before_side = Pixel::new(7, 7).top_side().reversed();
@@ -74,25 +75,31 @@ impl Interpreter {
             let phi_after_border = phi[self.after_border];
             let after = topology.topology_right_of_border(&topology[phi_after_border]);
 
-            // Collect regions that are part of the source for this Rule
-            let mut source: Vec<_> = Vec::new();
-            source.extend(before.regions.keys().copied());
-            source.extend(after.regions.keys().copied());
+            // Collect regions that are part of the source for this Rule.
+            let mut source: Vec<StrongRegionKey> = Vec::new();
+            // Before and after regions
+            source.extend(
+                before
+                    .regions
+                    .values()
+                    .map(Region::arbitrary_interior_pixel),
+            );
+            source.extend(after.regions.values().map(Region::arbitrary_interior_pixel));
+            // Rule frame regions
             for &region_key in self.rule_frame.iter_region_keys() {
-                source.push(phi[region_key]);
+                let phi_region_key = phi[region_key];
+                source.push(topology[phi_region_key].arbitrary_interior_pixel());
             }
 
             let before = before.without_material(Material::VOID);
             let after = after.without_material(Material::VOID);
 
             // Find translation from after to before
-            // FIXME: This might not work depending of the AreaBounds implementation
             let before_bounds = before.bounding_rect();
             let after_bounds = after.bounding_rect();
             assert_eq!(before_bounds.size(), after_bounds.size());
 
-            let offset = before_bounds.low() - after_bounds.low();
-            let after = after.translated(offset);
+            let after = after.translated(before_bounds.low() - after_bounds.low());
 
             let rule = Rule::new(before, after)?;
             let compiled_rule = CompiledRule { rule, source };
@@ -123,11 +130,6 @@ impl Interpreter {
                 if modified {
                     return true;
                 }
-                // world
-                //     .to_pixmap()
-                //     .to_bitmap_with_size(world_bitmap.size())
-                //     .save(format!("{folder}/stabilize_{steps}.png"))
-                //     .unwrap();
             }
         }
 
@@ -173,6 +175,15 @@ mod test {
                 break;
             }
             steps += 1;
+
+            // Save world to image for debugging!
+            // world
+            //     .material_map()
+            //     .to_field(Material::VOID)
+            //     .into_rgba()
+            //     .save(format!("{folder}/run_{name}_{steps}.png"))
+            //     .unwrap();
+
             assert!(steps <= expected_steps);
         }
 

@@ -19,14 +19,32 @@ impl Rule {
     pub fn new(before: Topology, after: Topology) -> anyhow::Result<Self> {
         let mut fill_regions: Vec<FillRegion> = Vec::new();
 
-        let after_pixmap = after.material_map();
+        // For debugging save before and after as pngs
+        // before
+        //     .material_map
+        //     .to_field(Material::BLACK)
+        //     .into_rgba()
+        //     .save("before.png")
+        //     .unwrap();
+        //
+        // after
+        //     .material_map
+        //     .to_field(Material::BLACK)
+        //     .into_rgba()
+        //     .save("after.png")
+        //     .unwrap();
 
         for (&before_region_key, before_region) in &before.regions {
+            let before_region = &before[before_region_key];
+
             let Some(after_fill_color) = Self::fill_material(
-                &after_pixmap,
+                &after.material_map,
                 before.iter_region_interior(before_region_key),
             ) else {
-                anyhow::bail!("Region {before_region_key} color not constant.")
+                anyhow::bail!(
+                    "Region {} color not constant.",
+                    before_region.arbitrary_interior_pixel()
+                )
             };
 
             if after_fill_color != before_region.material {
@@ -113,13 +131,13 @@ mod test {
             .unwrap()
             .intot::<MaterialMap>()
             .without(&Material::VOID);
-        let before = Topology::new(&before_material_map);
+        let before = Topology::new(before_material_map);
 
         let after_material_map = RgbaField::load(format!("{folder}/after.png"))
             .unwrap()
             .intot::<MaterialMap>()
             .without(&Material::VOID);
-        let after = Topology::new(&after_material_map);
+        let after = Topology::new(after_material_map);
 
         let rule = Rule::new(before, after).unwrap();
 
@@ -133,7 +151,18 @@ mod test {
             Search::new(world.topology(), &rule.pattern).find_first_match(NullTrace::new())
         {
             rule.apply_ops(&phi, &mut world);
+
+            // Save world to image for debugging!
+            // world
+            //     .topology()
+            //     .material_map
+            //     .to_field(Material::BLACK)
+            //     .into_rgba()
+            //     .save(format!("{folder}/run_{application_count}.png"))
+            //     .unwrap();
+
             application_count += 1;
+            assert!(application_count <= expected_application_count);
         }
 
         assert_eq!(application_count, expected_application_count);

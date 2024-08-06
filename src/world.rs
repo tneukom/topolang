@@ -19,18 +19,15 @@ impl CachedTopology {
         }
     }
 
-    pub fn from(material_map: &MaterialMap) -> Self {
-        let topology = Topology::new(&material_map);
+    pub fn from(material_map: MaterialMap) -> Self {
+        let topology = Topology::new(material_map);
         Self {
             topology: OnceCell::from(topology),
         }
     }
 
-    pub fn get_or_init(&self, material_map: &MaterialMap) -> &Topology {
-        self.topology.get_or_init(|| {
-            println!("Recomputing topology!");
-            Topology::new(material_map)
-        })
+    pub fn get_or_init(&self, material_map: MaterialMap) -> &Topology {
+        self.topology.get_or_init(|| Topology::new(material_map))
     }
 
     pub fn get(&self) -> Option<&Topology> {
@@ -52,7 +49,7 @@ pub struct World {
 
 impl World {
     pub fn from_material_map(material_map: MaterialMap) -> Self {
-        let topology = CachedTopology::from(&material_map);
+        let topology = CachedTopology::from(material_map.clone());
         Self {
             material_map,
             topology,
@@ -60,7 +57,7 @@ impl World {
     }
 
     pub fn topology(&self) -> &Topology {
-        self.topology.get_or_init(&self.material_map)
+        self.topology.get_or_init(self.material_map.clone())
     }
 
     pub fn material_map(&self) -> &MaterialMap {
@@ -83,10 +80,9 @@ impl World {
     #[inline(never)]
     pub fn fill_regions(&mut self, fill_regions: &Vec<FillRegion>) -> bool {
         let mut modified = false;
-        let mut topology_invalidated = false;
         let topology = self
             .topology
-            .get_mut()
+            .get()
             .expect("Requires topology, otherwise region ids will be invalid.");
 
         for &fill_region in fill_regions {
@@ -101,28 +97,9 @@ impl World {
                 fill_region.material,
                 &mut self.material_map,
             );
-
-            if topology_invalidated {
-                continue;
-            }
-
-            // Try to update the topology to the changed material map
-            let can_update_material = topology[fill_region.region_key]
-                .iter_seams()
-                .all(|seam| topology.material_right_of(seam) != Some(fill_region.material));
-
-            if can_update_material {
-                // If all neighboring regions have a different material than fill_region.material we
-                // can update the topology by
-                let mut_region = &mut topology[fill_region.region_key];
-                mut_region.material = fill_region.material;
-            } else {
-                // Otherwise we have to recompute the topology
-                topology_invalidated = true;
-            }
         }
 
-        if topology_invalidated {
+        if modified {
             self.topology = CachedTopology::empty();
         }
         modified
