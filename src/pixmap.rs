@@ -205,36 +205,52 @@ pub fn combine_indices(tile_index: Point<i64>, offset_index: Point<i64>) -> Poin
 
 /// 3 by 3 grid of Tile references for fast lookups
 /// TODO: Use tiles: [[...; 3]; 3] and make Copy, might make implementing iterators easier
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Neighborhood<'a, T> {
     /// Neighborhood of this tile
-    tile_index: Point<i64>,
+    top_left_index: Point<i64>,
 
     /// Neighbor tiles of tile_index
-    // TODO: Use [[]]
-    tiles: Field<Option<&'a Tile<T>>>,
+    tiles: [[Option<&'a Tile<T>>; 3]; 3],
 }
 
 impl<'a, T: Clone> Neighborhood<'a, T> {
     pub fn new(
-        tiles: &'a BTreeMap<Point<i64>, impl Borrow<Tile<T>>>,
-        tile_index: Point<i64>,
+        tile_map: &'a BTreeMap<Point<i64>, impl Borrow<Tile<T>>>,
+        center_tile_index: Point<i64>,
     ) -> Self {
-        let bounds = Rect::low_size(tile_index - Point(1, 1), Point(3, 3));
-        let tiles = Field::from_map(bounds, |tile_index| {
-            tiles.get(&tile_index).map(Borrow::borrow)
-        });
-        Self { tile_index, tiles }
+        let top_left_index = center_tile_index - Point(1, 1);
+
+        let mut tiles = [[None; 3]; 3];
+        for y in 0..3 {
+            for x in 0..3 {
+                let offset_tile_index =
+                    Point(top_left_index.x + x as i64, top_left_index.y + y as i64);
+                tiles[y][x] = tile_map.get(&offset_tile_index).map(|tile| tile.borrow());
+            }
+        }
+        Self {
+            top_left_index,
+            tiles,
+        }
     }
 
-    pub fn from_pixmap(pixmap: &'a Pixmap<T>, tile_index: Point<i64>) -> Self {
-        Self::new(&pixmap.tiles, tile_index)
+    pub fn center_tile_index(&self) -> Point<i64> {
+        self.top_left_index + Point(1, 1)
+    }
+
+    #[inline(never)]
+    pub fn from_pixmap(pixmap: &'a Pixmap<T>, center_tile_index: Point<i64>) -> Self {
+        Self::new(&pixmap.tiles, center_tile_index)
     }
 
     /// Panics if index is out of bounds
+    #[inline(never)]
     pub fn get(&self, index: impl FieldIndex) -> Option<&'a T> {
         let (tile_index, pixel_index) = split_index(index);
-        let tile = self.tiles[tile_index]?;
+        let offset_tile_index: Point<usize> =
+            (tile_index - self.top_left_index).cwise_try_into().unwrap();
+        let tile = self.tiles[offset_tile_index.y][offset_tile_index.x]?;
         tile.get(pixel_index)
     }
 
@@ -245,22 +261,19 @@ impl<'a, T: Clone> Neighborhood<'a, T> {
         Some(SideNeighbors { left, right })
     }
 
-    /// Iterate over the ccw sides of all pixels that are not None.
-    pub fn into_iter_side_neighbors(self) -> impl IteratorPlus<(Side, SideNeighbors<&'a T>)> {
-        let center_tile = self.tiles[self.tile_index].unwrap();
+    #[inline(never)]
+    pub fn for_each_side_neighbors(&self, mut f: impl FnMut(Side, SideNeighbors<&'a T>)) {
+        let center_tile = self.tiles[1][1].unwrap();
 
-        center_tile.iter().flat_map(move |(sub_index, value)| {
-            let pixel = combine_indices(self.tile_index, sub_index);
+        for (sub_index, value) in center_tile.iter() {
+            let pixel = combine_indices(self.center_tile_index(), sub_index);
 
-            pixel
-                .sides_ccw()
-                .map(|side| {
-                    let right = self.get(side.right_pixel());
-                    let neighbors = SideNeighbors { left: value, right };
-                    (side, neighbors)
-                })
-                .into_iter()
-        })
+            for side in pixel.sides_ccw() {
+                let right = self.get(side.right_pixel());
+                let neighbors = SideNeighbors { left: value, right };
+                f(side, neighbors);
+            }
+        }
     }
 }
 
@@ -513,10 +526,11 @@ impl<T: Clone> Pixmap<T> {
             .map(|&tile_index| Neighborhood::from_pixmap(self, tile_index))
     }
 
-    /// Iterate over the CCW sides of all pixels with values
-    pub fn iter_side_neighbors(&self) -> impl Iterator<Item = (Side, SideNeighbors<&T>)> {
-        self.iter_neighborhoods()
-            .flat_map(|neighborhood| neighborhood.into_iter_side_neighbors())
+    #[inline(never)]
+    pub fn for_each_side_neighbors(&self, mut f: impl FnMut(Side, SideNeighbors<&T>)) {
+        for neighborhood in self.iter_neighborhoods() {
+            neighborhood.for_each_side_neighbors(&mut f);
+        }
     }
 
     // TODO:REMOVE

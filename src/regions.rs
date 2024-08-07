@@ -5,7 +5,7 @@ use crate::{
         pixel::{Side, SideName},
         point::Point,
     },
-    pixmap::{iter_tile_boundary_sides, Neighborhood, Pixmap, Tile},
+    pixmap::{iter_tile_boundary_sides, Neighborhood, Pixmap, SideNeighbors, Tile},
     union_find::UnionFind,
 };
 /// Unionfind crates
@@ -247,15 +247,23 @@ pub fn pixmap_regions<T: Copy + Eq>(color_map: &Pixmap<T>) -> (Pixmap<usize>, Ve
 pub type RegionBoundary = BTreeMap<Side, Option<usize>>;
 
 #[inline(never)]
+pub fn wtf99(side: Side, neighbors: SideNeighbors<&usize>, boundaries: &mut Vec<RegionBoundary>) {
+    let boundary = &mut boundaries[*neighbors.left];
+    if Some(neighbors.left) != neighbors.right {
+        boundary.insert(side, neighbors.right.cloned());
+    }
+}
+
+#[inline(never)]
 pub fn region_boundaries(region_map: &Pixmap<usize>, n_regions: usize) -> Vec<RegionBoundary> {
     let mut boundaries = vec![RegionBoundary::new(); n_regions];
 
-    for (side, neighbors) in region_map.iter_side_neighbors() {
-        let boundary = &mut boundaries[*neighbors.left];
-        if Some(neighbors.left) != neighbors.right {
-            boundary.insert(side, neighbors.right.cloned());
-        }
-    }
+    region_map.for_each_side_neighbors(
+        #[inline(never)]
+        |side, neighbors| {
+            wtf99(side, neighbors, &mut boundaries);
+        },
+    );
 
     boundaries
 }
