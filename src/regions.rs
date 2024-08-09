@@ -5,9 +5,10 @@ use crate::{
         pixel::{Side, SideName},
         point::Point,
     },
-    pixmap::{iter_tile_boundary_sides, Neighborhood, Pixmap, SideNeighbors, Tile},
+    pixmap::{iter_tile_boundary_sides, Neighborhood, Pixmap, Tile},
     union_find::UnionFind,
 };
+use ahash::{HashMap, HashMapExt};
 /// Unionfind crates
 /// https://crates.io/crates/union-find
 /// https://crates.io/crates/disjoint-sets
@@ -17,6 +18,7 @@ use crate::{
 ///
 /// https://docs.rs/petgraph/latest/src/petgraph/unionfind.rs.html#16-27
 use std::{collections::BTreeMap, rc::Rc};
+use itertools::Itertools;
 
 pub struct CompactLabels {
     remap: Vec<usize>,
@@ -244,36 +246,33 @@ pub fn pixmap_regions<T: Copy + Eq>(color_map: &Pixmap<T>) -> (Pixmap<usize>, Ve
     (region_map, area_covers)
 }
 
-pub type RegionBoundary = BTreeMap<Side, Option<usize>>;
-
-#[inline(never)]
-pub fn wtf99(side: Side, neighbors: SideNeighbors<&usize>, boundaries: &mut Vec<RegionBoundary>) {
-    let boundary = &mut boundaries[*neighbors.left];
-    if Some(neighbors.left) != neighbors.right {
-        boundary.insert(side, neighbors.right.cloned());
-    }
-}
+pub type RegionBoundary = HashMap<Side, Option<usize>>;
 
 #[inline(never)]
 pub fn region_boundaries(region_map: &Pixmap<usize>, n_regions: usize) -> Vec<RegionBoundary> {
     let mut boundaries = vec![RegionBoundary::new(); n_regions];
 
-    region_map.for_each_side_neighbors(
-        #[inline(never)]
-        |side, neighbors| {
-            wtf99(side, neighbors, &mut boundaries);
-        },
-    );
+    region_map.for_each_side_neighbors(|side, neighbors| {
+        let boundary = &mut boundaries[*neighbors.left];
+        if Some(neighbors.left) != neighbors.right {
+            boundary.insert(side, neighbors.right.cloned());
+        }
+    });
 
     boundaries
 }
 
 /// Split a set of sides into cycles. Each cycle starts with its smallest side. The list of cycles
 /// is ordered by the first side in each cycle. This means the first cycle is the outer cycle.
-pub fn split_boundary_into_cycles<T>(mut sides: BTreeMap<Side, T>) -> Vec<Vec<(Side, T)>> {
+#[inline(never)]
+pub fn split_boundary_into_cycles<T>(mut sides: HashMap<Side, T>) -> Vec<Vec<(Side, T)>> {
     let mut cycles = Vec::new();
 
-    while let Some((mut side, color)) = sides.pop_first() {
+    while !sides.is_empty() {
+        // Pop first element
+        let mut side = *sides.keys().next().unwrap();
+        let color = sides.remove(&side).unwrap();
+
         // Extract cycle
         let mut cycle = vec![(side, color)];
         'outer: loop {
@@ -289,9 +288,15 @@ pub fn split_boundary_into_cycles<T>(mut sides: BTreeMap<Side, T>) -> Vec<Vec<(S
             break;
         }
 
+        // Make sure cycle starts with smallest element
+        let i_min = cycle.iter().position_min_by_key(|(side, _)| side).unwrap();
+        cycle.rotate_left(i_min);
+
         cycles.push(cycle);
     }
 
+    // Sort cycles by first element
+    cycles.sort_by_key(|cycle| cycle[0].0);
     cycles
 }
 
@@ -306,6 +311,7 @@ mod test {
     };
     use itertools::Itertools;
     use std::collections::BTreeMap;
+    use ahash::{HashMap, HashMapExt};
 
     pub fn pixel_touches_tile_boundary(index: Point<i64>) -> bool {
         let (_, pixel_index) = split_index(index);
@@ -354,8 +360,8 @@ mod test {
 
     /// Collect the boundary of the area with the given value, in other words the sides that have
     /// a pixel of the given value on the left side and a different value on the right side.
-    fn boundary_of<T: Ord + Clone>(map: &Pixmap<T>, interior: &T) -> BTreeMap<Side, Option<T>> {
-        let mut boundary = BTreeMap::new();
+    fn boundary_of<T: Ord + Clone>(map: &Pixmap<T>, interior: &T) -> HashMap<Side, Option<T>> {
+        let mut boundary = HashMap::new();
         for side in iter_sides_in_rect(map.bounding_rect()) {
             if map.get(side.left_pixel) == Some(interior) {
                 let right_color = map.get(side.right_pixel());

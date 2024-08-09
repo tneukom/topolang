@@ -503,15 +503,9 @@ impl Topology {
         &'a self,
         region_key: RegionKey,
     ) -> impl IteratorPlus<Pixel> + 'a {
-        // TODO: Fix
         let region = &self.regions[&region_key];
-        // self.region_map
-        //     .iter_cover(&region.cover)
-        //     .filter(move |(_, &iter_region_key)| iter_region_key == region_key)
-        //     .map(|kv| kv.0)
-
         self.region_map
-            .iter()
+            .iter_cover(&region.cover)
             .filter(move |(_, &iter_region_key)| iter_region_key == region_key)
             .map(|kv| kv.0)
     }
