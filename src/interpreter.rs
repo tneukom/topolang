@@ -58,6 +58,7 @@ impl Interpreter {
         }
     }
 
+    #[inline(never)]
     pub fn compile(&self, world: &mut World) -> anyhow::Result<Vec<CompiledRule>> {
         // Find all matches for rule_frame in world
         let search = Search::new(world.topology(), &self.rule_frame);
@@ -110,6 +111,7 @@ impl Interpreter {
     }
 
     /// Returns if a Rule was applied
+    #[inline(never)]
     pub fn step(&self, world: &mut World) -> bool {
         let compiled_rules = self.compile(world).unwrap();
 

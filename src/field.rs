@@ -21,6 +21,15 @@ pub struct Field<T> {
 pub type RgbaField = Field<Rgba8>;
 pub type MaterialField = Field<Material>;
 
+pub fn field_linear_index(bounds: Rect<i64>, index: Point<i64>) -> Option<usize> {
+    if !bounds.half_open_contains(index.point()) {
+        None
+    } else {
+        let i = (index.x() - bounds.x.low) + (index.y() - bounds.y.low) * bounds.width();
+        Some(i as usize)
+    }
+}
+
 impl<T> Field<T> {
     pub fn from_linear(bounds: Rect<i64>, elems: Vec<T>) -> Self {
         assert!(bounds.width() >= 0);
@@ -78,13 +87,7 @@ impl<T> Field<T> {
     }
 
     pub fn linear_index(&self, index: impl FieldIndex) -> Option<usize> {
-        if !self.bounds().half_open_contains(index.point()) {
-            None
-        } else {
-            let i = (index.x() - self.bounds.x.low)
-                + (index.y() - self.bounds.y.low) * self.bounds.width();
-            Some(i as usize)
-        }
+        field_linear_index(self.bounds, index.point())
     }
 
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &T> {

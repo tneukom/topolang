@@ -9,6 +9,7 @@ use seamlang::{
     math::rgba8::Rgba8,
     pixmap::{MaterialMap, RgbaMap},
     regions::{field_regions_fast, pixmap_regions, CompactLabels},
+    topology::Topology,
     utils::IntoT,
     world::World,
 };
@@ -69,8 +70,8 @@ pub fn main_benchmark_pixmap_regions() {
 }
 
 pub fn main_benchmark() {
-    let folder = "test_resources/compiler/b/";
-    let original_world = RgbaField::load(format!("{folder}/world.png"))
+    let folder = "resources/saves";
+    let original_world = RgbaField::load(format!("{folder}/turing.png"))
         .unwrap()
         .intot::<MaterialMap>()
         .intot::<World>();
@@ -92,6 +93,20 @@ pub fn main_benchmark() {
             }
         }
         println!("steps = {}, elapsed = {:.3?}", steps, now.elapsed());
+    }
+}
+
+pub fn benchmark_topology_new() {
+    let folder = "resources/saves";
+    let material_map = RgbaField::load(format!("{folder}/turing.png"))
+        .unwrap()
+        .intot::<MaterialMap>();
+
+    for _ in 0..100 {
+        use std::time::Instant;
+        let now = Instant::now();
+        Topology::new(material_map.clone());
+        println!("elapsed = {:.3?}", now.elapsed());
     }
 }
 
@@ -168,8 +183,9 @@ pub fn main() {
     {
         env_logger::init();
         warn!("Logging!");
-        main_benchmark();
-        // main_editor();
+        // main_benchmark();
+        // benchmark_topology_new();
+        main_editor();
         // color_replace();
 
         // main_benchmark_pixmap_regions();

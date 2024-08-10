@@ -5,10 +5,11 @@ use crate::{
         pixel::{Side, SideName},
         point::Point,
     },
-    pixmap::{iter_tile_boundary_sides, Neighborhood, Pixmap, Tile},
+    pixmap::{Pixmap, Tile, TileSideClass, TileSidesForEach},
     union_find::UnionFind,
 };
 use ahash::{HashMap, HashMapExt};
+use itertools::Itertools;
 /// Unionfind crates
 /// https://crates.io/crates/union-find
 /// https://crates.io/crates/disjoint-sets
@@ -18,7 +19,6 @@ use ahash::{HashMap, HashMapExt};
 ///
 /// https://docs.rs/petgraph/latest/src/petgraph/unionfind.rs.html#16-27
 use std::{collections::BTreeMap, rc::Rc};
-use itertools::Itertools;
 
 pub struct CompactLabels {
     remap: Vec<usize>,
@@ -208,24 +208,21 @@ pub fn pixmap_regions<T: Copy + Eq>(color_map: &Pixmap<T>) -> (Pixmap<usize>, Ve
 
     // Build UnionFind to merge tiled regions that are connected
     let mut union_find = UnionFind::new(region_to_tile.len());
-    for &tile_index in color_map.tiles.keys() {
-        let color_neighborhood = Neighborhood::from_pixmap(color_map, tile_index);
-        let region_neighborhood = Neighborhood::from_pixmap(&region_map, tile_index);
 
-        // TODO: iter_tile_boundary_sides uses a global variable, therefore atomic compare
-        for side in iter_tile_boundary_sides(tile_index) {
-            let Some(color_neighbors) = color_neighborhood.side_neighbors(side) else {
-                continue;
-            };
-
-            if Some(color_neighbors.left) == color_neighbors.right {
-                let region_neighbors = region_neighborhood.side_neighbors(side).unwrap();
-                let &left_region = region_neighbors.left;
-                let &right_region = region_neighbors.right.unwrap();
-                union_find.union(left_region, right_region);
+    let tile_sides_for_each = TileSidesForEach::cached();
+    tile_sides_for_each.for_each_zip(
+        color_map,
+        &region_map,
+        TileSideClass::Boundary,
+        |_side, left, right| {
+            if let Some(right) = right {
+                // if left color == right color, merge left region with right region
+                if left.0 == right.0 {
+                    union_find.union(left.1, right.1);
+                }
             }
-        }
-    }
+        },
+    );
 
     let mut roots = union_find.into_roots();
 
@@ -252,12 +249,20 @@ pub type RegionBoundary = HashMap<Side, Option<usize>>;
 pub fn region_boundaries(region_map: &Pixmap<usize>, n_regions: usize) -> Vec<RegionBoundary> {
     let mut boundaries = vec![RegionBoundary::new(); n_regions];
 
-    region_map.for_each_side_neighbors(|side, neighbors| {
-        let boundary = &mut boundaries[*neighbors.left];
-        if Some(neighbors.left) != neighbors.right {
-            boundary.insert(side, neighbors.right.cloned());
+    let tile_sides_for_each = TileSidesForEach::cached();
+    tile_sides_for_each.for_each(region_map, TileSideClass::All, |side, left, right| {
+        let boundary = &mut boundaries[left];
+        if Some(left) != right {
+            boundary.insert(side, right);
         }
     });
+
+    // region_map.for_each_side_neighbors(|side, neighbors| {
+    //     let boundary = &mut boundaries[*neighbors.left];
+    //     if Some(neighbors.left) != neighbors.right {
+    //         boundary.insert(side, neighbors.right.cloned());
+    //     }
+    // });
 
     boundaries
 }
@@ -309,9 +314,9 @@ mod test {
         regions::{pixmap_regions, region_boundaries},
         utils::IntoT,
     };
+    use ahash::{HashMap, HashMapExt};
     use itertools::Itertools;
     use std::collections::BTreeMap;
-    use ahash::{HashMap, HashMapExt};
 
     pub fn pixel_touches_tile_boundary(index: Point<i64>) -> bool {
         let (_, pixel_index) = split_index(index);
@@ -334,13 +339,13 @@ mod test {
     }
 
     fn field_bounds_cases() -> Vec<Rect<i64>> {
-        return vec![
+        vec![
             Rect::low_high([0, 0], [1, 1]),
             Rect::low_high([-1, -1], [0, 0]),
             Rect::low_high([0, 0], [TILE_SIZE - 1, TILE_SIZE - 1]),
             Rect::low_high([0, 0], [TILE_SIZE + 1, TILE_SIZE - 1]),
             Rect::low_high([-391, 234], [519, 748]),
-        ];
+        ]
     }
 
     #[test]

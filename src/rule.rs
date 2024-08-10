@@ -16,6 +16,7 @@ pub struct Rule {
 }
 
 impl Rule {
+    #[inline(never)]
     pub fn new(before: Topology, after: Topology) -> anyhow::Result<Self> {
         let mut fill_regions: Vec<FillRegion> = Vec::new();
 
@@ -64,6 +65,7 @@ impl Rule {
 
     /// The fill color of a given region or None if the color is not constant on the region
     /// pixels.
+    #[inline(never)]
     pub fn fill_material(
         pixmap: &Pixmap<Material>,
         pixels: impl IntoIterator<Item = Pixel>,

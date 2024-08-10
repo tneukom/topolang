@@ -26,8 +26,9 @@ impl CachedTopology {
         }
     }
 
-    pub fn get_or_init(&self, material_map: MaterialMap) -> &Topology {
-        self.topology.get_or_init(|| Topology::new(material_map))
+    pub fn get_or_init(&self, material_map: &MaterialMap) -> &Topology {
+        self.topology
+            .get_or_init(|| Topology::new(material_map.clone()))
     }
 
     pub fn get(&self) -> Option<&Topology> {
@@ -57,7 +58,7 @@ impl World {
     }
 
     pub fn topology(&self) -> &Topology {
-        self.topology.get_or_init(self.material_map.clone())
+        self.topology.get_or_init(&self.material_map)
     }
 
     pub fn material_map(&self) -> &MaterialMap {

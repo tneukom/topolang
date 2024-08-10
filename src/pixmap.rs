@@ -1,6 +1,6 @@
 use crate::{
     area_cover::AreaCover,
-    field::{Field, FieldIndex, MaterialField, RgbaField},
+    field::{field_linear_index, Field, FieldIndex, MaterialField, RgbaField},
     material::Material,
     math::{
         interval::Interval,
@@ -12,12 +12,12 @@ use crate::{
     topology::Border,
     utils::IteratorPlus,
 };
+use ahash::HashMap;
 use std::{
-    borrow::Borrow,
     collections::BTreeMap,
     ops::{Deref, Index},
     rc::Rc,
-    sync::OnceLock,
+    sync::{LazyLock, OnceLock},
 };
 
 /// PartialEq for Rc<T: Eq> checks pointer equality first, see
@@ -61,8 +61,14 @@ impl<T> Tile<T> {
         self.field.set(index, None)
     }
 
+    /// Panics if index is out of bounds
     pub fn get(&self, index: impl FieldIndex) -> Option<&T> {
         self.field.get(index).unwrap().as_ref()
+    }
+
+    /// Panics if index is out of bounds
+    pub fn get_linear(&self, index: usize) -> Option<&T> {
+        self.field.as_slice().get(index).unwrap().as_ref()
     }
 
     pub fn into_map<S>(self, mut f: impl FnMut(T) -> S) -> Tile<S> {
@@ -201,80 +207,6 @@ pub fn tile_index(index: Point<i64>) -> Point<i64> {
 
 pub fn combine_indices(tile_index: Point<i64>, offset_index: Point<i64>) -> Point<i64> {
     tile_index * TILE_SIZE + offset_index
-}
-
-/// 3 by 3 grid of Tile references for fast lookups
-/// TODO: Use tiles: [[...; 3]; 3] and make Copy, might make implementing iterators easier
-#[derive(Debug, Clone, Copy)]
-pub struct Neighborhood<'a, T> {
-    /// Neighborhood of this tile
-    top_left_index: Point<i64>,
-
-    /// Neighbor tiles of tile_index
-    tiles: [[Option<&'a Tile<T>>; 3]; 3],
-}
-
-impl<'a, T: Clone> Neighborhood<'a, T> {
-    pub fn new(
-        tile_map: &'a BTreeMap<Point<i64>, impl Borrow<Tile<T>>>,
-        center_tile_index: Point<i64>,
-    ) -> Self {
-        let top_left_index = center_tile_index - Point(1, 1);
-
-        let mut tiles = [[None; 3]; 3];
-        for y in 0..3 {
-            for x in 0..3 {
-                let offset_tile_index =
-                    Point(top_left_index.x + x as i64, top_left_index.y + y as i64);
-                tiles[y][x] = tile_map.get(&offset_tile_index).map(|tile| tile.borrow());
-            }
-        }
-        Self {
-            top_left_index,
-            tiles,
-        }
-    }
-
-    pub fn center_tile_index(&self) -> Point<i64> {
-        self.top_left_index + Point(1, 1)
-    }
-
-    #[inline(never)]
-    pub fn from_pixmap(pixmap: &'a Pixmap<T>, center_tile_index: Point<i64>) -> Self {
-        Self::new(&pixmap.tiles, center_tile_index)
-    }
-
-    /// Panics if index is out of bounds
-    #[inline(never)]
-    pub fn get(&self, index: impl FieldIndex) -> Option<&'a T> {
-        let (tile_index, pixel_index) = split_index(index);
-        let offset_tile_index: Point<usize> =
-            (tile_index - self.top_left_index).cwise_try_into().unwrap();
-        let tile = self.tiles[offset_tile_index.y][offset_tile_index.x]?;
-        tile.get(pixel_index)
-    }
-
-    /// Panics if left side None
-    pub fn side_neighbors(&self, side: Side) -> Option<SideNeighbors<&'a T>> {
-        let left = self.get(side.left_pixel)?;
-        let right = self.get(side.right_pixel());
-        Some(SideNeighbors { left, right })
-    }
-
-    #[inline(never)]
-    pub fn for_each_side_neighbors(&self, mut f: impl FnMut(Side, SideNeighbors<&'a T>)) {
-        let center_tile = self.tiles[1][1].unwrap();
-
-        for (sub_index, value) in center_tile.iter() {
-            let pixel = combine_indices(self.center_tile_index(), sub_index);
-
-            for side in pixel.sides_ccw() {
-                let right = self.get(side.right_pixel());
-                let neighbors = SideNeighbors { left: value, right };
-                f(side, neighbors);
-            }
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -505,43 +437,6 @@ impl<T: Clone> Pixmap<T> {
         field
     }
 
-    // /// Iterate tile with their neighborhoods
-    // pub fn iter_neighborhoods(&self) -> impl IteratorPlus<Neighborhood<T>> {
-    //     Neighborhood::iter_neighborhoods(&self.tiles)
-    // }
-    //
-    // /// Iterate over all sides of set pixels with their left and right neighbors.
-    // pub fn iter_side_neighbors(&self) -> impl Iterator<Item = SideNeighbors<&T>> {
-    //     Neighborhood::iter_side_neighbors(&self.tiles)
-    // }
-    //
-    // pub fn iter_tile_interface_sides(&self) -> impl Iterator<Item = SideNeighbors<&T>> {
-    //     Neighborhood::iter_tile_interface_sides(&self.tiles)
-    // }
-
-    /// Iterate tile with their neighborhoods
-    pub fn iter_neighborhoods(&self) -> impl IteratorPlus<Neighborhood<T>> {
-        self.tiles
-            .keys()
-            .map(|&tile_index| Neighborhood::from_pixmap(self, tile_index))
-    }
-
-    #[inline(never)]
-    pub fn for_each_side_neighbors(&self, mut f: impl FnMut(Side, SideNeighbors<&T>)) {
-        for neighborhood in self.iter_neighborhoods() {
-            neighborhood.for_each_side_neighbors(&mut f);
-        }
-    }
-
-    // TODO:REMOVE
-    // pub fn iter_tile_interface_sides(&self) -> impl Iterator<Item = SideNeighbors<&T>> {
-    //     self.tiles.keys().flat_map(|&tile_index| {
-    //         let neighborhood = Neighborhood::from_pixmap(self, tile_index);
-    //         // TODO: iter_tile_boundary_sides uses a global variable therefore atomic compare
-    //         iter_tile_boundary_sides(tile_index).map(move |side| neighborhood.side_neighbors(side))
-    //     })
-    // }
-
     pub fn translated(&self, offset: Point<i64>) -> Self {
         let mut result = Self::new();
         for (&tile_index, tile) in &self.tiles {
@@ -681,4 +576,211 @@ impl From<RgbaField> for MaterialMap {
     fn from(field: RgbaField) -> Self {
         Self::from(&field)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TileSideClass {
+    Interior,
+    Boundary,
+    All,
+}
+
+impl TileSideClass {
+    fn includes(self, tile_index_offset: Point<i64>) -> bool {
+        match self {
+            Self::Interior => tile_index_offset == Point(0, 0),
+            Self::Boundary => tile_index_offset != Point(0, 0),
+            Self::All => true,
+        }
+    }
+}
+
+pub struct TileSidesForEach {
+    /// Maps tile offset to a vec of (side, left index, right index)
+    sides: HashMap<Point<i64>, Vec<(Side, usize, usize)>>,
+}
+
+impl TileSidesForEach {
+    #[inline(never)]
+    pub fn new() -> Self {
+        let tile_rect = tile_rect(Point(0, 0));
+
+        let mut sides = HashMap::default();
+        for side in iter_sides_in_rect(tile_rect) {
+            let (left_tile_index, left_sub_index) = split_index(side.left_pixel);
+            assert_eq!(left_tile_index, Point(0, 0));
+            let left_linear_index = field_linear_index(tile_rect, left_sub_index).unwrap();
+
+            let (right_tile_index, right_sub_index) = split_index(side.right_pixel());
+            let right_linear_index = field_linear_index(tile_rect, right_sub_index).unwrap();
+
+            let side_entry = (side, left_linear_index, right_linear_index);
+            sides
+                .entry(right_tile_index)
+                .or_insert(Vec::new())
+                .push(side_entry);
+        }
+
+        Self { sides }
+    }
+
+    #[inline(never)]
+    pub fn cached() -> &'static Self {
+        static CELL: LazyLock<TileSidesForEach> = LazyLock::new(TileSidesForEach::new);
+        CELL.deref()
+    }
+
+    #[inline(never)]
+    pub fn for_each<T: Copy>(
+        &self,
+        map: &Pixmap<T>,
+        side_class: TileSideClass,
+        mut f: impl FnMut(Side, T, Option<T>),
+    ) {
+        for &tile_index in map.tiles.keys() {
+            self.for_each_generic(
+                |tile_index| map.get_tile(tile_index),
+                |tile, linear_index| tile.field.as_slice()[linear_index],
+                side_class,
+                tile_index,
+                &mut f,
+            );
+        }
+    }
+
+    fn option_pair_lift<Fst, Snd>(first: Option<Fst>, second: Option<Snd>) -> Option<(Fst, Snd)> {
+        match (first, second) {
+            (Some(fst), Some(snd)) => Some((fst, snd)),
+            (None, None) => None,
+            _ => panic!("Not allowed"),
+        }
+    }
+
+    /// For each over two Pixmaps in parallel
+    pub fn for_each_zip<Fst: Copy, Snd: Copy>(
+        &self,
+        first_map: &Pixmap<Fst>,
+        second_map: &Pixmap<Snd>,
+        side_class: TileSideClass,
+        mut f: impl FnMut(Side, (Fst, Snd), Option<(Fst, Snd)>),
+    ) {
+        for &tile_index in first_map.tiles.keys() {
+            self.for_each_generic(
+                |tile_index| {
+                    Self::option_pair_lift(
+                        first_map.get_tile(tile_index),
+                        second_map.get_tile(tile_index),
+                    )
+                },
+                |(first_tile, second_tile), linear_index| {
+                    Self::option_pair_lift(
+                        first_tile.get_linear(linear_index).copied(),
+                        second_tile.get_linear(linear_index).copied(),
+                    )
+                },
+                side_class,
+                tile_index,
+                &mut f,
+            );
+        }
+    }
+
+    /// Generic for each tile side function, Tile could be &Tile<T> or (&Tile<T>, &Tile<S>) for
+    /// example.
+    pub fn for_each_generic<Tile: Copy, Color: Copy>(
+        &self,
+        mut get_tile: impl FnMut(Point<i64>) -> Option<Tile>,
+        mut get_pixel: impl FnMut(Tile, usize) -> Option<Color>,
+        side_class: TileSideClass,
+        tile_index: Point<i64>,
+        mut f: impl FnMut(Side, Color, Option<Color>),
+    ) {
+        let Some(tile) = get_tile(tile_index) else {
+            return;
+        };
+
+        for (&tile_index_offset, sides) in &self.sides {
+            if !side_class.includes(tile_index_offset) {
+                continue;
+            }
+
+            if let Some(neighbor_tile) = get_tile(tile_index + tile_index_offset) {
+                for (side, left_linear_index, right_linear_index) in sides {
+                    if let Some(left) = get_pixel(tile, *left_linear_index) {
+                        let right = get_pixel(neighbor_tile, *right_linear_index);
+                        f(*side + tile_index * TILE_SIZE, left, right);
+                    }
+                }
+            } else {
+                for (side, left_linear_index, _) in sides {
+                    if let Some(left) = get_pixel(tile, *left_linear_index) {
+                        f(*side + tile_index * TILE_SIZE, left, None);
+                    }
+                }
+            }
+        }
+    }
+
+    // #[inline(never)]
+    // pub fn for_each_in_tile<T>(
+    //     &self,
+    //     map: &Pixmap<T>,
+    //     tile_index: Point<i64>,
+    //     f: impl FnMut(Side, &T, Option<&T>),
+    // ) {
+    //     self.for_each_gen(
+    //         |tile_index| map.get_tile(tile_index),
+    //         |tile, linear_index| tile.field.as_slice()[linear_index],
+    //         tile_index,
+    //         f,
+    //     );
+    //     // let Some(tile) = map.get_tile(tile_index) else {
+    //     //     return;
+    //     // };
+    //     //
+    //     // for (&tile_index_offset, sides) in &self.sides {
+    //     //     if let Some(neighbor_tile) = map.get_tile(tile_index + tile_index_offset) {
+    //     //         for (side, left_linear_index, right_linear_index) in sides {
+    //     //             if let Some(left) = &tile.field.as_slice()[*left_linear_index] {
+    //     //                 let right = &neighbor_tile.field.as_slice()[*right_linear_index];
+    //     //                 f(*side + tile_index * TILE_SIZE, left, right.as_ref());
+    //     //             }
+    //     //         }
+    //     //     } else {
+    //     //         for (side, left_linear_index, _) in sides {
+    //     //             if let Some(left) = &tile.field.as_slice()[*left_linear_index] {
+    //     //                 f(*side + tile_index * TILE_SIZE, left, None);
+    //     //             }
+    //     //         }
+    //     //     }
+    //     // }
+    // }
+
+    // pub fn iter_tile<'a, T: Copy>(
+    //     &'a self,
+    //     map: &'a Pixmap<T>,
+    //     tile_index: Point<i64>,
+    // ) -> impl Iterator<Item = (Side, T, Option<T>)> + 'a {
+    //     map.get_tile(tile_index).into_iter().flat_map(move |tile| {
+    //         self.sides
+    //             .iter()
+    //             .flat_map(move |(&tile_index_offset, sides)| {
+    //                 let neighbor_tile = map.get_tile(tile_index + tile_index_offset);
+    //
+    //                 sides
+    //                     .iter()
+    //                     .filter_map(move |(side, left_linear_index, right_linear_index)| {
+    //                         // Put into function?
+    //                         if let Some(left) = tile.field.as_slice()[*left_linear_index] {
+    //                             let right = neighbor_tile.and_then(|neighbor_tile| {
+    //                                 neighbor_tile.field.as_slice()[*right_linear_index]
+    //                             });
+    //                             Some((*side + tile_index * TILE_SIZE, left, right))
+    //                         } else {
+    //                             None
+    //                         }
+    //                     })
+    //             })
+    //     })
+    // }
 }
