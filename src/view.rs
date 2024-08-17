@@ -181,8 +181,11 @@ impl Selection {
         self
     }
 
+    pub fn material_map(&self) -> &MaterialMap {
+        &self.material_map
+    }
+
     pub fn blit(&self, target: &mut MaterialMap) {
-        // TODO:SPEEDUP: Should be done in MaterialMap
         target.blit_over(&self.material_map);
     }
 }
@@ -299,7 +302,12 @@ impl View {
 
             // set selection by cutting the selected rectangle out of the world
             let selection_rect = op.rect();
-            let selection = self.world.material_map().sub_rect(selection_rect);
+            // Transparent pixels are not included in selection
+            let selection = self
+                .world
+                .material_map()
+                .sub_rect(selection_rect)
+                .without(&Material::TRANSPARENT);
             self.world.fill_rect(selection_rect, Material::TRANSPARENT);
             self.selection = Some(Selection::new(selection));
             return UiState::Idle;

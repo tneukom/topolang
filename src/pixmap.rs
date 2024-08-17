@@ -109,6 +109,7 @@ impl<T: Clone> Tile<T> {
             .filter_map(|(index, opt_value)| opt_value.as_ref().map(|_| index))
     }
 
+    /// Only set value for a pixel if pred(self value at pixel)
     pub fn blit_if(&mut self, other: &Self, mut pred: impl FnMut(&Option<T>) -> bool) {
         for (self_value, other_value) in self.field.iter_mut().zip(other.field.iter()) {
             if other_value.is_some() && pred(self_value) {
@@ -358,6 +359,7 @@ impl<T: Clone> Pixmap<T> {
         Pixmap { tiles }
     }
 
+    /// Only set value for a pixel if pred(self value at pixel)
     pub fn blit_if(&mut self, other: &Self, mut pred: impl FnMut(&Option<T>) -> bool) {
         for (&other_tile_index, other_tile) in &other.tiles {
             self.get_tile_mut(other_tile_index)
