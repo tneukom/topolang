@@ -2,7 +2,6 @@ use crate::{
     material::Material,
     math::{arrow::Arrow, point::Point, rect::Rect},
     pixmap::MaterialMap,
-    utils::IteratorPlus,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -49,7 +48,10 @@ impl Brush {
 
     /// Slow but flexible line drawing, only use for small lines!
     /// FIXME: Find something faster than iterating over bounding box
-    pub fn points_within_radius(line: Arrow<f64>, radius: f64) -> impl IteratorPlus<Point<i64>> {
+    pub fn points_within_radius(
+        line: Arrow<f64>,
+        radius: f64,
+    ) -> impl Iterator<Item = Point<i64>> + Clone {
         let bbox = line.bounds().padded(radius.ceil());
         let low = bbox.low().floor().cwise_cast::<i64>();
         let high = bbox.high().ceil().cwise_cast::<i64>();

@@ -10,7 +10,6 @@ use crate::{
         rgba8::Rgba8,
     },
     topology::Border,
-    utils::IteratorPlus,
 };
 use ahash::HashMap;
 use std::{
@@ -40,7 +39,7 @@ impl<T> Tile<T> {
         Self { field }
     }
 
-    pub fn iter<'a>(&'a self) -> impl IteratorPlus<(Point<i64>, &T)> + 'a {
+    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Point<i64>, &T)> + Clone + 'a {
         self.field
             .enumerate()
             .filter_map(|(index, opt_value)| opt_value.as_ref().map(|value| (index, value)))
@@ -105,7 +104,7 @@ impl<T: Clone> Tile<T> {
         self.filter_map(|index, value| pred(index, value).then(|| value.clone()))
     }
 
-    pub fn keys<'a>(&'a self) -> impl IteratorPlus<Point<i64>> + 'a {
+    pub fn keys<'a>(&'a self) -> impl Iterator<Item = Point<i64>> + Clone + 'a {
         self.field
             .enumerate()
             .filter_map(|(index, opt_value)| opt_value.as_ref().map(|_| index))
@@ -143,16 +142,16 @@ pub fn tile_rect(tile_index: Point<i64>) -> Rect<i64> {
     TILE_BOUNDS + tile_index * TILE_SIZE
 }
 
-pub fn iter_tile_pixels(tile_index: Point<i64>) -> impl IteratorPlus<Pixel> {
+pub fn iter_tile_pixels(tile_index: Point<i64>) -> impl Iterator<Item = Pixel> + Clone {
     tile_rect(tile_index).iter_half_open()
 }
 
-pub fn iter_zero_tile_pixels() -> impl IteratorPlus<Pixel> {
+pub fn iter_zero_tile_pixels() -> impl Iterator<Item = Pixel> + Clone {
     TILE_BOUNDS.iter_half_open()
 }
 
 /// Contains interior and boundary sides
-pub fn iter_sides_in_rect(rect: Rect<i64>) -> impl IteratorPlus<Side> {
+pub fn iter_sides_in_rect(rect: Rect<i64>) -> impl Iterator<Item = Side> + Clone {
     let pixel_iter = rect.iter_half_open();
     pixel_iter.flat_map(|pixel| pixel.sides_ccw().into_iter())
 }
@@ -167,7 +166,7 @@ pub fn zero_tile_boundary_sides() -> &'static [Side] {
 }
 
 /// Contains only boundary sides
-pub fn iter_tile_boundary_sides(tile_index: Point<i64>) -> impl IteratorPlus<Side> {
+pub fn iter_tile_boundary_sides(tile_index: Point<i64>) -> impl Iterator<Item = Side> + Clone {
     let zero_tile_sides = zero_tile_boundary_sides();
     let offset = tile_index * TILE_SIZE;
     zero_tile_sides
@@ -236,7 +235,7 @@ impl<T> Pixmap<T> {
         self.iter().count()
     }
 
-    pub fn iter(&self) -> impl IteratorPlus<(Point<i64>, &T)> {
+    pub fn iter(&self) -> impl Iterator<Item = (Point<i64>, &T)> + Clone {
         self.tiles.iter().flat_map(|(&tile_index, tile)| {
             tile.iter().map(move |(offset_index, value)| {
                 (combine_indices(tile_index, offset_index), value)
@@ -248,7 +247,7 @@ impl<T> Pixmap<T> {
     pub fn iter_cover<'a>(
         &'a self,
         cover: &'a AreaCover,
-    ) -> impl IteratorPlus<(Point<i64>, &T)> + 'a {
+    ) -> impl Iterator<Item = (Point<i64>, &T)> + Clone + 'a {
         let tiles = cover
             .iter_tiles()
             .filter_map(|tile_index| self.tiles.get(&tile_index).map(|tile| (tile_index, tile)));
@@ -271,11 +270,11 @@ impl<T> Pixmap<T> {
         })
     }
 
-    pub fn keys(&self) -> impl IteratorPlus<Point<i64>> + '_ {
+    pub fn keys(&self) -> impl Iterator<Item = Point<i64>> + Clone + '_ {
         self.iter().map(|(index, _)| index)
     }
 
-    pub fn values(&self) -> impl IteratorPlus<&T> {
+    pub fn values(&self) -> impl Iterator<Item = &T> + Clone {
         self.iter().map(|(_, value)| value)
     }
 

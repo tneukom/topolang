@@ -18,7 +18,7 @@ use crate::{
     },
     pixmap::{MaterialMap, Pixmap},
     regions::{pixmap_regions, region_boundaries, split_boundary_into_cycles},
-    utils::{IteratorPlus, UndirectedEdge, UndirectedGraph},
+    utils::{UndirectedEdge, UndirectedGraph},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -197,14 +197,14 @@ pub struct Region {
 }
 
 impl Region {
-    pub fn iter_seams(&self) -> impl IteratorPlus<&Seam> {
+    pub fn iter_seams(&self) -> impl Iterator<Item = &Seam> + Clone {
         self.boundary
             .borders
             .iter()
             .flat_map(|border| border.seams.iter())
     }
 
-    pub fn iter_boundary_sides(&self) -> impl IteratorPlus<Side> + '_ {
+    pub fn iter_boundary_sides(&self) -> impl Iterator<Item = Side> + Clone + '_ {
         self.boundary
             .borders
             .iter()
@@ -212,7 +212,7 @@ impl Region {
     }
 
     /// Pixels touching border on the left side, each pixel might appear more than once.
-    pub fn interior_padding<'a>(&'a self) -> impl IteratorPlus<Pixel> + 'a {
+    pub fn interior_padding<'a>(&'a self) -> impl Iterator<Item = Pixel> + Clone + 'a {
         self.iter_boundary_sides().map(|side| side.left_pixel())
     }
 
@@ -386,13 +386,13 @@ impl Topology {
         Self::new(self.material_map.translated(offset))
     }
 
-    pub fn iter_borders(&self) -> impl IteratorPlus<&Border> {
+    pub fn iter_borders(&self) -> impl Iterator<Item = &Border> + Clone {
         self.regions
             .values()
             .flat_map(|region| region.boundary.borders.iter())
     }
 
-    pub fn iter_borders_with_key(&self) -> impl IteratorPlus<(BorderKey, &Border)> {
+    pub fn iter_borders_with_key(&self) -> impl Iterator<Item = (BorderKey, &Border)> + Clone {
         self.regions.iter().flat_map(|(&region_key, region)| {
             region
                 .boundary
@@ -403,19 +403,19 @@ impl Topology {
         })
     }
 
-    pub fn iter_seams(&self) -> impl IteratorPlus<&Seam> {
+    pub fn iter_seams(&self) -> impl Iterator<Item = &Seam> + Clone {
         self.iter_borders().flat_map(|border| border.seams.iter())
     }
 
-    pub fn iter_seam_indices(&self) -> impl IteratorPlus<&SeamIndex> {
+    pub fn iter_seam_indices(&self) -> impl Iterator<Item = &SeamIndex> + Clone {
         self.seam_indices.values()
     }
 
-    pub fn iter_region_keys<'a>(&'a self) -> impl IteratorPlus<&RegionKey> + 'a {
+    pub fn iter_region_keys<'a>(&'a self) -> impl Iterator<Item = &RegionKey> + Clone + 'a {
         self.regions.keys()
     }
 
-    pub fn iter_region_values<'a>(&'a self) -> impl IteratorPlus<&Region> + 'a {
+    pub fn iter_region_values<'a>(&'a self) -> impl Iterator<Item = &Region> + Clone + 'a {
         self.regions.values()
     }
 
@@ -475,7 +475,11 @@ impl Topology {
 
     /// Seam between left and right region
     /// Component index errors cause panic
-    pub fn seams_between(&self, left: RegionKey, right: RegionKey) -> impl IteratorPlus<&Seam> {
+    pub fn seams_between(
+        &self,
+        left: RegionKey,
+        right: RegionKey,
+    ) -> impl Iterator<Item = &Seam> + Clone {
         let left_comp = &self.regions[&left];
         left_comp
             .iter_seams()
@@ -502,7 +506,7 @@ impl Topology {
     pub fn iter_region_interior<'a>(
         &'a self,
         region_key: RegionKey,
-    ) -> impl IteratorPlus<Pixel> + 'a {
+    ) -> impl Iterator<Item = Pixel> + Clone + 'a {
         let region = &self.regions[&region_key];
         self.region_map
             .iter_cover(&region.cover)

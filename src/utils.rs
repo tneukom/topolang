@@ -107,22 +107,6 @@ impl<T: Ord> UndirectedEdge<T> {
 
 pub type UndirectedGraph<T> = BTreeSet<UndirectedEdge<T>>;
 
-pub trait IteratorPlus<Item>
-where
-    Self: Iterator<Item = Item>,
-    // Self: IntoIterator<Item = Item, IntoIter = Self>,
-    Self: Clone,
-{
-}
-
-impl<Iter, Item> IteratorPlus<Item> for Iter
-where
-    Self: Iterator<Item = Item>,
-    // Self: IntoIterator<Item = Item, IntoIter = Self>,
-    Self: Clone,
-{
-}
-
 pub fn unix_timestamp() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

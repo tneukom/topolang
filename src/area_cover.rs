@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use crate::{math::point::Point, utils::IteratorPlus};
+use crate::math::point::Point;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AreaCover {
@@ -15,7 +15,7 @@ impl AreaCover {
         }
     }
 
-    pub fn iter_tiles<'a>(&'a self) -> impl IteratorPlus<Point<i64>> + 'a {
+    pub fn iter_tiles<'a>(&'a self) -> impl Iterator<Item = Point<i64>> + Clone + 'a {
         self.tiles.iter().copied()
     }
 

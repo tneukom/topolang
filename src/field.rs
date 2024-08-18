@@ -7,7 +7,6 @@ use std::{
 use crate::{
     material::Material,
     math::{point::Point, rect::Rect, rgba8::Rgba8},
-    utils::IteratorPlus,
 };
 use image::{Rgba, RgbaImage};
 
@@ -68,11 +67,11 @@ impl<T> Field<T> {
         (self.bounds.width() * self.bounds().height()) as usize
     }
 
-    pub fn indices(&self) -> impl IteratorPlus<Point<i64>> {
+    pub fn indices(&self) -> impl Iterator<Item = Point<i64>> + Clone {
         self.bounds.iter_half_open()
     }
 
-    pub fn enumerate(&self) -> impl IteratorPlus<(Point<i64>, &T)> {
+    pub fn enumerate(&self) -> impl Iterator<Item = (Point<i64>, &T)> + Clone {
         self.indices().zip(self.iter())
     }
 
@@ -88,11 +87,11 @@ impl<T> Field<T> {
         field_linear_index(self.bounds, index.point())
     }
 
-    pub fn iter(&self) -> impl IteratorPlus<&T> {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = &T> + Clone {
         self.elems.iter()
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = &mut T> {
         self.elems.iter_mut()
     }
 

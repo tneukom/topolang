@@ -3,10 +3,7 @@ use std::{
     ops::{Add, Mul, Range, RangeInclusive, Sub},
 };
 
-use crate::{
-    math::generic::{Cast, ConstZero, Num},
-    utils::IteratorPlus,
-};
+use crate::math::generic::{Cast, ConstZero, Num};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Interval<T> {
@@ -202,12 +199,12 @@ where
     RangeInclusive<T>: Clone + Iterator<Item = T>,
 {
     /// All whole number points in [low, high)
-    pub fn iter_half_open(self) -> impl IteratorPlus<T> {
+    pub fn iter_half_open(self) -> impl Iterator<Item = T> + Clone {
         self.low..self.high
     }
 
     /// All whole number points in [low, high]
-    pub fn iter_closed(self) -> impl IteratorPlus<T> {
+    pub fn iter_closed(self) -> impl Iterator<Item = T> + Clone {
         self.low..=self.high
     }
 }

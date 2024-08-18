@@ -6,7 +6,7 @@ use crate::{
         interval::Interval,
         point::Point,
     },
-    utils::{IteratorPlus, ReflectEnum},
+    utils::ReflectEnum,
 };
 use itertools::Itertools;
 use std::{
@@ -679,14 +679,14 @@ where
     RangeInclusive<T>: Clone + Iterator<Item = T>,
 {
     /// All whole number points in [x.low, x.high) x [y.low, y.high)
-    pub fn iter_half_open(self) -> impl IteratorPlus<Point<T>> {
+    pub fn iter_half_open(self) -> impl Iterator<Item = Point<T>> + Clone {
         (self.y.low..self.y.high)
             .cartesian_product(self.x.low..self.x.high)
             .map(|(y, x)| Point::new(x, y))
     }
 
     /// All whole number points in [x.low, x.high] x [y.low, y.high]
-    pub fn iter_closed(self) -> impl IteratorPlus<Point<T>> {
+    pub fn iter_closed(self) -> impl Iterator<Item = Point<T>> + Clone {
         (self.y.low..=self.y.high)
             .cartesian_product(self.x.low..=self.x.high)
             .map(|(y, x)| Point::new(x, y))

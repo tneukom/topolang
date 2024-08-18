@@ -1,8 +1,5 @@
 use super::{interval::Interval, point::Point};
-use crate::{
-    math::generic::{CwiseMul, Num},
-    utils::IteratorPlus,
-};
+use crate::math::generic::{CwiseMul, Num};
 use itertools::Either;
 use std::ops::{Add, Mul, Sub};
 
@@ -54,7 +51,7 @@ impl<T: Num> Span<T> {
 impl Span<i64> {
     /// iterator that yields start, start + 1, ..., stop - 1 if stop > start
     /// and start, start - 1, ..., stop + 1
-    fn steps_excluding_stop(self) -> impl IteratorPlus<i64> {
+    fn steps_excluding_stop(self) -> impl Iterator<Item = i64> + Clone {
         if self.start < self.stop {
             Either::Left(self.start..self.stop)
         } else {
@@ -268,7 +265,7 @@ where
 
 impl AxisArrow<i64> {
     /// Includes start but not stop
-    pub fn steps_excluding_stop(self) -> impl IteratorPlus<Point<i64>> {
+    pub fn steps_excluding_stop(self) -> impl Iterator<Item = Point<i64>> + Clone {
         match self {
             Self::Vertical { x, y } => {
                 Either::Left(y.steps_excluding_stop().map(move |y| Point::new(x, y)))
