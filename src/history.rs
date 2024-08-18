@@ -12,10 +12,18 @@ pub enum SnapshotCause {
     Erase,
     Fill,
     Step,
+    Resize,
 }
 
 impl SnapshotCause {
-    pub const ALL: [Self; 5] = [Self::Root, Self::Brush, Self::Erase, Self::Fill, Self::Step];
+    pub const ALL: [Self; 6] = [
+        Self::Root,
+        Self::Brush,
+        Self::Erase,
+        Self::Fill,
+        Self::Step,
+        Self::Resize,
+    ];
 }
 
 impl ReflectEnum for SnapshotCause {
@@ -30,6 +38,7 @@ impl ReflectEnum for SnapshotCause {
             Self::Erase => "Erase",
             Self::Fill => "Fill",
             Self::Step => "Step",
+            Self::Resize => "Resize",
         }
     }
 }

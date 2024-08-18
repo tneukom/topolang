@@ -579,9 +579,14 @@ impl EguiApp {
                     .speed(2.0),
             );
 
+            let bounds = Rect::low_size([0, 0], self.new_size);
+
             if ui.button("New").clicked() {
-                let bounds = Rect::low_size([0, 0], self.new_size);
                 self.view = View::empty(bounds);
+            }
+
+            if ui.button("Resize").clicked() {
+                self.view.resize(bounds);
             }
         });
 

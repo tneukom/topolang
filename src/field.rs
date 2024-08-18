@@ -4,13 +4,12 @@ use std::{
     path::Path,
 };
 
-use image::{Rgba, RgbaImage};
-
 use crate::{
     material::Material,
     math::{point::Point, rect::Rect, rgba8::Rgba8},
     utils::IteratorPlus,
 };
+use image::{Rgba, RgbaImage};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Field<T> {
@@ -74,8 +73,7 @@ impl<T> Field<T> {
     }
 
     pub fn enumerate(&self) -> impl IteratorPlus<(Point<i64>, &T)> {
-        // FIXME: Should not require index check
-        self.indices().map(|index| (index, &self[index]))
+        self.indices().zip(self.iter())
     }
 
     pub fn enumerate_mut(&mut self) -> impl Iterator<Item = (Point<i64>, &mut T)> {
@@ -90,11 +88,11 @@ impl<T> Field<T> {
         field_linear_index(self.bounds, index.point())
     }
 
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = &T> {
+    pub fn iter(&self) -> impl IteratorPlus<&T> {
         self.elems.iter()
     }
 
-    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = &mut T> {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         self.elems.iter_mut()
     }
 
@@ -130,6 +128,18 @@ impl<T> Field<T> {
 
     pub fn map<S>(&self, f: impl FnMut(&T) -> S) -> Field<S> {
         let elems = self.elems.iter().map(f).collect();
+        Field {
+            bounds: self.bounds,
+            elems,
+        }
+    }
+
+    // TODO: Do we need map_with_index and map?
+    pub fn map_with_index<S>(&self, mut f: impl FnMut(Point<i64>, &T) -> S) -> Field<S> {
+        let elems = self
+            .enumerate()
+            .map(|(index, value)| f(index, value))
+            .collect();
         Field {
             bounds: self.bounds,
             elems,

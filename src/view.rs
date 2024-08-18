@@ -304,7 +304,7 @@ impl View {
             let selection = self
                 .world
                 .material_map()
-                .sub_rect(selection_rect)
+                .clip_rect(selection_rect)
                 .without(&Material::TRANSPARENT);
             self.world.fill_rect(selection_rect, Material::TRANSPARENT);
             self.selection = Some(Selection::new(selection));
@@ -429,9 +429,9 @@ impl View {
             self.cancel_selection();
         }
 
-        // if input.delete_key.is_down {
-        //     self.delete_selection();
-        // }
+        if input.delete_key.is_down {
+            self.selection = None;
+        }
 
         let ui_state = self.ui_state.clone();
         self.ui_state = match ui_state {
@@ -480,5 +480,13 @@ impl View {
         let world_mouse = input.world_mouse.floor().cwise_cast();
         let selection = Selection::new(material_map).with_center_at(world_mouse);
         self.selection = Some(selection);
+    }
+
+    pub fn resize(&mut self, bounds: Rect<i64>) {
+        self.history
+            .add_snapshot(self.world.material_map().clone(), SnapshotCause::Resize);
+        self.world.mut_material_map(|material_map| {
+            *material_map = material_map.clip_rect(bounds);
+        });
     }
 }

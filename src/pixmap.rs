@@ -94,13 +94,15 @@ impl<T: Clone> Tile<T> {
     }
 
     /// Does not drop tiles that become all None
-    pub fn filter_map<S>(&self, mut f: impl FnMut(&T) -> Option<S>) -> Tile<S> {
-        let field = self.field.map(|value| value.as_ref().and_then(&mut f));
+    pub fn filter_map<S>(&self, mut f: impl FnMut(Point<i64>, &T) -> Option<S>) -> Tile<S> {
+        let field = self
+            .field
+            .map_with_index(|index, value| value.as_ref().and_then(|value| f(index, value)));
         Tile { field }
     }
 
-    pub fn filter(&self, mut pred: impl FnMut(&T) -> bool) -> Self {
-        self.filter_map(|value| pred(value).then(|| value.clone()))
+    pub fn filter(&self, mut pred: impl FnMut(Point<i64>, &T) -> bool) -> Self {
+        self.filter_map(|index, value| pred(index, value).then(|| value.clone()))
     }
 
     pub fn keys<'a>(&'a self) -> impl IteratorPlus<Point<i64>> + 'a {
@@ -242,7 +244,7 @@ impl<T> Pixmap<T> {
         })
     }
 
-    /// Iterate all entries contained in `cover`
+    /// Iterate all (pixel, &value) contained in `cover`
     pub fn iter_cover<'a>(
         &'a self,
         cover: &'a AreaCover,
@@ -331,20 +333,23 @@ impl<T: Clone> Pixmap<T> {
     }
 
     /// Does not drop tiles that become all None
-    pub fn filter_map<S>(&self, mut f: impl FnMut(&T) -> Option<S>) -> Pixmap<S> {
+    pub fn filter_map<S>(&self, mut f: impl FnMut(Point<i64>, &T) -> Option<S>) -> Pixmap<S> {
         let tiles = self
             .tiles
             .iter()
             .map(|(&tile_index, tile)| {
-                let tile = tile.filter_map(&mut f);
+                let tile = tile.filter_map(|sub_index, value| {
+                    let pixel_index = combine_indices(tile_index, sub_index);
+                    f(pixel_index, value)
+                });
                 (tile_index, Rc::new(tile))
             })
             .collect();
         Pixmap { tiles }
     }
 
-    pub fn filter(&self, mut pred: impl FnMut(&T) -> bool) -> Self {
-        self.filter_map(|value| pred(value).then(|| value.clone()))
+    pub fn filter(&self, mut pred: impl FnMut(Point<i64>, &T) -> bool) -> Self {
+        self.filter_map(|index, value| pred(index, value).then(|| value.clone()))
     }
 
     pub fn into_map<S>(self, mut f: impl FnMut(T) -> S) -> Pixmap<S> {
@@ -462,19 +467,30 @@ impl<T: Clone> Pixmap<T> {
     }
 
     /// Extract the pixel in the interior of the given rectangle.
-    pub fn sub_rect(&self, rect: Rect<i64>) -> Self {
-        // TODO:SPEEDUP: Per tile
-        // let result = Self::new();
-        // for tile_index in tile_cover(rect).iter_half_open() {
-        //     if let Some(tile) = self.tiles.get(&tile_index) {
-        //         let sub_tile = tile.filter_map()
-        //         result.tiles.set
-        //     }
-        // }
+    pub fn clip_rect(&self, clip_rect: Rect<i64>) -> Self {
+        let mut tiles = BTreeMap::new();
 
-        // TODO:SPEEDUP: Could be done much faster especially for large rectangle that contain
-        //   few pixels from self.
-        self.sub(rect.iter_half_open())
+        for cover_tile_index in tile_cover(clip_rect).iter_half_open() {
+            let Some(rc_tile) = self.tiles.get(&cover_tile_index) else {
+                continue;
+            };
+
+            let cover_tile_rect = tile_rect(cover_tile_index);
+
+            // If the cover_tile_rect lies fully in clip_rect we can copy the whole tile otherwise
+            // we need to clip it.
+            if clip_rect.contains_rect(cover_tile_rect) {
+                tiles.insert(cover_tile_index, rc_tile.clone());
+            } else {
+                let clipped_tile = rc_tile.filter(|sub_index, _| {
+                    let pixel_index = combine_indices(cover_tile_index, sub_index);
+                    clip_rect.half_open_contains(pixel_index)
+                });
+                tiles.insert(cover_tile_index, Rc::new(clipped_tile));
+            }
+        }
+
+        Self { tiles }
     }
 
     pub fn extract(&mut self, pixels: impl IntoIterator<Item = Pixel>) -> Self {
@@ -503,7 +519,7 @@ impl<T: Clone> Pixmap<T> {
 impl<T: Eq + Clone> Pixmap<T> {
     /// TODO: Rename to something more generic, like without_value, drop_value, reject_value
     pub fn without(&self, removed: &T) -> Self {
-        self.filter(|value| value != removed)
+        self.filter(|_, value| value != removed)
     }
 }
 

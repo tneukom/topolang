@@ -107,10 +107,19 @@ impl<T: Ord> UndirectedEdge<T> {
 
 pub type UndirectedGraph<T> = BTreeSet<UndirectedEdge<T>>;
 
-pub trait IteratorPlus<Item>: Iterator<Item = Item> + IntoIterator<Item = Item> + Clone {}
+pub trait IteratorPlus<Item>
+where
+    Self: Iterator<Item = Item>,
+    // Self: IntoIterator<Item = Item, IntoIter = Self>,
+    Self: Clone,
+{
+}
 
-impl<I, Item> IteratorPlus<Item> for I where
-    I: Iterator<Item = Item> + IntoIterator<Item = Item> + Clone
+impl<Iter, Item> IteratorPlus<Item> for Iter
+where
+    Self: Iterator<Item = Item>,
+    // Self: IntoIterator<Item = Item, IntoIter = Self>,
+    Self: Clone,
 {
 }
 
