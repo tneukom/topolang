@@ -283,9 +283,7 @@ impl View {
         op.world_mouse = input.world_mouse;
 
         self.world.mut_material_map(|material_map| {
-            for (&index, &material) in &change {
-                material_map.set(index, material);
-            }
+            material_map.blit_over(&change);
         });
 
         UiState::Brushing(op)
