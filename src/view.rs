@@ -221,8 +221,8 @@ impl View {
         self.camera = Camera::fit_world_into_view(world_bounds.cwise_cast(), view_rect).round();
     }
 
-    pub fn empty() -> View {
-        let field = Field::filled(Rect::low_size([0, 0], [512, 512]), Material::TRANSPARENT);
+    pub fn empty(bounds: Rect<i64>) -> View {
+        let field = Field::filled(bounds, Material::TRANSPARENT);
         let material_map = Pixmap::from_field(&field);
         let world = World::from_material_map(material_map);
         Self::new(world)

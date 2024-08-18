@@ -185,6 +185,7 @@ pub struct EguiApp {
 
     view_input: ViewInput,
 
+    new_size: Point<i64>,
     file_name: String,
     // current_folder: PathBuf,
     run: bool,
@@ -315,6 +316,7 @@ impl EguiApp {
             view_rect: Rect::low_size([0, 0], [1, 1]),
             mouse_button_states,
             gl,
+            new_size: Point(512, 512),
             file_name: "".to_string(),
             run: false,
             // stabilize: false,
@@ -563,9 +565,25 @@ impl EguiApp {
     }
 
     pub fn load_save_ui(&mut self, ui: &mut egui::Ui) {
-        if ui.button("New").clicked() {
-            self.view = View::empty();
-        }
+        ui.horizontal(|ui| {
+            ui.label("Width:");
+            ui.add(
+                egui::DragValue::new(&mut self.new_size.x)
+                    .clamp_range(0..=1024)
+                    .speed(2.0),
+            );
+            ui.label("Height:");
+            ui.add(
+                egui::DragValue::new(&mut self.new_size.y)
+                    .clamp_range(0..=1024)
+                    .speed(2.0),
+            );
+
+            if ui.button("New").clicked() {
+                let bounds = Rect::low_size([0, 0], self.new_size);
+                self.view = View::empty(bounds);
+            }
+        });
 
         let path = self.file_chooser.show(ui);
 
