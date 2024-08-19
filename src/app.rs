@@ -308,6 +308,10 @@ impl EguiApp {
 
         let (channel_sender, channel_receiver) = mpsc::sync_channel(1);
 
+        let saves_path = PathBuf::from("resources/saves")
+            .canonicalize()
+            .expect("Failed to canonicalize saves path");
+
         Self {
             view_painter: scene_painter,
             start_time,
@@ -324,7 +328,7 @@ impl EguiApp {
             // current_folder: PathBuf::from("resources/saves"),
             view_input: ViewInput::EMPTY,
             edit_mode_icons,
-            file_chooser: FileChooser::new(PathBuf::from("resources/saves")),
+            file_chooser: FileChooser::new(saves_path),
             brush_chooser: BrushChooser::new(ColorChooser::default()),
             interpreter: Interpreter::new(),
             gif_recorder: GifRecorder::new(),
@@ -760,6 +764,7 @@ impl EguiApp {
             warn!("Failed to load png file!");
             return;
         };
+        self.new_size = rgba_field.bounds().size();
         let world = rgba_field.intot::<MaterialMap>().into();
         self.view = View::new(world);
     }
