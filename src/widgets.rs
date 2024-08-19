@@ -3,6 +3,7 @@ use std::{ffi::OsStr, fs, ops::RangeInclusive, path::PathBuf};
 
 use crate::{
     brush::Brush,
+    material::Material,
     math::rgba8::Rgba8,
     palettes::{Palette, SystemPalette},
     utils::ReflectEnum,
@@ -142,17 +143,18 @@ impl BrushChooser {
         ui.separator();
     }
 
-    pub fn color(&self) -> Rgba8 {
-        let mut color = self.color_chooser.color;
-        if self.rigid {
-            color.a = 170;
-        };
-        color
+    pub fn material(&self) -> Material {
+        let mut material = Material::from(self.color_chooser.color);
+        if material.is_normal() && self.rigid {
+            material.rigid()
+        } else {
+            material
+        }
     }
 
     pub fn brush(&self) -> Brush {
         Brush {
-            material: self.color().into(),
+            material: self.material(),
             radius: self.radius,
         }
     }

@@ -31,6 +31,12 @@ impl Material {
         self.color.a == Self::RIGID_ALPHA
     }
 
+    pub fn rigid(mut self) -> Material {
+        assert!(self.is_normal());
+        self.color.a = Self::RIGID_ALPHA;
+        self
+    }
+
     pub fn is_normal(self) -> bool {
         self.color.a == Self::NORMAL_ALPHA
     }
