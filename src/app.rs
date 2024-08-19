@@ -204,6 +204,10 @@ pub struct EguiApp {
     channel_sender: mpsc::SyncSender<Vec<u8>>,
 
     clipboard: Option<Clipboard>,
+
+    /// When creating App we already load the world but cannot reset the camera because we don't
+    /// have the proper view_rect
+    reset_camera_requested: bool,
 }
 
 impl EguiApp {
@@ -335,6 +339,7 @@ impl EguiApp {
             clipboard: None,
             channel_sender,
             channel_receiver,
+            reset_camera_requested: true,
         }
     }
 
@@ -767,6 +772,7 @@ impl EguiApp {
         self.new_size = rgba_field.bounds().size();
         let world = rgba_field.intot::<MaterialMap>().into();
         self.view = View::new(world);
+        self.reset_camera();
     }
 
     fn load_from_path(&mut self, path: impl AsRef<Path>) {
@@ -848,8 +854,13 @@ impl eframe::App for EguiApp {
             .rect;
 
         let view_size = Self::view_size(ctx);
-        // println!("side_panel_rect left: {}, right: {}", side_panel_rect.left(), side_panel_rect.right());
         self.view_rect = Rect::low_high([side_panel_rect.right() as i64, 0], view_size);
+
+        // Reset camera requested, for example from loading World in Self::new
+        if self.reset_camera_requested {
+            self.reset_camera();
+            self.reset_camera_requested = false;
+        }
 
         // view_input after the UI has been drawn, so we know if the cursor is
         // over an element.
