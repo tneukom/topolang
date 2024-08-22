@@ -1,16 +1,17 @@
-use crate::math::rgba8::Rgba8;
+use crate::{math::rgba8::Rgba8, regions::RegionEq};
 use std::{
     cmp::Ordering,
     hash::{Hash, Hasher},
 };
 
-#[derive(Debug, Clone, Copy)]
+// TODO: Material should be optimized for RegionEq, not converting from and to Rgba8!
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Material {
     color: Rgba8,
 }
 
 impl Material {
-    pub const RIGID_ALPHA: u8 = 170;
+    pub const SOLID_ALPHA: u8 = 170;
     pub const NORMAL_ALPHA: u8 = 255;
 
     pub const VOID: Self = Self::new(Rgba8::VOID);
@@ -27,13 +28,13 @@ impl Material {
         Self { color: rgba }
     }
 
-    pub fn is_rigid(self) -> bool {
-        self.color.a == Self::RIGID_ALPHA
+    pub fn is_solid(self) -> bool {
+        self.color.a == Self::SOLID_ALPHA
     }
 
-    pub fn rigid(mut self) -> Material {
+    pub fn solid(mut self) -> Material {
         assert!(self.is_normal());
-        self.color.a = Self::RIGID_ALPHA;
+        self.color.a = Self::SOLID_ALPHA;
         self
     }
 
@@ -41,19 +42,6 @@ impl Material {
         self.color.a == Self::NORMAL_ALPHA
     }
 }
-
-impl PartialEq for Material {
-    fn eq(&self, other: &Self) -> bool {
-        // For rule frame and arrow (alpha = 180, 181) all rgb values are considered equal
-        if self.color.a == 180 || self.color.a == 181 {
-            self.color.a == other.color.a
-        } else {
-            self.color == other.color
-        }
-    }
-}
-
-impl Eq for Material {}
 
 impl Ord for Material {
     fn cmp(&self, other: &Self) -> Ordering {
@@ -96,5 +84,16 @@ impl From<&Rgba8> for Material {
 impl From<Material> for Rgba8 {
     fn from(material: Material) -> Self {
         material.color
+    }
+}
+
+impl RegionEq for Material {
+    fn region_eq(self, other: Self) -> bool {
+        // For rule frame and arrow (alpha = 180, 181) all rgb values are considered equal
+        if self.color.a == 180 || self.color.a == 181 {
+            self.color.a == other.color.a
+        } else {
+            self.color == other.color
+        }
     }
 }

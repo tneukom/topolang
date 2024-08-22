@@ -144,9 +144,9 @@ impl BrushChooser {
     }
 
     pub fn material(&self) -> Material {
-        let mut material = Material::from(self.color_chooser.color);
+        let material = Material::from(self.color_chooser.color);
         if material.is_normal() && self.rigid {
-            material.rigid()
+            material.solid()
         } else {
             material
         }

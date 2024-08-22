@@ -1,15 +1,3 @@
-use crate::{
-    area_cover::AreaCover,
-    field::Field,
-    math::{
-        pixel::{Side, SideName},
-        point::Point,
-    },
-    pixmap::{Pixmap, Tile, TileSideClass, TileSidesForEach},
-    union_find::UnionFind,
-};
-use ahash::{HashMap, HashMapExt};
-use itertools::Itertools;
 /// Unionfind crates
 /// https://crates.io/crates/union-find
 /// https://crates.io/crates/disjoint-sets
@@ -18,7 +6,47 @@ use itertools::Itertools;
 /// Has clear function
 ///
 /// https://docs.rs/petgraph/latest/src/petgraph/unionfind.rs.html#16-27
+use crate::{
+    area_cover::AreaCover,
+    field::Field,
+    math::{
+        pixel::{Side, SideName},
+        point::Point,
+        rgba8::Rgba8,
+    },
+    pixmap::{Pixmap, Tile, TileSideClass, TileSidesForEach},
+    union_find::UnionFind,
+};
+use ahash::{HashMap, HashMapExt};
+use itertools::Itertools;
+
 use std::{collections::BTreeMap, rc::Rc};
+
+pub trait RegionEq {
+    fn region_eq(self, other: Self) -> bool;
+}
+
+impl<T: RegionEq> RegionEq for Option<T> {
+    fn region_eq(self, other: Self) -> bool {
+        match (self, other) {
+            (Some(this), Some(other)) => this.region_eq(other),
+            (None, None) => true,
+            _ => false,
+        }
+    }
+}
+
+impl RegionEq for () {
+    fn region_eq(self, other: Self) -> bool {
+        true
+    }
+}
+
+impl RegionEq for Rgba8 {
+    fn region_eq(self, other: Self) -> bool {
+        self == other
+    }
+}
 
 pub struct CompactLabels {
     remap: Vec<usize>,
@@ -106,16 +134,17 @@ trait NeighborsFn<T: Copy> {
     }
 }
 
-struct BuildUnionFind {
+struct BuildRegionsUnionFind {
     union_find: UnionFind,
 }
 
-impl<T: Eq + Copy> NeighborsFn<T> for BuildUnionFind {
+impl<T: Copy + RegionEq> NeighborsFn<T> for BuildRegionsUnionFind {
+    // Build UnionFind data structure for equivalent regions
     fn call<const N: usize>(&mut self, field: &Field<T>, center: usize, neighbors: [usize; N]) {
         let center_value = field.as_slice()[center];
         for neighbor in neighbors {
             let neighbor_value = field.as_slice()[neighbor];
-            if neighbor_value == center_value {
+            if neighbor_value.region_eq(center_value) {
                 self.union_find.union(center, neighbor);
             }
         }
@@ -123,9 +152,9 @@ impl<T: Eq + Copy> NeighborsFn<T> for BuildUnionFind {
 }
 
 #[inline(never)]
-pub fn field_regions_fast<T: Copy + Eq>(field: &Field<T>) -> Field<usize> {
+pub fn field_regions_fast<T: Copy + RegionEq>(field: &Field<T>) -> Field<usize> {
     let union_find = UnionFind::new(field.len());
-    let mut build_union_find = BuildUnionFind { union_find };
+    let mut build_union_find = BuildRegionsUnionFind { union_find };
     build_union_find.for_each(field);
     let labeling = build_union_find.union_find.into_roots();
     Field::from_linear(field.bounds(), labeling)
@@ -133,18 +162,20 @@ pub fn field_regions_fast<T: Copy + Eq>(field: &Field<T>) -> Field<usize> {
 
 /// Returns connected components of `field`
 #[inline(never)]
-pub fn field_regions<T: Clone + Eq>(field: &Field<T>) -> Field<usize> {
+pub fn field_regions<T: Copy + RegionEq>(field: &Field<T>) -> Field<usize> {
     // TODO: Reuse UnionFind so we don't allocate each time
     let mut union_find = UnionFind::new(field.len());
 
-    for (center, value) in field.enumerate() {
+    for (center, &color) in field.enumerate() {
         for side in [SideName::TopLeft, SideName::Top, SideName::Left] {
             let neighbor = center.neighbor(side);
-            if Some(value) == field.get(neighbor) {
-                union_find.union(
-                    field.linear_index(center).unwrap(),
-                    field.linear_index(neighbor).unwrap(),
-                );
+            if let Some(neighbor_color) = field.get(neighbor).copied() {
+                if color.region_eq(neighbor_color) {
+                    union_find.union(
+                        field.linear_index(center).unwrap(),
+                        field.linear_index(neighbor).unwrap(),
+                    );
+                }
             }
         }
     }
@@ -154,7 +185,7 @@ pub fn field_regions<T: Clone + Eq>(field: &Field<T>) -> Field<usize> {
 }
 
 #[inline(never)]
-pub fn mask_field<T: Clone, S>(field: &Field<T>, mask: &Field<Option<S>>) -> Field<Option<T>> {
+pub fn mask_field<T: Copy, S>(field: &Field<T>, mask: &Field<Option<S>>) -> Field<Option<T>> {
     let elems = field
         .iter()
         .zip(mask.iter())
@@ -164,7 +195,7 @@ pub fn mask_field<T: Clone, S>(field: &Field<T>, mask: &Field<Option<S>>) -> Fie
 }
 
 #[inline(never)]
-pub fn tile_regions<T: Copy + Eq>(tile: &Tile<T>) -> (Tile<usize>, usize) {
+pub fn tile_regions<T: Copy + RegionEq>(tile: &Tile<T>) -> (Tile<usize>, usize) {
     let mut region_field = field_regions_fast(&tile.field);
     let mut region_field = mask_field(&mut region_field, &tile.field);
 
@@ -176,7 +207,9 @@ pub fn tile_regions<T: Copy + Eq>(tile: &Tile<T>) -> (Tile<usize>, usize) {
 
 /// Returns the region map and the number of regions
 #[inline(never)]
-pub fn pixmap_regions<T: Copy + Eq>(color_map: &Pixmap<T>) -> (Pixmap<usize>, Vec<AreaCover>) {
+pub fn pixmap_regions<T: Copy + RegionEq>(
+    color_map: &Pixmap<T>,
+) -> (Pixmap<usize>, Vec<AreaCover>) {
     // Map pixmap tile wise (not regarding interface between tiles)
 
     // Maps each region_id to the tile it is in
@@ -216,8 +249,8 @@ pub fn pixmap_regions<T: Copy + Eq>(color_map: &Pixmap<T>) -> (Pixmap<usize>, Ve
         TileSideClass::Boundary,
         |_side, left, right| {
             if let Some(right) = right {
-                // if left color == right color, merge left region with right region
-                if left.0 == right.0 {
+                let (left_color, right_color) = (left.0, right.0);
+                if left_color.region_eq(right_color) {
                     union_find.union(left.1, right.1);
                 }
             }

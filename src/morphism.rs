@@ -97,9 +97,9 @@ impl Morphism {
         self.region_map.iter().all(|(&region, &phi_region)| {
             let dom_material = dom[region].material;
             let codom_material = codom[phi_region].material;
-            if dom_material.is_rigid() {
+            if dom_material.is_solid() {
                 // match rigid rgb or normal rgb
-                (codom_material.is_normal() || codom_material.is_rigid())
+                (codom_material.is_normal() || codom_material.is_solid())
                     && dom_material.color().rgb() == codom_material.color().rgb()
             } else {
                 // exact color match otherwise
@@ -141,7 +141,7 @@ impl Morphism {
             .all(|(&region_key, &phi_region_key)| {
                 let region = &dom[region_key];
                 let phi_region = &codom[phi_region_key];
-                if region.material.is_rigid() {
+                if region.material.is_solid() {
                     // If region is rigid, phi_region must be a translation of region
                     region.boundary.is_translation_of(&phi_region.boundary)
                 } else {

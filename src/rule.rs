@@ -35,6 +35,13 @@ impl Rule {
         //     .save("after.png")
         //     .unwrap();
 
+        // Build the rigid map from `before` and replace rigid colors with normal ones.
+        // NOTE: rigid map will contain many empty tiles, ignore for now
+        // NOTE: How to map and filter at the same time?
+
+        // TODO: Build rigid map and replace with normal colors in two passes.
+
+        // Collect regions that change their color
         for (&before_region_key, before_region) in &before.regions {
             let before_region = &before[before_region_key];
 

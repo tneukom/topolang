@@ -5,10 +5,19 @@ use std::{
 
 use crate::{
     material::Material,
-    math::pixel::Corner,
+    math::{pixel::Corner, point::Point},
     morphism::Morphism,
     topology::{RegionKey, Seam, SeamMaterials, StrongRegionKey, Topology},
 };
+
+pub struct Solid {
+    pixels: Vec<Point<i64>>,
+}
+
+pub struct Pattern {
+    topology: Topology,
+    solids: Vec<Solid>,
+}
 
 /// Returns all seams (including non-atomic ones) in topo
 #[inline(never)]
@@ -172,10 +181,10 @@ impl Unassigned {
 
     #[inline(never)]
     fn fallback_assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
-        return generalized_seams(world, self.materials.left)
+        generalized_seams(world, self.materials.left)
             .into_iter()
             .filter(|phi_seam| self.possible_assignment(world, pattern, phi_seam))
-            .collect();
+            .collect()
     }
 
     /// Returns possible candidate seams in `world` that `self.seam` could be mapped to.
