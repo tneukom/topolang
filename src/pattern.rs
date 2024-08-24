@@ -385,7 +385,7 @@ mod test {
         utils::IntoT,
     };
 
-    const PATTERN_FRAME_MATERIAL: Material = Material::new(Rgba8::MAGENTA);
+    const PATTERN_FRAME_MATERIAL: Material = Material::from_rgba(Rgba8::MAGENTA);
 
     #[inline(never)]
     pub fn extract_pattern(material_map: &mut MaterialMap) -> MaterialMap {

@@ -19,6 +19,10 @@ impl Rgba8 {
         Rgba8 { r, g, b, a }
     }
 
+    pub const fn from_rgb_a(rgb: [u8; 3], a: u8) -> Rgba8 {
+        Self::new(rgb[0], rgb[1], rgb[2], a)
+    }
+
     pub fn hex(self) -> String {
         format!("#{:02x}{:02x}{:02x}{:02x}", self.r, self.g, self.b, self.a)
     }
@@ -59,7 +63,7 @@ impl Rgba8 {
         Some(Rgba8 { r, g, b, a })
     }
 
-    pub fn rgb(self) -> [u8; 3] {
+    pub const fn rgb(self) -> [u8; 3] {
         [self.r, self.g, self.b]
     }
 
@@ -76,9 +80,6 @@ impl Rgba8 {
     pub const TEAL: Self = rgba8(0x00, 0x80, 0x80, 0xFF);
     pub const TRANSPARENT: Self = rgba8(0x00, 0x00, 0x00, 0x00);
     pub const ZERO: Self = Self::TRANSPARENT;
-
-    /// Hex 360c29
-    pub const VOID: Rgba8 = Rgba8::new(0x36, 0x0C, 0x29, 0xB4);
 }
 
 // TODO: Is this the idiomatic way of putting constants in a namespace?

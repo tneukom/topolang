@@ -100,7 +100,7 @@ impl Morphism {
             if dom_material.is_solid() {
                 // match rigid rgb or normal rgb
                 (codom_material.is_normal() || codom_material.is_solid())
-                    && dom_material.color().rgb() == codom_material.color().rgb()
+                    && dom_material.rgb() == codom_material.rgb()
             } else {
                 // exact color match otherwise
                 dom[region].material == codom[phi_region].material

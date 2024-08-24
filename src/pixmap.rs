@@ -551,7 +551,7 @@ impl Pixmap<Rgba8> {
 
 impl Pixmap<Material> {
     pub fn into_rgba8(self) -> Pixmap<Rgba8> {
-        self.into_map(|material| material.color())
+        self.into_map(|material| material.to_rgba())
     }
 }
 

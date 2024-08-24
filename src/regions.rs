@@ -37,7 +37,7 @@ impl<T: RegionEq> RegionEq for Option<T> {
 }
 
 impl RegionEq for () {
-    fn region_eq(self, other: Self) -> bool {
+    fn region_eq(self, _other: Self) -> bool {
         true
     }
 }
@@ -337,6 +337,16 @@ pub fn split_boundary_into_cycles<T>(mut sides: HashMap<Side, T>) -> Vec<Vec<(Si
     cycles.sort_by_key(|cycle| cycle[0].0);
     cycles
 }
+
+// pub enum Malleability  {
+//     Solid,
+//     Pliable
+// }
+
+// TODO: Might make more sense to have a PixSet class
+// pub fn solid_regions(material_map: &MaterialMap) -> Pixmap<Material> {
+//     let solid_map = material_map.filter(|_, material| material.is_solid() )
+// }
 
 #[cfg(test)]
 mod test {

@@ -113,7 +113,7 @@ pub enum BrushMaterial {
 
 pub struct BrushChooser {
     color_chooser: ColorChooser,
-    rigid: bool,
+    solid: bool,
     radius: i64,
 }
 
@@ -121,7 +121,7 @@ impl BrushChooser {
     pub fn new(color_chooser: ColorChooser) -> Self {
         Self {
             color_chooser,
-            rigid: false,
+            solid: false,
             radius: 1,
         }
     }
@@ -133,9 +133,9 @@ impl BrushChooser {
         ui.label("System colors");
         system_colors_widget(ui, &mut self.color_chooser.color);
 
-        // Rigid checkbox
+        // Solid checkbox
         ui.add_enabled_ui(self.color_chooser.color.a == 255, |ui| {
-            ui.checkbox(&mut self.rigid, "Rigid");
+            ui.checkbox(&mut self.solid, "Solid");
         });
 
         // Brush shape
@@ -145,8 +145,8 @@ impl BrushChooser {
 
     pub fn material(&self) -> Material {
         let material = Material::from(self.color_chooser.color);
-        if material.is_normal() && self.rigid {
-            material.solid()
+        if material.is_normal() && self.solid {
+            material.as_solid()
         } else {
             material
         }

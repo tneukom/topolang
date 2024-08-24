@@ -1,4 +1,4 @@
-use crate::{field::RgbaField, math::rgba8::Rgba8, utils::ReflectEnum};
+use crate::{field::RgbaField, material::Material, math::rgba8::Rgba8, utils::ReflectEnum};
 use itertools::Itertools;
 
 pub struct Palette {
@@ -65,8 +65,8 @@ impl SystemPalette {
 
     pub const fn rgba(self) -> Rgba8 {
         match self {
-            Self::Rule => Rgba8::VOID,
-            Self::Arrow => Rgba8::new(0xFF, 0x6E, 0x00, 0xB4), // ff6e00
+            Self::Rule => Material::RULE_FRAME.to_rgba(),
+            Self::Arrow => Material::RULE_ARROW.to_rgba(),
         }
     }
 }

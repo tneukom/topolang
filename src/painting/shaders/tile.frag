@@ -27,7 +27,7 @@ void main() {
     highp vec2 uv = vec2(u, v);
 
     // alpha = 180 is rule frame and alpha = 181 is rule arrow
-    if(texcolor.a == 180.0/255.0 || texcolor.a == 181.0/255.0) {
+    if(texcolor.a == 180.0/255.0) {
         // Rule frame and arrow
         highp float s = u + 4.0 * sin(1.0/25.0 * PI * v) + 4.0 * time;
         //highp float s = 1.0/10.0 * PI * (window_frag_coord.x + window_frag_coord.y);

@@ -28,14 +28,14 @@ pub struct Interpreter {
 
 impl Interpreter {
     // Not the same as the actual RULE_FRAME color
-    const RULE_FRAME_VOID_MATERIAL: Material = Material::new(Rgba8::CYAN);
+    const RULE_FRAME_MATERIAL: Material = Material::from_rgba(Rgba8::CYAN);
 
     pub fn new() -> Self {
         // Load rule_frame pattern from file
         let rule_frame_pixmap = RgbaField::load_from_memory(include_bytes!("rule_frame.png"))
             .unwrap()
             .intot::<MaterialMap>()
-            .without(&Self::RULE_FRAME_VOID_MATERIAL);
+            .without(&Self::RULE_FRAME_MATERIAL);
         let rule_frame = Topology::new(rule_frame_pixmap);
 
         // Side on the before border (inner border of the frame)
