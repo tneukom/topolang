@@ -20,6 +20,7 @@ use crate::{
 use ahash::{HashMap, HashMapExt};
 use itertools::Itertools;
 
+use crate::{math::pixel::Pixel, pixmap::MaterialMap};
 use std::{collections::BTreeMap, rc::Rc};
 
 pub trait RegionEq {
@@ -338,6 +339,34 @@ pub fn split_boundary_into_cycles<T>(mut sides: HashMap<Side, T>) -> Vec<Vec<(Si
     cycles
 }
 
+// TODO: Use iterator instead of Vec<Side>
+pub fn left_of_border(border: impl Iterator<Item = Side>) -> Vec<Pixel> {
+    let mut left_right_sides: Vec<_> = border
+        .filter(|side| side.name == SideName::Left || side.name == SideName::Right)
+        .collect();
+
+    assert!(!left_right_sides.is_empty());
+
+    left_right_sides.sort();
+
+    let mut area = Vec::new();
+    for (left_side, right_side) in left_right_sides.into_iter().tuples() {
+        assert_eq!(left_side.left_pixel.y, right_side.left_pixel.y);
+        for x in left_side.left_pixel.x..=right_side.left_pixel.x {
+            let pixel = Pixel::new(x, left_side.left_pixel.y);
+            area.push(pixel);
+        }
+    }
+
+    area
+}
+
+pub fn right_of_border(border: impl DoubleEndedIterator<Item = Side>) -> Vec<Pixel> where
+{
+    let reversed_border = border.rev().map(|side| side.reversed());
+    left_of_border(reversed_border)
+}
+
 // pub enum Malleability  {
 //     Solid,
 //     Pliable
@@ -351,15 +380,18 @@ pub fn split_boundary_into_cycles<T>(mut sides: HashMap<Side, T>) -> Vec<Vec<(Si
 #[cfg(test)]
 mod test {
     use crate::{
-        field::Field,
+        field::{Field, RgbaField},
         math::{generic::EuclidDivRem, pixel::Side, point::Point, rect::Rect, rgba8::Rgba8},
         pixmap::{iter_sides_in_rect, split_index, MaterialMap, Pixmap, RgbaMap, TILE_SIZE},
-        regions::{pixmap_regions, region_boundaries},
+        regions::{
+            left_of_border, pixmap_regions, region_boundaries, right_of_border,
+            split_boundary_into_cycles,
+        },
         utils::IntoT,
     };
     use ahash::{HashMap, HashMapExt};
     use itertools::Itertools;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashSet};
 
     pub fn pixel_touches_tile_boundary(index: Point<i64>) -> bool {
         let (_, pixel_index) = split_index(index);
@@ -518,5 +550,190 @@ mod test {
         test_region_boundaries("multiple_tiles_a.png");
         test_region_boundaries("multiple_tiles_b.png");
         test_region_boundaries("multiple_tiles_c.png");
+    }
+
+    fn area_boundary(area: &HashSet<Point<i64>>) -> HashSet<Side> {
+        area.iter()
+            // iter over all sides of each pixel in area
+            .flat_map(|pixel| pixel.sides_ccw())
+            // keep only sides with a different region on the right side
+            .filter(|side| !area.contains(&side.right_pixel()))
+            .collect()
+    }
+
+    /// Helper function to split boundary into cycles on HashSet<Side> instead of HashMap<Side, T>
+    /// Naturally mapping HashSet<Side> to HashMap<Side, ()> and Vec<(Side, ()> to Vec<Side>
+    fn split_set_boundary_into_cycles(boundary: HashSet<Side>) -> Vec<Vec<Side>> {
+        let side_map: HashMap<Side, ()> = boundary.into_iter().map(|side| (side, ())).collect();
+        let cycles = split_boundary_into_cycles(side_map);
+        cycles
+            .into_iter()
+            .map(|cycle| cycle.into_iter().map(|(side, _)| side).collect())
+            .collect()
+    }
+
+    fn test_left_of_border(area: HashSet<Point<i64>>, n_sides: usize) {
+        let boundary = area_boundary(&area);
+        assert_eq!(boundary.len(), n_sides);
+
+        let borders = split_set_boundary_into_cycles(boundary.into());
+        assert_eq!(borders.len(), 1);
+
+        let border = &borders[0];
+        let left_of_border = left_of_border(border.iter().copied());
+        assert_eq!(area, left_of_border.into_iter().collect());
+    }
+
+    /// The cycle from a border and the reverse of the border should start at the same corner.
+    /// See also regarding this: min_side_cw_ccw test in pixel.rs
+    #[test]
+    fn compatible_reverse_borders() {
+        let sides_ccw: HashSet<_> = Point(0, 0).sides_ccw().into_iter().collect();
+        let cycles_ccw = split_set_boundary_into_cycles(sides_ccw);
+        assert_eq!(cycles_ccw.len(), 1);
+
+        let sides_cw: HashSet<_> = Point(0, 0).sides_cw().into_iter().collect();
+        let cycles_cw = split_set_boundary_into_cycles(sides_cw);
+        assert_eq!(cycles_cw.len(), 1);
+
+        assert_eq!(
+            cycles_cw[0][0].start_corner(),
+            cycles_ccw[0][0].start_corner()
+        );
+    }
+
+    #[test]
+    fn simple_left_of_border_a() {
+        let area: HashSet<_> = [Point(0, 0)].into();
+        test_left_of_border(area, 6);
+    }
+
+    #[test]
+    fn simple_left_of_border_b() {
+        let area: HashSet<_> = [Point(0, 0), Point(1, 0)].into();
+        test_left_of_border(area, 10);
+    }
+
+    #[test]
+    fn simple_left_of_border_c() {
+        let area: HashSet<_> = [Point(0, 0), Point(1, 0), Point(0, 1), Point(1, 1)].into();
+        test_left_of_border(area, 14);
+    }
+
+    /// Set of pixels with the given color
+    fn pixmap_color_area<T: Eq>(pixmap: &Pixmap<T>, area_color: &T) -> HashSet<Point<i64>> {
+        pixmap
+            .iter()
+            .filter(|(_, pixel_color)| pixel_color == &area_color)
+            .map(|kv| kv.0)
+            .collect()
+    }
+
+    fn test_right_of_border(filename: &str) {
+        let folder = "test_resources/regions/right_of_border";
+        let path = format!("{folder}/{filename}");
+        let color_map: RgbaMap = RgbaField::load(path).unwrap().into();
+        let red_area = pixmap_color_area(&color_map, &Rgba8::RED);
+        let blue_area = pixmap_color_area(&color_map, &Rgba8::BLUE);
+
+        let red_boundary = area_boundary(&red_area);
+        let red_borders = split_set_boundary_into_cycles(red_boundary.into());
+        assert_eq!(red_borders.len(), 2); // inner and outer border
+
+        let inner_border = &red_borders[1];
+        let right_of_inner_border = right_of_border(inner_border.iter().copied());
+        let right_of_inner_border_set: HashSet<_> = right_of_inner_border.into_iter().collect();
+        assert_eq!(right_of_inner_border_set, blue_area);
+    }
+
+    #[test]
+    fn right_of_border_1() {
+        test_right_of_border("1.png")
+    }
+
+    #[test]
+    fn right_of_border_2() {
+        test_right_of_border("2.png")
+    }
+
+    #[test]
+    fn right_of_border_3() {
+        test_right_of_border("3.png")
+    }
+
+    #[test]
+    fn right_of_border_4() {
+        test_right_of_border("4.png")
+    }
+
+    fn assert_proper_components(filename: &str, count: usize) {
+        // Load bitmap
+        let folder = "test_resources/regions/connected_components";
+        let path = format!("{folder}/{filename}");
+        let color_map: RgbaMap = RgbaField::load(path).unwrap().into();
+
+        // Compute regions
+        let (region_map, region_covers) = pixmap_regions(&color_map);
+
+        assert_eq!(
+            region_covers.len(),
+            count,
+            "number of components is correct"
+        );
+
+        // Make sure for each side, if left and right have the same color, they belong to the
+        // same region.
+        for (pixel, color) in color_map.iter() {
+            for side in pixel.sides_ccw() {
+                if Some(color) == color_map.get(side.right_pixel()) {
+                    assert_eq!(region_map.get(pixel), region_map.get(side.right_pixel()));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn components_1a() {
+        assert_proper_components("1a.png", 1);
+    }
+
+    #[test]
+    fn components_2a() {
+        assert_proper_components("2a.png", 2);
+    }
+
+    #[test]
+    fn components_3a() {
+        assert_proper_components("3a.png", 3);
+    }
+
+    #[test]
+    fn components_3b() {
+        assert_proper_components("3b.png", 3);
+    }
+
+    #[test]
+    fn components_3c() {
+        assert_proper_components("3c.png", 3);
+    }
+
+    #[test]
+    fn components_3d() {
+        assert_proper_components("3d.png", 3);
+    }
+
+    #[test]
+    fn components_4a() {
+        assert_proper_components("4a.png", 4);
+    }
+
+    #[test]
+    fn components_5a() {
+        assert_proper_components("5a.png", 4);
+    }
+
+    #[test]
+    fn components_7a() {
+        assert_proper_components("7a.png", 6);
     }
 }

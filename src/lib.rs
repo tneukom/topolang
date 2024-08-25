@@ -7,7 +7,6 @@ pub mod app;
 pub mod area_cover;
 pub mod brush;
 pub mod camera;
-pub mod connected_components;
 pub mod coordinate_frame;
 pub mod field;
 pub mod frozen;

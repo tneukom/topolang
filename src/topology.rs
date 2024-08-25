@@ -9,7 +9,6 @@ use std::{
 
 use crate::{
     area_cover::AreaCover,
-    connected_components::{left_of_border, right_of_border},
     material::Material,
     math::{
         pixel::{Corner, Pixel, Side},
@@ -17,7 +16,10 @@ use crate::{
         rect::Rect,
     },
     pixmap::{MaterialMap, Pixmap},
-    regions::{pixmap_regions, region_boundaries, split_boundary_into_cycles},
+    regions::{
+        left_of_border, pixmap_regions, region_boundaries, right_of_border,
+        split_boundary_into_cycles,
+    },
     utils::{UndirectedEdge, UndirectedGraph},
 };
 
