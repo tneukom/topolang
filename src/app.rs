@@ -587,7 +587,9 @@ impl EguiApp {
                     .clamp_range(0..=1024)
                     .speed(2.0),
             );
+        });
 
+        ui.horizontal(|ui| {
             let bounds = Rect::low_size([0, 0], self.new_size);
 
             if ui.button("New").clicked() {

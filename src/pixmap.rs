@@ -39,10 +39,14 @@ impl<T> Tile<T> {
         Self { field }
     }
 
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Point<i64>, &T)> + Clone + 'a {
+    pub fn iter(&self) -> impl Iterator<Item = (Point<i64>, &T)> + Clone + '_ {
         self.field
             .enumerate()
             .filter_map(|(index, opt_value)| opt_value.as_ref().map(|value| (index, value)))
+    }
+
+    pub fn values(&self) -> impl Iterator<Item = &T> + Clone + '_ {
+        self.iter().map(|(_index, value)| value)
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (Point<i64>, &mut T)> {
@@ -104,16 +108,17 @@ impl<T: Clone> Tile<T> {
         self.filter_map(|index, value| pred(index, value).then(|| value.clone()))
     }
 
-    pub fn keys<'a>(&'a self) -> impl Iterator<Item = Point<i64>> + Clone + 'a {
+    pub fn keys(&self) -> impl Iterator<Item = Point<i64>> + Clone + '_ {
         self.field
             .enumerate()
             .filter_map(|(index, opt_value)| opt_value.as_ref().map(|_| index))
     }
 
     /// Only set value for a pixel if pred(self value at pixel)
-    pub fn blit_if(&mut self, other: &Self, mut pred: impl FnMut(&Option<T>) -> bool) {
-        for (self_value, other_value) in self.field.iter_mut().zip(other.field.iter()) {
-            if other_value.is_some() && pred(self_value) {
+    pub fn blit_if(&mut self, other: &Self, mut pred: impl FnMut(Point<i64>, &Option<T>) -> bool) {
+        for ((index, self_value), other_value) in self.field.enumerate_mut().zip(other.field.iter())
+        {
+            if other_value.is_some() && pred(index, self_value) {
                 *self_value = other_value.clone();
             }
         }
@@ -364,7 +369,7 @@ impl<T: Clone> Pixmap<T> {
     }
 
     /// Only set value for a pixel if pred(self value at pixel)
-    pub fn blit_if(&mut self, other: &Self, mut pred: impl FnMut(&Option<T>) -> bool) {
+    pub fn blit_if(&mut self, other: &Self, mut pred: impl FnMut(Point<i64>, &Option<T>) -> bool) {
         for (&other_tile_index, other_tile) in &other.tiles {
             self.get_tile_mut(other_tile_index)
                 .blit_if(&other_tile, &mut pred);
@@ -373,7 +378,7 @@ impl<T: Clone> Pixmap<T> {
 
     /// Blit if there is already an existing entry.
     pub fn blit_over(&mut self, other: &Self) {
-        self.blit_if(other, |current| current.is_some());
+        self.blit_if(other, |_, current| current.is_some());
     }
 
     pub fn blit_op<S>(
@@ -467,29 +472,33 @@ impl<T: Clone> Pixmap<T> {
 
     /// Extract the pixel in the interior of the given rectangle.
     pub fn clip_rect(&self, clip_rect: Rect<i64>) -> Self {
-        let mut tiles = BTreeMap::new();
+        let mut result = Self::new();
+        result.blit_rect(self, clip_rect);
+        result
+    }
 
-        for cover_tile_index in tile_cover(clip_rect).iter_half_open() {
-            let Some(rc_tile) = self.tiles.get(&cover_tile_index) else {
+    /// Blit all pixels contained in bounds from source to self
+    /// `self[k] = source[k]` for all `k` in `bounds` where `source` is defined.
+    pub fn blit_rect(&mut self, source: &Self, bounds: Rect<i64>) {
+        for cover_tile_index in tile_cover(bounds).iter_half_open() {
+            let Some(rc_source_tile) = source.tiles.get(&cover_tile_index) else {
                 continue;
             };
 
             let cover_tile_rect = tile_rect(cover_tile_index);
 
-            // If the cover_tile_rect lies fully in clip_rect we can copy the whole tile otherwise
-            // we need to clip it.
-            if clip_rect.contains_rect(cover_tile_rect) {
-                tiles.insert(cover_tile_index, rc_tile.clone());
+            if bounds.contains_rect(cover_tile_rect) {
+                // If the cover_tile_rect lies fully in bounds we can replace the whole tile
+                self.tiles.insert(cover_tile_index, rc_source_tile.clone());
             } else {
-                let clipped_tile = rc_tile.filter(|sub_index, _| {
-                    let pixel_index = combine_indices(cover_tile_index, sub_index);
-                    clip_rect.half_open_contains(pixel_index)
+                // Otherwise we have to blit a subset of the tile
+                let self_tile = self.get_tile_mut(cover_tile_index);
+                self_tile.blit_if(rc_source_tile, |sub_index, _value| {
+                    let index = combine_indices(cover_tile_index, sub_index);
+                    bounds.half_open_contains(index)
                 });
-                tiles.insert(cover_tile_index, Rc::new(clipped_tile));
             }
         }
-
-        Self { tiles }
     }
 
     pub fn extract(&mut self, pixels: impl IntoIterator<Item = Pixel>) -> Self {
@@ -737,67 +746,4 @@ impl TileSidesForEach {
             }
         }
     }
-
-    // #[inline(never)]
-    // pub fn for_each_in_tile<T>(
-    //     &self,
-    //     map: &Pixmap<T>,
-    //     tile_index: Point<i64>,
-    //     f: impl FnMut(Side, &T, Option<&T>),
-    // ) {
-    //     self.for_each_gen(
-    //         |tile_index| map.get_tile(tile_index),
-    //         |tile, linear_index| tile.field.as_slice()[linear_index],
-    //         tile_index,
-    //         f,
-    //     );
-    //     // let Some(tile) = map.get_tile(tile_index) else {
-    //     //     return;
-    //     // };
-    //     //
-    //     // for (&tile_index_offset, sides) in &self.sides {
-    //     //     if let Some(neighbor_tile) = map.get_tile(tile_index + tile_index_offset) {
-    //     //         for (side, left_linear_index, right_linear_index) in sides {
-    //     //             if let Some(left) = &tile.field.as_slice()[*left_linear_index] {
-    //     //                 let right = &neighbor_tile.field.as_slice()[*right_linear_index];
-    //     //                 f(*side + tile_index * TILE_SIZE, left, right.as_ref());
-    //     //             }
-    //     //         }
-    //     //     } else {
-    //     //         for (side, left_linear_index, _) in sides {
-    //     //             if let Some(left) = &tile.field.as_slice()[*left_linear_index] {
-    //     //                 f(*side + tile_index * TILE_SIZE, left, None);
-    //     //             }
-    //     //         }
-    //     //     }
-    //     // }
-    // }
-
-    // pub fn iter_tile<'a, T: Copy>(
-    //     &'a self,
-    //     map: &'a Pixmap<T>,
-    //     tile_index: Point<i64>,
-    // ) -> impl Iterator<Item = (Side, T, Option<T>)> + 'a {
-    //     map.get_tile(tile_index).into_iter().flat_map(move |tile| {
-    //         self.sides
-    //             .iter()
-    //             .flat_map(move |(&tile_index_offset, sides)| {
-    //                 let neighbor_tile = map.get_tile(tile_index + tile_index_offset);
-    //
-    //                 sides
-    //                     .iter()
-    //                     .filter_map(move |(side, left_linear_index, right_linear_index)| {
-    //                         // Put into function?
-    //                         if let Some(left) = tile.field.as_slice()[*left_linear_index] {
-    //                             let right = neighbor_tile.and_then(|neighbor_tile| {
-    //                                 neighbor_tile.field.as_slice()[*right_linear_index]
-    //                             });
-    //                             Some((*side + tile_index * TILE_SIZE, left, right))
-    //                         } else {
-    //                             None
-    //                         }
-    //                     })
-    //             })
-    //     })
-    // }
 }
