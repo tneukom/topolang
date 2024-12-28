@@ -483,14 +483,12 @@ impl View {
     }
 
     pub fn resize(&mut self, bounds: Rect<i64>) {
+        let mut resized = MaterialMap::new();
+        resized.fill_rect(bounds, Material::TRANSPARENT);
+        resized.blit_over(self.world.material_map());
+        self.world = World::from_material_map(resized);
+
         self.history
             .add_snapshot(self.world.material_map().clone(), SnapshotCause::Resize);
-
-        self.world.mut_material_map(|material_map| {
-            let mut resized = MaterialMap::new();
-            resized.fill_rect(bounds, Material::TRANSPARENT);
-            resized.blit_rect(material_map, bounds);
-            *material_map = resized;
-        });
     }
 }

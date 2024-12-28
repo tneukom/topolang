@@ -114,7 +114,8 @@ impl<T: Clone> Tile<T> {
             .filter_map(|(index, opt_value)| opt_value.as_ref().map(|_| index))
     }
 
-    /// Only set value for a pixel if pred(self value at pixel)
+    /// Set `self[pixel]` to `other[pixel]` if `other[pixel]` is Some and
+    /// `pred(pixel, self[pixel])`.
     pub fn blit_if(&mut self, other: &Self, mut pred: impl FnMut(Point<i64>, &Option<T>) -> bool) {
         for ((index, self_value), other_value) in self.field.enumerate_mut().zip(other.field.iter())
         {
@@ -124,6 +125,16 @@ impl<T: Clone> Tile<T> {
         }
     }
 
+    /// Set `self[pixel]` to `other[pixel]` if `other[pixel]` is Some.
+    pub fn blit(&mut self, other: &Self) {
+        for (self_value, other_value) in self.field.iter_mut().zip(other.field.iter()) {
+            if other_value.is_some() {
+                *self_value = other_value.clone();
+            }
+        }
+    }
+
+    /// Apply `op(&mut self[pixel], other[pixel])` where `other[pixel]` is Some.
     pub fn blit_op<S>(&mut self, other: &Tile<S>, mut op: impl FnMut(&mut Option<T>, &S)) {
         for (self_value, other_value) in self.field.iter_mut().zip(other.field.iter()) {
             if let Some(other_value) = other_value {
@@ -371,7 +382,8 @@ impl<T: Clone> Pixmap<T> {
         Pixmap { tiles }
     }
 
-    /// Only set value for a pixel if pred(self value at pixel)
+    /// Set `self[pixel]` to `other[pixel]` if `other[pixel]` is Some and
+    /// `pred(pixel, other[pixel])`.
     pub fn blit_if(&mut self, other: &Self, mut pred: impl FnMut(Point<i64>, &Option<T>) -> bool) {
         for (&other_tile_index, other_tile) in &other.tiles {
             self.get_tile_mut(other_tile_index)
@@ -379,13 +391,20 @@ impl<T: Clone> Pixmap<T> {
         }
     }
 
-    /// Blit if there is already an existing entry.
+    /// Set `self[pixel]` to `other[pixel]` of `other[pixel]` and `self[pixel]` are Some.
     pub fn blit_over(&mut self, other: &Self) {
         self.blit_if(other, |_, current| current.is_some());
     }
 
-    /// Apply an operation to each pixel in `self` that is contained in `cover` and `other` is
-    /// defined.
+    /// Set `self[pixel]` to `other[pixel]` if `other[pixel]` is Some.
+    pub fn blit(&mut self, other: &Self) {
+        for (&other_tile_index, other_tile) in &other.tiles {
+            self.get_tile_mut(other_tile_index).blit(&other_tile);
+        }
+    }
+
+    /// Apply `op(&mut self[pixel], other[pixel]) to each `pixel` in `self` that is contained in
+    /// `cover` and `other[pixel]` is defined.
     pub fn blit_op<S>(
         &mut self,
         other: &Pixmap<S>,
@@ -475,35 +494,31 @@ impl<T: Clone> Pixmap<T> {
         result
     }
 
-    /// Extract the pixel in the interior of the given rectangle.
+    /// Returns a pixmap with all pixels contained in `clip_rect`.
     pub fn clip_rect(&self, clip_rect: Rect<i64>) -> Self {
         let mut result = Self::new();
-        result.blit_rect(self, clip_rect);
-        result
-    }
 
-    /// Blit all pixels contained in bounds from source to self
-    /// `self[k] = source[k]` for all `k` in `bounds` where `source` is defined.
-    pub fn blit_rect(&mut self, source: &Self, bounds: Rect<i64>) {
-        for cover_tile_index in tile_cover(bounds).iter_half_open() {
-            let Some(rc_source_tile) = source.tiles.get(&cover_tile_index) else {
+        for cover_tile_index in tile_cover(clip_rect).iter_half_open() {
+            let Some(rc_tile) = self.tiles.get(&cover_tile_index) else {
                 continue;
             };
 
             let cover_tile_rect = tile_rect(cover_tile_index);
 
-            if bounds.contains_rect(cover_tile_rect) {
-                // If the cover_tile_rect lies fully in bounds we can replace the whole tile
-                self.tiles.insert(cover_tile_index, rc_source_tile.clone());
-            } else {
-                // Otherwise we have to blit a subset of the tile
-                let self_tile = self.get_tile_mut(cover_tile_index);
-                self_tile.blit_if(rc_source_tile, |sub_index, _value| {
+            if clip_rect.contains_rect(cover_tile_rect) {
+                // If the cover_tile_rect lies fully in clip_rect we take the whole tile
+                result.tiles.insert(cover_tile_index, rc_tile.clone());
+            } else if clip_rect.interior_intersects(cover_tile_rect) {
+                // If the clip rectangle overlaps the tile we have to clip the tile
+                let clipped_tile = rc_tile.filter(|sub_index, _| {
                     let index = combine_indices(cover_tile_index, sub_index);
-                    bounds.half_open_contains(index)
+                    clip_rect.half_open_contains(index)
                 });
+                result.tiles.insert(cover_tile_index, Rc::new(clipped_tile));
             }
         }
+
+        result
     }
 
     pub fn extract(&mut self, pixels: impl IntoIterator<Item = Pixel>) -> Self {
@@ -551,6 +566,7 @@ impl<T: PartialEq + Clone> PartialEq for Pixmap<T> {
         self.tiles.iter().all(|(&tile_index, tile)| {
             let other_tile = other.get_tile(tile_index);
             if let Some(other_tile) = other_tile {
+                println!("Comparing tiles");
                 tile.deref() == other_tile
             } else {
                 tile.is_empty()

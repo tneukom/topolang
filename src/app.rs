@@ -575,29 +575,9 @@ impl EguiApp {
 
     pub fn load_save_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.label("Width:");
-            ui.add(
-                egui::DragValue::new(&mut self.new_size.x)
-                    .clamp_range(0..=1024)
-                    .speed(2.0),
-            );
-            ui.label("Height:");
-            ui.add(
-                egui::DragValue::new(&mut self.new_size.y)
-                    .clamp_range(0..=1024)
-                    .speed(2.0),
-            );
-        });
-
-        ui.horizontal(|ui| {
-            let bounds = Rect::low_size([0, 0], self.new_size);
-
             if ui.button("New").clicked() {
+                let bounds = Rect::low_size(Point(0, 0), self.new_size);
                 self.view = View::empty(bounds);
-            }
-
-            if ui.button("Resize").clicked() {
-                self.view.resize(bounds);
             }
         });
 
@@ -640,6 +620,24 @@ impl EguiApp {
             if ui.button("Export").clicked() {
                 if let Err(err) = self.gif_recorder.export("movie.gif") {
                     warn!("Failed to export gif with {err}");
+                }
+            }
+        });
+    }
+
+    pub fn document_ui(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            let bounds = self.view.world.bounding_rect();
+            let size = bounds.size();
+            ui.label(format!("Size: {} x {}", size.x, size.y));
+        });
+
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Set size:");
+            for size in [16, 32, 64, 128, 256, 512, 1024, 2048] {
+                if ui.button(format!("{size}")).clicked() {
+                    let bounds = Rect::low_size(Point::ZERO, Point(size, size));
+                    self.view.resize(bounds);
                 }
             }
         });
@@ -752,6 +750,10 @@ impl EguiApp {
 
         ui.label("Gif");
         self.gif_ui(ui);
+        ui.separator();
+
+        ui.label("Document");
+        self.document_ui(ui);
     }
 
     pub fn top_ui(&mut self, ui: &mut egui::Ui) {

@@ -106,6 +106,7 @@ impl<M: Copy + Eq> History<M> {
     /// If colormap is same as current no new snapshot is added
     pub fn add_snapshot(&mut self, material_map: Pixmap<M>, cause: SnapshotCause) {
         if self.head.material_map() == &material_map {
+            println!("New snapshot with no changes!");
             return;
         }
         self.head = Rc::new(Snapshot::new(material_map, cause, Some(self.head.clone())));
