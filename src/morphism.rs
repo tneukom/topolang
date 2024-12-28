@@ -1,7 +1,10 @@
 use crate::{
     math::pixel::Corner,
+    pattern::Pattern,
+    solid::SolidTransform,
     topology::{BorderKey, RegionKey, Seam, Topology},
 };
+use ahash::HashSet;
 use itertools::Itertools;
 use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet},
@@ -346,6 +349,65 @@ pub fn induced_corner_map(seam_phi: &BTreeMap<Seam, Seam>) -> Option<BTreeMap<Co
     }
 
     Some(corner_map)
+}
+
+/// A morphism that maps subsets of the domain (the solids) rigidly and the rest topologically.
+/// TODO: Should Morphism be renamed to TopologyMorphism?
+pub struct MixedMorphism {
+    morphism: Morphism,
+
+    /// A transform for each solid in the pattern that maps it to a matching area in the world.
+    /// The transformations must be compatible with the morphism, meaning
+    /// region_map[solid_transform(pixel)] = morphism[region_map(pixel)] for each pixel in the
+    /// respective solid.
+    solid_transforms: Vec<SolidTransform>,
+}
+
+impl MixedMorphism {
+    /// Satisfies required axioms
+    /// Alternative names: is_sound(),
+    /// TODO: Maybe an alternative would be
+    ///   is_sound(&self, dom: &Topology, codom: &Topology, solid: &Solids)
+    pub fn is_sound(&self, pattern: &Pattern, world: &Topology) -> bool {
+        // Check if morphism is sound
+        if !self.morphism.is_homomorphism(&pattern.topology, world) {
+            return false;
+        }
+
+        for (solid, solid_transform) in pattern.solids.solids.iter().zip_eq(&self.solid_transforms)
+        {
+            if !solid_transform.is_compatible_with_morphism(
+                solid,
+                &pattern.topology,
+                world,
+                &self.morphism,
+            ) {
+                return false;
+            }
+        }
+
+        if !self.is_injective(pattern, world) {
+            return false;
+        }
+
+        true
+    }
+
+    /// Returns true if none of that mapped solids overlap.
+    pub fn is_injective(&self, pattern: &Pattern, world: &Topology) -> bool {
+        let mut total_area = HashSet::default();
+
+        for solid in &pattern.solids.solids {
+            for pixel in solid.area() {
+                if !total_area.insert(pixel) {
+                    // pixel was already contained in total_area, therefore we have overlap.
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
 }
 
 #[cfg(test)]

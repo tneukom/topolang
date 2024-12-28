@@ -21,6 +21,7 @@ pub mod pattern;
 pub mod pixmap;
 pub mod regions;
 pub mod rule;
+pub mod solid;
 pub mod topology;
 mod union_find;
 pub mod utils;

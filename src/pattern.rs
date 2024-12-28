@@ -1,25 +1,30 @@
+use crate::{
+    material::Material,
+    math::pixel::Corner,
+    morphism::{MixedMorphism, Morphism},
+    pixmap::MaterialMap,
+    solid::{SolidTransform, Solids},
+    topology::{RegionKey, Seam, SeamMaterials, StrongRegionKey, Topology},
+};
+use itertools::Itertools;
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, BTreeSet},
 };
 
-use crate::{
-    material::Material,
-    math::{pixel::Corner, point::Point},
-    morphism::Morphism,
-    topology::{RegionKey, Seam, SeamMaterials, StrongRegionKey, Topology},
-};
-
-pub struct Solid {
-    pixels: Vec<Point<i64>>,
-}
-
 pub struct Pattern {
-    topology: Topology,
-    solids: Vec<Solid>,
+    pub topology: Topology,
+    pub solids: Solids,
 }
 
-/// Returns all seams (including non-atomic ones) in topo
+impl Pattern {
+    pub fn new(material_map: MaterialMap) -> Self {
+        let topology = Topology::new(material_map);
+        let solids = Solids::new(&topology.material_map, &topology.region_map);
+        Self { solids, topology }
+    }
+}
+
 /// Returns all Seams `seam` (including non-atomic ones) where the material on the left of `seam`
 /// is a match of `left_material`.
 #[inline(never)]
@@ -294,6 +299,29 @@ impl<'a> SearchMorphism<'a> {
     pub fn find_first_match(&self, trace: impl Trace) -> Option<Morphism> {
         let phis = self.find_matches(trace);
         phis.into_iter().next()
+    }
+}
+
+pub struct SearchMixedMorphism<'a> {
+    pub world: &'a Topology,
+    pub pattern: &'a Pattern,
+    pub hidden: Option<&'a BTreeSet<StrongRegionKey>>,
+}
+
+impl<'a> SearchMixedMorphism<'a> {
+    #[inline(never)]
+    pub fn find_mixed_morphisms(&self, trace: impl Trace) -> Vec<MixedMorphism> {
+        let search_topological_morphism = SearchMorphism {
+            world: self.world,
+            pattern: &self.pattern.topology,
+            hidden: self.hidden,
+        };
+
+        let partial = BTreeMap::new();
+        search_topological_morphism.search_step(partial, trace, |phi| {
+            // We have a topological morphism, now we find a consistent mapping of the solids.
+            SolidTransform::transforms_compatible_with_morphism(&self.solid)
+        })
     }
 }
 
@@ -575,5 +603,11 @@ mod test {
         assert_pattern_match("rule_frame_b/pattern.png", "rule_frame_b/match_2.png", 1);
         assert_pattern_match("rule_frame_b/pattern.png", "rule_frame_b/match_3.png", 1);
         assert_pattern_match("rule_frame_b/pattern.png", "rule_frame_b/match_4.png", 1);
+    }
+
+    #[test]
+    fn pattern_matches_solid_a() {
+        // assert_pattern_match("solid/a/pattern.png", "solid/a/match_1.png", 1);
+        assert_pattern_match("solid/a/pattern.png", "solid/a/miss_1.png", 0);
     }
 }
