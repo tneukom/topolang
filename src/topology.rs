@@ -71,6 +71,11 @@ impl Seam {
             len: self.len,
         }
     }
+
+    // self + offset == other
+    pub fn translated_eq(&self, offset: Point<i64>, other: &Seam) -> bool {
+        &self.translated(offset) == other
+    }
 }
 
 impl Display for Seam {
@@ -137,9 +142,9 @@ impl Border {
     }
 
     /// self + offset == other
-    pub fn eq_with_translation(&self, other: &Self, offset: Point<i64>) -> bool {
+    pub fn translated_eq(&self, offset: Point<i64>, other: &Self) -> bool {
         if self.cycle.len() != other.cycle.len() {
-            return true;
+            return false;
         }
 
         self.sides()
@@ -170,20 +175,16 @@ impl Boundary {
         first_border.cycle[0].0.left_pixel
     }
 
-    /// Returns true if the left side is equal to the right side plus an offset, ignores material.
-    pub fn is_translation_of(&self, other: &Self) -> bool {
+    /// self + offset == other
+    pub fn translated_eq(&self, offset: Point<i64>, other: &Self) -> bool {
         if self.borders.len() != other.borders.len() {
             return false;
         }
 
-        // self + offset == other
-        let offset = self.top_left_interior_pixel() - other.top_left_interior_pixel();
         self.borders
             .iter()
             .zip(&other.borders)
-            .all(|(self_border, other_border)| {
-                self_border.eq_with_translation(other_border, offset)
-            })
+            .all(|(self_border, other_border)| self_border.translated_eq(offset, other_border))
     }
 }
 

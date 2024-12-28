@@ -86,6 +86,7 @@ impl Material {
         self
     }
 
+    /// Discard flags like `Self::SOLID_FLAG`
     pub fn as_normal(mut self) -> Material {
         self.flags = Self::NO_FLAGS;
         self
@@ -93,13 +94,14 @@ impl Material {
 
     /// Can a matching map a region with material `self` to a region with material `other`?
     pub fn matches(self, other: Self) -> bool {
-        if self.is_solid() {
-            // match rigid rgb or normal rgb
-            (other.is_normal() || other.is_solid()) && self.rgb() == other.rgb()
-        } else {
-            // exact color match otherwise
-            self == other
-        }
+        self == other
+        // if self.is_solid() {
+        //     // match rigid rgb or normal rgb
+        //     (other.is_normal() || other.is_solid()) && self.rgb() == other.rgb()
+        // } else {
+        //     // exact color match otherwise
+        //     self == other
+        // }
     }
 }
 

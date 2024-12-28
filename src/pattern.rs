@@ -576,4 +576,25 @@ mod test {
         assert_pattern_match("rule_frame_b/pattern.png", "rule_frame_b/match_3.png", 1);
         assert_pattern_match("rule_frame_b/pattern.png", "rule_frame_b/match_4.png", 1);
     }
+
+    #[test]
+    fn pattern_matches_solid_a() {
+        assert_pattern_match("solid/a/pattern.png", "solid/a/match_1.png", 1);
+        assert_pattern_match("solid/a/pattern.png", "solid/a/match_2.png", 2);
+        assert_pattern_match("solid/a/pattern.png", "solid/a/miss_1.png", 0);
+        assert_pattern_match("solid/a/pattern.png", "solid/a/miss_2.png", 0);
+        assert_pattern_match("solid/a/pattern.png", "solid/a/miss_3.png", 0);
+    }
+
+    #[test]
+    fn pattern_matches_solid_b() {
+        assert_pattern_match("solid/b/pattern.png", "solid/b/match_1.png", 1);
+        assert_pattern_match("solid/b/pattern.png", "solid/b/miss_1.png", 0);
+    }
+
+    #[test]
+    fn pattern_matches_solid_c() {
+        assert_pattern_match("solid/c/pattern.png", "solid/c/match_1.png", 1);
+        assert_pattern_match("solid/c/pattern.png", "solid/c/miss_1.png", 0);
+    }
 }
