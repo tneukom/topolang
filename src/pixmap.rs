@@ -240,6 +240,7 @@ impl<T> Pixmap<T> {
         self.iter().count()
     }
 
+    /// Iterate over all (pixel, &value)
     pub fn iter(&self) -> impl Iterator<Item = (Point<i64>, &T)> + Clone {
         self.tiles.iter().flat_map(|(&tile_index, tile)| {
             tile.iter().map(move |(offset_index, value)| {
@@ -248,11 +249,11 @@ impl<T> Pixmap<T> {
         })
     }
 
-    /// Iterate all (pixel, &value) contained in `cover`
+    /// Iterate all (pixel, &value) where `pixel` is contained in `cover`
     pub fn iter_cover<'a>(
         &'a self,
         cover: &'a AreaCover,
-    ) -> impl Iterator<Item = (Point<i64>, &T)> + Clone + 'a {
+    ) -> impl Iterator<Item = (Point<i64>, &'a T)> + Clone + 'a {
         let tiles = cover
             .iter_tiles()
             .filter_map(|tile_index| self.tiles.get(&tile_index).map(|tile| (tile_index, tile)));
@@ -275,10 +276,12 @@ impl<T> Pixmap<T> {
         })
     }
 
+    /// Iterate over all keys
     pub fn keys(&self) -> impl Iterator<Item = Point<i64>> + Clone + '_ {
         self.iter().map(|(index, _)| index)
     }
 
+    /// Iterate over all values
     pub fn values(&self) -> impl Iterator<Item = &T> + Clone {
         self.iter().map(|(_, value)| value)
     }
@@ -286,7 +289,7 @@ impl<T> Pixmap<T> {
     pub fn bounding_rect(&self) -> Rect<i64> {
         // TODO: In many cases returning the bounding rectangle of the tiles would be enough
         // TODO:SPEEDUP: There must be a quicker way than just brute force
-        crate::math::rect::RectBounds::iter_bounds(self.keys()).inc_high()
+        Rect::index_bounds(self.keys())
     }
 
     pub fn get_tile(&self, tile_index: Point<i64>) -> Option<&Tile<T>> {
@@ -381,6 +384,8 @@ impl<T: Clone> Pixmap<T> {
         self.blit_if(other, |_, current| current.is_some());
     }
 
+    /// Apply an operation to each pixel in `self` that is contained in `cover` and `other` is
+    /// defined.
     pub fn blit_op<S>(
         &mut self,
         other: &Pixmap<S>,
@@ -528,6 +533,16 @@ impl<T: Eq + Clone> Pixmap<T> {
     /// TODO: Rename to something more generic, like without_value, drop_value, reject_value
     pub fn without(&self, removed: &T) -> Self {
         self.filter(|_, value| value != removed)
+    }
+
+    /// Iterate all `pixel` in `cover` where `self[pixel] == value`
+    pub fn iter_where_value<'a>(
+        &'a self,
+        cover: &'a AreaCover,
+        value: T,
+    ) -> impl Iterator<Item = Point<i64>> + Clone + 'a {
+        self.iter_cover(cover)
+            .filter_map(move |(pixel, pixel_value)| (pixel_value == &value).then_some(pixel))
     }
 }
 

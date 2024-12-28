@@ -4,7 +4,7 @@ use crate::{
     material::Material,
     math::pixel::Pixel,
     morphism::Morphism,
-    pattern::{NullTrace, Search},
+    pattern::{NullTrace, SearchMorphism},
     pixmap::Pixmap,
     topology::{FillRegion, Topology},
     world::World,
@@ -42,7 +42,7 @@ impl Rule {
         // TODO: Build rigid map and replace with normal colors in two passes.
 
         // Collect regions that change their color
-        for (&before_region_key, before_region) in &before.regions {
+        for (&before_region_key, _before_region) in &before.regions {
             let before_region = &before[before_region_key];
 
             let Some(after_fill_color) = Self::fill_material(
@@ -105,8 +105,8 @@ pub fn stabilize(world: &mut World, rules: &Vec<Rule>) -> usize {
     loop {
         let mut applied = false;
         for rule in rules {
-            if let Some(phi) =
-                Search::new(world.topology(), &rule.pattern).find_first_match(NullTrace::new())
+            if let Some(phi) = SearchMorphism::new(world.topology(), &rule.pattern)
+                .find_first_match(NullTrace::new())
             {
                 rule.apply_ops(&phi, world);
                 steps += 1;
@@ -125,7 +125,7 @@ mod test {
     use crate::{
         field::RgbaField,
         material::Material,
-        pattern::{NullTrace, Search},
+        pattern::{NullTrace, SearchMorphism},
         pixmap::MaterialMap,
         rule::Rule,
         topology::Topology,
@@ -157,7 +157,7 @@ mod test {
 
         let mut application_count: usize = 0;
         while let Some(phi) =
-            Search::new(world.topology(), &rule.pattern).find_first_match(NullTrace::new())
+            SearchMorphism::new(world.topology(), &rule.pattern).find_first_match(NullTrace::new())
         {
             rule.apply_ops(&phi, &mut world);
 

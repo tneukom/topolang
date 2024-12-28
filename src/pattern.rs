@@ -20,12 +20,14 @@ pub struct Pattern {
 }
 
 /// Returns all seams (including non-atomic ones) in topo
+/// Returns all Seams `seam` (including non-atomic ones) where the material on the left of `seam`
+/// is a match of `left_material`.
 #[inline(never)]
 pub fn generalized_seams(topo: &Topology, left_material: Material) -> Vec<Seam> {
     let mut seams = Vec::new();
 
     for region in topo.regions.values() {
-        if region.material != left_material {
+        if !region.material.matches(left_material) {
             continue;
         }
 
@@ -57,17 +59,26 @@ pub fn generalized_seams(topo: &Topology, left_material: Material) -> Vec<Seam> 
     seams
 }
 
+/// A seam that has not yet been assigned in a Morphism, its corners and left side might
+/// already be assigned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Unassigned {
+pub struct UnassignedSeam {
+    /// Seam in the domain
     seam: Seam,
+
     phi_left: Option<RegionKey>,
     phi_start_corner: Option<Corner>,
     phi_stop_corner: Option<Corner>,
+
+    /// Is the reverse of the unassigned seam also in the pattern? The reversed seam is not in the
+    /// pattern if one side of the seam is void.
     reverse_in_pattern: bool,
+
+    /// Left and right material of seam
     materials: SeamMaterials,
 }
 
-impl Unassigned {
+impl UnassignedSeam {
     /// List of unassigned seams given a pattern and a partial Morphism `phi`
     /// If returned list is empty phi is fully defined
     #[inline(never)]
@@ -90,7 +101,7 @@ impl Unassigned {
     /// by the already assigned seams and/or restricts other items more than rhs.
     /// Not a total order (not antisymmetric)
     fn compare_heuristic(&self, other: &Self) -> Ordering {
-        let cmp_tuple = |unassigned: &Unassigned| {
+        let cmp_tuple = |unassigned: &UnassignedSeam| {
             (
                 unassigned.phi_left.is_some(),
                 unassigned.phi_start_corner.is_some(),
@@ -117,8 +128,10 @@ impl Unassigned {
         pattern: &Topology,
         phi_seam: &Seam,
     ) -> bool {
-        if pattern[pattern.left_of(&self.seam)].material != world[world.left_of(phi_seam)].material
-        {
+        // Check if left side materials match
+        let left_material = pattern[pattern.left_of(&self.seam)].material;
+        let phi_left_material = world[world.left_of(phi_seam)].material;
+        if !left_material.matches(phi_left_material) {
             // Inconsistent left side color
             return false;
         }
@@ -133,9 +146,9 @@ impl Unassigned {
                 return false;
             };
 
-            if world[right_of_phi_seam].material
-                != pattern[pattern.right_of(&self.seam).unwrap()].material
-            {
+            let right_material = pattern[pattern.right_of(&self.seam).unwrap()].material;
+            let phi_right_material = world[right_of_phi_seam].material;
+            if !right_material.matches(phi_right_material) {
                 // Inconsistent right color
                 return false;
             }
@@ -165,16 +178,15 @@ impl Unassigned {
         true
     }
 
-    /// Iterate over matching candidates for pattern seam which have a region on both sides (left and right)
+    /// Iterate over assignment candidates for a pattern seam which has a region on both sides
+    /// (left and right).
     #[inline(never)]
     fn both_sided_assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
-        // let right_color = self.colors.right.expect("Not both sided");
-
         world
             .regions
             .values()
-            .filter(|region| self.materials.left == region.material)
-            .flat_map(|region| region.iter_seams().copied())
+            .filter(|world_region| self.materials.left.matches(world_region.material))
+            .flat_map(|world_region| world_region.iter_seams().copied())
             .filter(|phi_seam| self.possible_assignment(world, pattern, phi_seam))
             .collect()
     }
@@ -199,13 +211,13 @@ impl Unassigned {
     }
 }
 
-pub struct Search<'a> {
+pub struct SearchMorphism<'a> {
     pub world: &'a Topology,
     pub pattern: &'a Topology,
     pub hidden: Option<&'a BTreeSet<StrongRegionKey>>,
 }
 
-impl<'a> Search<'a> {
+impl<'a> SearchMorphism<'a> {
     pub fn new(world: &'a Topology, pattern: &'a Topology) -> Self {
         Self {
             world,
@@ -218,8 +230,8 @@ impl<'a> Search<'a> {
     pub fn search_step(
         &self,
         partial: BTreeMap<Seam, Seam>,
-        solutions: &mut Vec<Morphism>,
         trace: impl Trace,
+        on_solution_found: &mut impl FnMut(Morphism),
     ) {
         // Check if partial assignment is consistent
         let Some(phi) = Morphism::induced_from_seam_map(self.pattern, self.world, partial.clone())
@@ -245,17 +257,19 @@ impl<'a> Search<'a> {
         }
 
         // Find a seam that is not yet assigned
-        let unassigned = Unassigned::choose(self.pattern, &phi);
+        let unassigned = UnassignedSeam::choose(self.pattern, &phi);
         let Some(unassigned) = unassigned else {
             // If seams are assigned, check morphism is proper
             trace.success();
-            solutions.push(phi);
+            on_solution_found(phi);
             return;
         };
 
         let assignment_candidates = unassigned.assignment_candidates(self.world, self.pattern);
         if assignment_candidates.is_empty() {
-            trace.failed("No assignment candidates");
+            trace.failed(&format!(
+                "No assignment candidates for UnassignedSeam {unassigned:?}"
+            ));
             return;
         }
 
@@ -264,7 +278,7 @@ impl<'a> Search<'a> {
             let mut ext_partial = partial.clone();
             ext_partial.insert(unassigned.seam, phi_unassigned);
             trace.assign(&unassigned.seam, &phi_unassigned);
-            self.search_step(ext_partial, solutions, trace.recurse());
+            self.search_step(ext_partial, trace.recurse(), on_solution_found);
         }
     }
 
@@ -272,7 +286,7 @@ impl<'a> Search<'a> {
     pub fn find_matches(&self, trace: impl Trace) -> Vec<Morphism> {
         let mut solutions = Vec::new();
         let partial = BTreeMap::new();
-        self.search_step(partial, &mut solutions, trace);
+        self.search_step(partial, trace, &mut |solution| solutions.push(solution));
         solutions
     }
 
@@ -379,7 +393,7 @@ mod test {
         field::RgbaField,
         material::Material,
         math::rgba8::Rgba8,
-        pattern::{NullTrace, Search},
+        pattern::{CoutTrace, NullTrace, SearchMorphism},
         pixmap::MaterialMap,
         topology::Topology,
         utils::IntoT,
@@ -458,10 +472,10 @@ mod test {
             .into();
         let world = Topology::new(world_material_map);
 
-        let trace = NullTrace::new();
-        // let trace = CoutTrace::new();
+        // let trace = NullTrace::new();
+        let trace = CoutTrace::new();
 
-        let matches = Search::new(&world, &pattern).find_matches(trace);
+        let matches = SearchMorphism::new(&world, &pattern).find_matches(trace);
         assert_eq!(matches.len(), n_solutions);
 
         // for a_match in &matches {

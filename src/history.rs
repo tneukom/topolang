@@ -65,7 +65,7 @@ impl<M: Copy + Eq> Snapshot<M> {
 
     // TODO: Could return an Iterator instead
     /// Resulting path contains start and stop
-    pub fn path_to<'a>(mut self: &'a Rc<Self>, stop: &'a Rc<Self>) -> Option<Vec<&Rc<Self>>> {
+    pub fn path_to<'a>(mut self: &Rc<Self>, stop: &Rc<Self>) -> Option<Vec<&Rc<Self>>> {
         let mut path = vec![self];
         while !Rc::ptr_eq(self, stop) {
             self = self.parent.as_ref()?;

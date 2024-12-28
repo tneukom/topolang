@@ -90,6 +90,17 @@ impl Material {
         self.flags = Self::NO_FLAGS;
         self
     }
+
+    /// Can a matching map a region with material `self` to a region with material `other`?
+    pub fn matches(self, other: Self) -> bool {
+        if self.is_solid() {
+            // match rigid rgb or normal rgb
+            (other.is_normal() || other.is_solid()) && self.rgb() == other.rgb()
+        } else {
+            // exact color match otherwise
+            self == other
+        }
+    }
 }
 
 impl From<Rgba8> for Material {

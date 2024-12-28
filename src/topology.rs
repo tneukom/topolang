@@ -196,6 +196,8 @@ pub struct Region {
     pub cover: AreaCover,
 
     pub material: Material,
+
+    pub bounds: Rect<i64>,
 }
 
 impl Region {
@@ -355,10 +357,13 @@ impl Topology {
 
             let boundary = Boundary::new(borders);
 
+            let bounds = Rect::index_bounds(region_map.iter_where_value(&area_cover, region_id));
+
             let region = Region {
                 material: material_map[boundary.arbitrary_interior_pixel()],
                 boundary: boundary,
                 cover: area_cover,
+                bounds,
             };
             regions.insert(region_id, region);
         }
@@ -413,11 +418,11 @@ impl Topology {
         self.seam_indices.values()
     }
 
-    pub fn iter_region_keys<'a>(&'a self) -> impl Iterator<Item = &RegionKey> + Clone + 'a {
+    pub fn iter_region_keys<'a>(&'a self) -> impl Iterator<Item = &'a RegionKey> + Clone + 'a {
         self.regions.keys()
     }
 
-    pub fn iter_region_values<'a>(&'a self) -> impl Iterator<Item = &Region> + Clone + 'a {
+    pub fn iter_region_values<'a>(&'a self) -> impl Iterator<Item = &'a Region> + Clone + 'a {
         self.regions.values()
     }
 
@@ -510,10 +515,7 @@ impl Topology {
         region_key: RegionKey,
     ) -> impl Iterator<Item = Pixel> + Clone + 'a {
         let region = &self.regions[&region_key];
-        self.region_map
-            .iter_cover(&region.cover)
-            .filter(move |(_, &iter_region_key)| iter_region_key == region_key)
-            .map(|kv| kv.0)
+        self.region_map.iter_where_value(&region.cover, region_key)
     }
 
     pub fn region_at(&self, pixel: Pixel) -> Option<RegionKey> {

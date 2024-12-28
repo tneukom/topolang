@@ -20,7 +20,7 @@ use crate::{
 use ahash::{HashMap, HashMapExt};
 use itertools::Itertools;
 
-use crate::{math::pixel::Pixel, pixmap::MaterialMap};
+use crate::math::pixel::Pixel;
 use std::{collections::BTreeMap, rc::Rc};
 
 pub trait RegionEq {
@@ -366,16 +366,6 @@ pub fn right_of_border(border: impl DoubleEndedIterator<Item = Side>) -> Vec<Pix
     let reversed_border = border.rev().map(|side| side.reversed());
     left_of_border(reversed_border)
 }
-
-// pub enum Malleability  {
-//     Solid,
-//     Pliable
-// }
-
-// TODO: Might make more sense to have a PixSet class
-// pub fn solid_regions(material_map: &MaterialMap) -> Pixmap<Material> {
-//     let solid_map = material_map.filter(|_, material| material.is_solid() )
-// }
 
 #[cfg(test)]
 mod test {

@@ -4,7 +4,7 @@ use crate::{
     field::RgbaField,
     material::Material,
     math::{pixel::Pixel, rgba8::Rgba8},
-    pattern::{NullTrace, Search},
+    pattern::{NullTrace, SearchMorphism},
     pixmap::MaterialMap,
     rule::Rule,
     topology::{BorderKey, Region, StrongRegionKey, Topology},
@@ -61,7 +61,7 @@ impl Interpreter {
     #[inline(never)]
     pub fn compile(&self, world: &mut World) -> anyhow::Result<Vec<CompiledRule>> {
         // Find all matches for rule_frame in world
-        let search = Search::new(world.topology(), &self.rule_frame);
+        let search = SearchMorphism::new(world.topology(), &self.rule_frame);
         let matches = search.find_matches(NullTrace::new());
         let topology = world.topology();
 
@@ -122,7 +122,7 @@ impl Interpreter {
             .collect();
 
         for CompiledRule { rule, .. } in &compiled_rules {
-            let mut search = Search::new(world.topology(), &rule.pattern);
+            let mut search = SearchMorphism::new(world.topology(), &rule.pattern);
             search.hidden = Some(&hidden);
 
             let solutions = search.find_matches(NullTrace::new());
