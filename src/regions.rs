@@ -277,6 +277,7 @@ pub fn pixmap_regions<T: Copy + RegionEq>(
     (region_map, area_covers)
 }
 
+/// Mapping each side to the region_id on its right side
 pub type RegionBoundary = HashMap<Side, Option<usize>>;
 
 #[inline(never)]
@@ -307,6 +308,18 @@ pub fn region_boundaries(region_map: &Pixmap<usize>, n_regions: usize) -> Vec<Re
 pub fn split_boundary_into_cycles<T>(mut sides: HashMap<Side, T>) -> Vec<Vec<(Side, T)>> {
     let mut cycles = Vec::new();
 
+    // Pop the next side after `side` from `sides` and return it.
+    let pop_next_side_on_boundary = |side: Side| {
+        for next_side in side.continuing_sides() {
+            // There is always exactly one continuing side
+            if let Some(next_color) = sides.remove(&next_side) {
+                return Some((next_side, next_color));
+            }
+        }
+
+        None
+    };
+
     while !sides.is_empty() {
         // Pop first element
         let mut side = *sides.keys().next().unwrap();
@@ -314,20 +327,11 @@ pub fn split_boundary_into_cycles<T>(mut sides: HashMap<Side, T>) -> Vec<Vec<(Si
 
         // Extract cycle
         let mut cycle = vec![(side, color)];
-        'outer: loop {
-            for next_side in side.continuing_sides() {
-                // There is always exactly one continuing side
-                if let Some(next_color) = sides.remove(&next_side) {
-                    cycle.push((next_side, next_color));
-                    side = next_side;
-                    continue 'outer;
-                }
-            }
-
-            break;
+        while let Some((next_side, next_color)) = pop_next_side_on_boundary(side) {
+            cycle.push((next_side, next_color));
         }
 
-        // Make sure cycle starts with smallest element
+        // Make sure cycle starts with the smallest element
         let i_min = cycle.iter().position_min_by_key(|(side, _)| side).unwrap();
         cycle.rotate_left(i_min);
 
@@ -339,8 +343,10 @@ pub fn split_boundary_into_cycles<T>(mut sides: HashMap<Side, T>) -> Vec<Vec<(Si
     cycles
 }
 
-// TODO: Use iterator instead of Vec<Side>
+/// Returns the pixels that are to the left of `border`. The border can contain holes and does not
+/// have to be ordered in any way.
 pub fn left_of_border(border: impl Iterator<Item = Side>) -> Vec<Pixel> {
+    // Collect rows of pixels between left and right borders.
     let mut left_right_sides: Vec<_> = border
         .filter(|side| side.name == SideName::Left || side.name == SideName::Right)
         .collect();
