@@ -309,7 +309,7 @@ pub fn split_boundary_into_cycles<T>(mut sides: HashMap<Side, T>) -> Vec<Vec<(Si
     let mut cycles = Vec::new();
 
     // Pop the next side after `side` from `sides` and return it.
-    let pop_next_side_on_boundary = |side: Side| {
+    fn pop_next_side_on_boundar<T>(sides: &mut HashMap<Side, T>, side: Side) -> Option<(Side, T)> {
         for next_side in side.continuing_sides() {
             // There is always exactly one continuing side
             if let Some(next_color) = sides.remove(&next_side) {
@@ -318,7 +318,7 @@ pub fn split_boundary_into_cycles<T>(mut sides: HashMap<Side, T>) -> Vec<Vec<(Si
         }
 
         None
-    };
+    }
 
     while !sides.is_empty() {
         // Pop first element
@@ -327,8 +327,9 @@ pub fn split_boundary_into_cycles<T>(mut sides: HashMap<Side, T>) -> Vec<Vec<(Si
 
         // Extract cycle
         let mut cycle = vec![(side, color)];
-        while let Some((next_side, next_color)) = pop_next_side_on_boundary(side) {
+        while let Some((next_side, next_color)) = pop_next_side_on_boundar(&mut sides, side) {
             cycle.push((next_side, next_color));
+            side = next_side;
         }
 
         // Make sure cycle starts with the smallest element

@@ -8,6 +8,7 @@ pub mod area_cover;
 pub mod brush;
 pub mod camera;
 pub mod coordinate_frame;
+pub mod cycle_segments;
 pub mod field;
 pub mod frozen;
 pub mod history;

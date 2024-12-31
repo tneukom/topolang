@@ -24,6 +24,8 @@ pub struct Pattern {
 /// is a match of `left_material`.
 #[inline(never)]
 pub fn generalized_seams(topo: &Topology, left_material: Material) -> Vec<Seam> {
+    // TODO: Create a function runs() in CycleSegments that returns multiple consecutive segments
+    //   joined.
     let mut seams = Vec::new();
 
     for region in topo.regions.values() {
@@ -32,19 +34,19 @@ pub fn generalized_seams(topo: &Topology, left_material: Material) -> Vec<Seam> 
         }
 
         for border in &region.boundary.borders {
-            for i in 0..border.seams.len() {
+            for i in 0..border.seams_len() {
                 // All seams that go around exactly once are equivalent, so we only include one.
                 let len = if i == 0 {
                     // Include seam that goes around the border.
-                    border.seams.len()
+                    border.seams_len()
                 } else {
                     // Skip seam that goes around.
-                    border.seams.len() - 1
+                    border.seams_len() - 1
                 };
 
                 for j in 0..len {
-                    let start = border.seams[i].start;
-                    let stop = border.seams[(i + j) % border.seams.len()].stop;
+                    let start = border.seam(i).start;
+                    let stop = border.seam((i + j) % border.seams_len()).stop;
                     let seam = Seam::new_with_len(start, stop, j + 1);
                     seams.push(seam)
                 }
@@ -85,13 +87,13 @@ impl UnassignedSeam {
     pub fn candidates(pattern: &Topology, phi: &Morphism) -> Vec<Self> {
         pattern
             .iter_seams()
-            .filter(|&seam| !phi.seam_map.contains_key(seam))
+            .filter(|seam| !phi.seam_map.contains_key(seam))
             .map(|seam| Self {
-                seam: *seam,
+                seam,
                 phi_left: phi.region_map.get(&pattern.left_of(seam)).copied(),
                 phi_start_corner: phi.corner_map.get(&seam.start_corner()).copied(),
                 phi_stop_corner: phi.corner_map.get(&seam.stop_corner()).copied(),
-                reverse_in_pattern: pattern.contains_seam(&seam.reversed()),
+                reverse_in_pattern: pattern.contains_seam(seam.reversed()),
                 materials: pattern.seam_materials(seam),
             })
             .collect()
@@ -126,10 +128,10 @@ impl UnassignedSeam {
         &self,
         world: &Topology,
         pattern: &Topology,
-        phi_seam: &Seam,
+        phi_seam: Seam,
     ) -> bool {
         // Check if left side materials match
-        let left_material = pattern[pattern.left_of(&self.seam)].material;
+        let left_material = pattern[pattern.left_of(self.seam)].material;
         let phi_left_material = world[world.left_of(phi_seam)].material;
         if !left_material.matches(phi_left_material) {
             // Inconsistent left side color
@@ -146,7 +148,7 @@ impl UnassignedSeam {
                 return false;
             };
 
-            let right_material = pattern[pattern.right_of(&self.seam).unwrap()].material;
+            let right_material = pattern[pattern.right_of(self.seam).unwrap()].material;
             let phi_right_material = world[right_of_phi_seam].material;
             if !right_material.matches(phi_right_material) {
                 // Inconsistent right color
@@ -186,8 +188,8 @@ impl UnassignedSeam {
             .regions
             .values()
             .filter(|world_region| self.materials.left.matches(world_region.material))
-            .flat_map(|world_region| world_region.iter_seams().copied())
-            .filter(|phi_seam| self.possible_assignment(world, pattern, phi_seam))
+            .flat_map(|world_region| world_region.iter_seams())
+            .filter(|&phi_seam| self.possible_assignment(world, pattern, phi_seam))
             .collect()
     }
 
@@ -195,7 +197,7 @@ impl UnassignedSeam {
     fn fallback_assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
         generalized_seams(world, self.materials.left)
             .into_iter()
-            .filter(|phi_seam| self.possible_assignment(world, pattern, phi_seam))
+            .filter(|&phi_seam| self.possible_assignment(world, pattern, phi_seam))
             .collect()
     }
 
@@ -277,7 +279,7 @@ impl<'a> SearchMorphism<'a> {
         for phi_unassigned in assignment_candidates {
             let mut ext_partial = partial.clone();
             ext_partial.insert(unassigned.seam, phi_unassigned);
-            trace.assign(&unassigned.seam, &phi_unassigned);
+            trace.assign(unassigned.seam, phi_unassigned);
             self.search_step(ext_partial, trace.recurse(), on_solution_found);
         }
     }
@@ -307,7 +309,7 @@ impl CoutTrace {
         Self { level: 0 }
     }
 
-    pub fn assign(&self, seam: &Seam, phi_seam: &Seam) {
+    pub fn assign(&self, seam: Seam, phi_seam: Seam) {
         let indent = self.indent();
         println!("{indent}{seam} -> {phi_seam}")
     }
@@ -334,7 +336,7 @@ impl CoutTrace {
 }
 
 pub trait Trace {
-    fn assign(&self, seam: &Seam, phi_seam: &Seam);
+    fn assign(&self, seam: Seam, phi_seam: Seam);
 
     fn failed(&self, cause: &str);
 
@@ -344,7 +346,7 @@ pub trait Trace {
 }
 
 impl Trace for CoutTrace {
-    fn assign(&self, seam: &Seam, phi_seam: &Seam) {
+    fn assign(&self, seam: Seam, phi_seam: Seam) {
         let indent = self.indent();
         println!("{indent}{seam} -> {phi_seam}")
     }
@@ -376,7 +378,7 @@ impl NullTrace {
 }
 
 impl Trace for NullTrace {
-    fn assign(&self, _seam: &Seam, _phi_seam: &Seam) {}
+    fn assign(&self, _seam: Seam, _phi_seam: Seam) {}
 
     fn failed(&self, _cause: &str) {}
 

@@ -145,7 +145,7 @@ impl Morphism {
 
         // Check if seam mapping is rigid
         for seam in region.iter_seams() {
-            if let Some(phi_seam) = &self.seam_map.get(seam) {
+            if let Some(phi_seam) = &self.seam_map.get(&seam) {
                 if !seam.translated_eq(offset, phi_seam) {
                     return false;
                 }
@@ -168,7 +168,7 @@ impl Morphism {
     ///   phi * reversed = reversed * phi
     #[inline(never)]
     pub fn preserves_structure(&self, dom: &Topology, codom: &Topology) -> bool {
-        for (seam, phi_seam) in &self.seam_map {
+        for (&seam, &phi_seam) in &self.seam_map {
             if self[seam.start_corner()] != phi_seam.start_corner() {
                 return false;
             }
@@ -208,15 +208,14 @@ impl Morphism {
     pub fn non_overlapping(&self, dom: &Topology, codom: &Topology) -> bool {
         self.border_map.iter().all(|(&border, &phi_border)| {
             let len_phi_seams: usize = dom[border]
-                .seams
-                .iter()
+                .iter_seams()
                 .filter_map(|seam| {
-                    let phi_seam = self.seam_map.get(seam)?;
-                    Some(phi_seam.len)
+                    let phi_seam = self.seam_map.get(&seam)?;
+                    Some(phi_seam.atoms)
                 })
                 .sum();
 
-            len_phi_seams <= codom[phi_border].seams.len()
+            len_phi_seams <= codom[phi_border].seams_len()
         })
     }
 
@@ -238,7 +237,7 @@ impl Morphism {
             .filter(|&seam| include_void_seams || !dom.touches_void(seam))
             .all(|seam| {
                 // Seams & corners
-                self.seam_map.contains_key(seam)
+                self.seam_map.contains_key(&seam)
                     && self.corner_map.contains_key(&seam.start_corner())
                     && self.corner_map.contains_key(&seam.stop_corner())
             });
@@ -279,13 +278,13 @@ pub fn induced_seam_map(
 
     for (&region_a, &phi_region_a) in region_phi {
         for (&region_b, &phi_region_b) in region_phi {
-            let &seam = match dom.seams_between(region_a, region_b).at_most_one() {
+            let seam = match dom.seams_between(region_a, region_b).at_most_one() {
                 Ok(Some(seam)) => seam,
                 Ok(None) => continue,
                 Err(_) => anyhow::bail!("Multiple seam between two regions not implemented"),
             };
 
-            let Ok(&phi_seam) = dom.seams_between(phi_region_a, phi_region_b).exactly_one() else {
+            let Ok(phi_seam) = dom.seams_between(phi_region_a, phi_region_b).exactly_one() else {
                 return Ok(None);
             };
 
@@ -309,7 +308,7 @@ pub fn induced_region_map(
 ) -> Option<BTreeMap<RegionKey, RegionKey>> {
     let mut region_phi: BTreeMap<RegionKey, RegionKey> = BTreeMap::new();
 
-    for (seam, phi_seam) in seam_phi {
+    for (&seam, &phi_seam) in seam_phi {
         // check left side
         let region = dom.left_of(seam);
         let phi_region = codom.left_of(phi_seam);
@@ -329,7 +328,7 @@ pub fn induced_border_map(
 ) -> Option<BTreeMap<BorderKey, BorderKey>> {
     let mut border_phi: BTreeMap<BorderKey, BorderKey> = BTreeMap::new();
 
-    for (seam, phi_seam) in seam_phi {
+    for (&seam, &phi_seam) in seam_phi {
         let border = dom.seam_border(seam);
         let phi_border = codom.seam_border(phi_seam);
         if !extend_map(&mut border_phi, border, phi_border) {
@@ -397,7 +396,7 @@ mod test {
                 .exactly_one()
                 .map_err(|_| anyhow!("Seam mapping not determined from colors."))?;
 
-            phi.insert(*seam, *phi_seam);
+            phi.insert(seam, phi_seam);
         }
 
         Ok(phi)
@@ -405,7 +404,7 @@ mod test {
 
     /// Map each seam of a Topology to itself
     fn trivial_seam_automorphism(topo: &Topology) -> BTreeMap<Seam, Seam> {
-        topo.iter_seams().map(|&seam| (seam, seam)).collect()
+        topo.iter_seams().map(|seam| (seam, seam)).collect()
     }
 
     #[test]
