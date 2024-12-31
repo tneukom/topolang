@@ -1,14 +1,6 @@
-use itertools::Itertools;
-use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
-    fmt,
-    fmt::{Debug, Display, Formatter},
-    hash::{Hash, Hasher},
-    ops::{Index, IndexMut},
-};
-
 use crate::{
     area_cover::AreaCover,
+    cycle_segments::{CycleSegment, CycleSegments},
     material::Material,
     math::{
         pixel::{Corner, Pixel, Side},
@@ -22,12 +14,22 @@ use crate::{
     },
     utils::{UndirectedEdge, UndirectedGraph},
 };
+use itertools::Itertools;
+use std::{
+    collections::{BTreeMap, BTreeSet, HashSet},
+    fmt,
+    fmt::{Debug, Display, Formatter},
+    hash::{Hash, Hasher},
+    ops::{Index, IndexMut},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Seam {
     pub start: Side,
     pub stop: Side,
-    pub len: usize,
+
+    /// Number of atomic Seams that make up this Seam.
+    pub atoms: usize,
 }
 
 impl Seam {
@@ -35,16 +37,20 @@ impl Seam {
         Seam {
             start,
             stop,
-            len: 1,
+            atoms: 1,
         }
     }
 
     pub fn new_with_len(start: Side, stop: Side, len: usize) -> Self {
-        Seam { start, stop, len }
+        Seam {
+            start,
+            stop,
+            atoms: len,
+        }
     }
 
     pub fn is_atom(&self) -> bool {
-        self.len == 1
+        self.atoms == 1
     }
 
     pub fn reversed(&self) -> Seam {
@@ -68,7 +74,7 @@ impl Seam {
         Self {
             start: self.start + offset,
             stop: self.stop + offset,
-            len: self.len,
+            atoms: self.atoms,
         }
     }
 
@@ -120,8 +126,9 @@ pub struct Border {
     /// First side is minimum side of cycle, contains at least one item
     pub cycle: Vec<(Side, Option<RegionKey>)>,
 
-    /// Start side of first seam is first side in cycle, contains at least one item
-    pub seams: Vec<Seam>,
+    // /// Start side of first seam is first side in cycle, contains at least one item
+    // pub seams: Vec<Seam>,
+    pub cycle_segments: CycleSegments,
 
     pub is_outer: bool,
 }
@@ -150,6 +157,28 @@ impl Border {
         self.sides()
             .zip(other.sides())
             .all(|(self_side, other_side)| self_side + offset == other_side)
+    }
+
+    pub fn seams_len(&self) -> usize {
+        self.cycle_segments.len()
+    }
+
+    fn seam_from_segment(&self, segment: CycleSegment) -> Seam {
+        Seam {
+            start: self.cycle[segment.first()].0,
+            stop: self.cycle[segment.last()].0,
+            atoms: 1,
+        }
+    }
+
+    pub fn seam(&self, i: usize) -> Seam {
+        self.seam_from_segment(self.cycle_segments.segment(i))
+    }
+
+    pub fn iter_seams(&self) -> impl Iterator<Item = Seam> + Clone + '_ {
+        self.cycle_segments
+            .iter()
+            .map(|segment| self.seam_from_segment(segment))
     }
 }
 
@@ -202,11 +231,11 @@ pub struct Region {
 }
 
 impl Region {
-    pub fn iter_seams(&self) -> impl Iterator<Item = &Seam> + Clone {
+    pub fn iter_seams(&self) -> impl Iterator<Item = Seam> + Clone + '_ {
         self.boundary
             .borders
             .iter()
-            .flat_map(|border| border.seams.iter())
+            .flat_map(|border| border.iter_seams())
     }
 
     pub fn iter_boundary_sides(&self) -> impl Iterator<Item = Side> + Clone + '_ {
@@ -346,11 +375,12 @@ impl Topology {
                 .enumerate()
             {
                 // Each cycle is a border
-                let seams = split_cycle_into_seams(&cycle);
+                let cycle_right_side = cycle.iter().copied().map(|(_, right_side)| right_side);
+                let cycle_segments = CycleSegments::from_iter(cycle_right_side);
 
                 let border = Border {
                     cycle,
-                    seams,
+                    cycle_segments,
                     is_outer: i_border == 0,
                 };
                 borders.push(border);
@@ -374,7 +404,7 @@ impl Topology {
 
         for (&region_id, region) in &regions {
             for (i_border, border) in region.boundary.borders.iter().enumerate() {
-                for (i_seam, &seam) in border.seams.iter().enumerate() {
+                for (i_seam, seam) in border.iter_seams().enumerate() {
                     let seam_index = SeamIndex::new(region_id, i_border, i_seam);
                     seam_indices.insert(seam.start, seam_index);
                 }
@@ -411,8 +441,8 @@ impl Topology {
         })
     }
 
-    pub fn iter_seams(&self) -> impl Iterator<Item = &Seam> + Clone {
-        self.iter_borders().flat_map(|border| border.seams.iter())
+    pub fn iter_seams(&self) -> impl Iterator<Item = Seam> + Clone + '_ {
+        self.iter_borders().flat_map(|border| border.iter_seams())
     }
 
     pub fn iter_seam_indices(&self) -> impl Iterator<Item = &SeamIndex> + Clone {
@@ -427,54 +457,52 @@ impl Topology {
         self.regions.values()
     }
 
-    pub fn contains_seam(&self, seam: &Seam) -> bool {
-        self.seam_indices.contains_key(&seam.start)
+    /// Returns the index of `seam` if the exact seam exists in `self`.
+    pub fn seam_index(&self, seam: Seam) -> Option<SeamIndex> {
+        let &index = self.seam_indices.get(&seam.start)?;
+        let region = &self.regions[&index.region_key];
+        let contained_seam = region.boundary.borders[index.i_border].seam(index.i_seam);
+        (contained_seam == seam).then_some(index)
+    }
+
+    /// Does the Topology contain a seam with the same start, stop and length.
+    pub fn contains_seam(&self, seam: Seam) -> bool {
+        self.seam_index(seam).is_some()
     }
 
     /// Returns the border of a given seam
     /// Only fails if seam is not self.contains_seam(seam)
-    pub fn seam_border(&self, seam: &Seam) -> BorderKey {
+    pub fn seam_border(&self, seam: Seam) -> BorderKey {
+        // TODO: Use `seam_index`
         let seam_index = &self.seam_indices[&seam.start];
         seam_index.border_index()
     }
 
     /// Return the region key on the left side of a given seam
     /// Only fails if seam is not self.contains_seam(seam)
-    pub fn left_of(&self, seam: &Seam) -> RegionKey {
+    pub fn left_of(&self, seam: Seam) -> RegionKey {
+        // TODO: Use `seam_index`
         let seam_index = &self.seam_indices[&seam.start];
         seam_index.region_key
     }
 
-    pub fn material_left_of(&self, seam: &Seam) -> Material {
+    pub fn material_left_of(&self, seam: Seam) -> Material {
         self.material_map[seam.start.left_pixel]
     }
 
     /// Not every seam has a region on the right, it can be empty space
-    pub fn right_of(&self, seam: &Seam) -> Option<RegionKey> {
+    pub fn right_of(&self, seam: Seam) -> Option<RegionKey> {
         assert!(seam.is_atom());
+        // TODO: Use `seam_index`
         let seam_index = self.seam_indices.get(&seam.reversed().start)?;
         Some(seam_index.region_key)
     }
 
-    pub fn material_right_of(&self, seam: &Seam) -> Option<Material> {
+    pub fn material_right_of(&self, seam: Seam) -> Option<Material> {
         self.material_map.get(seam.start.right_pixel()).cloned()
     }
 
-    /// Only fails if seam is not self.contains_seam(seam)
-    pub fn next_seam(&self, seam: &Seam) -> &Seam {
-        let seam_index = self.seam_indices[&seam.start];
-        let border = &self.regions[&seam_index.region_key].boundary.borders[seam_index.i_border];
-        &border.seams[(seam_index.i_seam + seam.len) % border.seams.len()]
-    }
-
-    /// Only fails if seam is not self.contains_seam(seam)
-    pub fn previous_seam(&self, seam: &Seam) -> &Seam {
-        let seam_index = self.seam_indices[&seam.start];
-        let border = &self.regions[&seam_index.region_key].boundary.borders[seam_index.i_border];
-        &border.seams[(seam_index.i_seam - 1 + border.seams.len()) % border.seams.len()]
-    }
-
-    pub fn seam_materials(&self, seam: &Seam) -> SeamMaterials {
+    pub fn seam_materials(&self, seam: Seam) -> SeamMaterials {
         SeamMaterials {
             left: self.material_left_of(seam),
             right: self.material_right_of(seam),
@@ -487,7 +515,7 @@ impl Topology {
         &self,
         left: RegionKey,
         right: RegionKey,
-    ) -> impl Iterator<Item = &Seam> + Clone {
+    ) -> impl Iterator<Item = Seam> + Clone + '_ {
         let left_comp = &self.regions[&left];
         left_comp
             .iter_seams()
@@ -503,11 +531,11 @@ impl Topology {
     }
 
     /// Is the right side of the seam void? The left side is always a proper region.
-    pub fn touches_void(&self, seam: &Seam) -> bool {
+    pub fn touches_void(&self, seam: Seam) -> bool {
         self.right_of(seam).is_none()
     }
 
-    pub fn seams_equivalent(&self, lhs: &Seam, rhs: &Seam) -> bool {
+    pub fn seams_equivalent(&self, lhs: Seam, rhs: Seam) -> bool {
         lhs.is_loop() && rhs.is_loop() && self.seam_border(lhs) == self.seam_border(rhs)
     }
 
@@ -621,7 +649,7 @@ impl Display for Topology {
             writeln!(f, "Component {region_key:?}")?;
             for (i_border, border) in region.boundary.borders.iter().enumerate() {
                 writeln!(f, "{indent}Border {i_border}")?;
-                for seam in &border.seams {
+                for seam in border.iter_seams() {
                     writeln!(f, "{indent}{indent}{seam}")?;
                 }
             }
@@ -634,38 +662,6 @@ impl Display for Topology {
 impl From<MaterialMap> for Topology {
     fn from(material_map: MaterialMap) -> Self {
         Self::new(material_map)
-    }
-}
-
-/// Split a side cycle into segments of constant value.
-pub fn split_cycle_into_seams<T: Eq + Copy + Debug>(cycle: &Vec<(Side, T)>) -> Vec<Seam> {
-    assert!(!cycle.is_empty());
-
-    // List pairs (side, value), (side', value') where value != value'
-    let steps: Vec<((Side, T), (Side, T))> = cycle
-        .iter()
-        .copied()
-        .circular_tuple_windows()
-        .filter(|((_, lhs_value), (_, rhs_value))| lhs_value != rhs_value)
-        .collect();
-
-    if steps.is_empty() {
-        // TODO: Reverse cycle should give same seam
-        vec![Seam::new_atom(
-            cycle.first().unwrap().0,
-            cycle.last().unwrap().0,
-        )]
-    } else {
-        steps
-            .iter()
-            .circular_tuple_windows()
-            .map(|(lhs_step, rhs_step)| {
-                let (start_side, start_value) = lhs_step.1;
-                let (stop_side, stop_value) = rhs_step.0;
-                assert_eq!(start_value, stop_value);
-                Seam::new_atom(start_side, stop_side)
-            })
-            .collect()
     }
 }
 
