@@ -344,17 +344,18 @@ pub fn split_boundary_into_cycles<T>(mut sides: HashMap<Side, T>) -> Vec<Vec<(Si
     cycles
 }
 
-/// Returns the pixels that are to the left of `border`. The border can contain holes and does not
+/// Returns the pixels that are to the left of `boundary`. The border can contain holes and does not
 /// have to be ordered in any way.
-pub fn left_of_border(border: impl Iterator<Item = Side>) -> Vec<Pixel> {
+pub fn left_of_boundary(boundary: impl Iterator<Item = Side>) -> Vec<Pixel> {
+    // TODO: Could this return an Iterator<Item = Pixel>? Would avoid one allocation
     // Collect rows of pixels between left and right borders.
-    let mut left_right_sides: Vec<_> = border
+    let mut left_right_sides: Vec<_> = boundary
         .filter(|side| side.name == SideName::Left || side.name == SideName::Right)
         .collect();
 
     assert!(!left_right_sides.is_empty());
 
-    left_right_sides.sort();
+    left_right_sides.sort_by_key(|side| side.left_pixel);
 
     let mut area = Vec::new();
     for (left_side, right_side) in left_right_sides.into_iter().tuples() {
@@ -368,10 +369,11 @@ pub fn left_of_border(border: impl Iterator<Item = Side>) -> Vec<Pixel> {
     area
 }
 
-pub fn right_of_border(border: impl DoubleEndedIterator<Item = Side>) -> Vec<Pixel> where
+/// See `left_of_boundary`
+pub fn right_of_boundary(border: impl DoubleEndedIterator<Item = Side>) -> Vec<Pixel> where
 {
-    let reversed_border = border.rev().map(|side| side.reversed());
-    left_of_border(reversed_border)
+    let reversed_border = border.map(|side| side.reversed());
+    left_of_boundary(reversed_border)
 }
 
 #[cfg(test)]
@@ -381,7 +383,7 @@ mod test {
         math::{generic::EuclidDivRem, pixel::Side, point::Point, rect::Rect, rgba8::Rgba8},
         pixmap::{iter_sides_in_rect, split_index, MaterialMap, Pixmap, RgbaMap, TILE_SIZE},
         regions::{
-            left_of_border, pixmap_regions, region_boundaries, right_of_border,
+            left_of_boundary, pixmap_regions, region_boundaries, right_of_boundary,
             split_boundary_into_cycles,
         },
         utils::IntoT,
@@ -577,7 +579,7 @@ mod test {
         assert_eq!(borders.len(), 1);
 
         let border = &borders[0];
-        let left_of_border = left_of_border(border.iter().copied());
+        let left_of_border = left_of_boundary(border.iter().copied());
         assert_eq!(area, left_of_border.into_iter().collect());
     }
 
@@ -638,7 +640,7 @@ mod test {
         assert_eq!(red_borders.len(), 2); // inner and outer border
 
         let inner_border = &red_borders[1];
-        let right_of_inner_border = right_of_border(inner_border.iter().copied());
+        let right_of_inner_border = right_of_boundary(inner_border.iter().copied());
         let right_of_inner_border_set: HashSet<_> = right_of_inner_border.into_iter().collect();
         assert_eq!(right_of_inner_border_set, blue_area);
     }

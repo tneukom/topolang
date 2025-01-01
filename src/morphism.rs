@@ -168,6 +168,15 @@ impl Morphism {
     ///   phi * reversed = reversed * phi
     #[inline(never)]
     pub fn preserves_structure(&self, dom: &Topology, codom: &Topology) -> bool {
+        // No spare borders!
+        for (&region_key, &phi_region_key) in &self.region_map {
+            let region = &dom[region_key];
+            let phi_region = &codom[phi_region_key];
+            if region.boundary.borders.len() != phi_region.boundary.borders.len() {
+                return false;
+            }
+        }
+
         for (&seam, &phi_seam) in &self.seam_map {
             if self[seam.start_corner()] != phi_seam.start_corner() {
                 return false;
@@ -181,13 +190,13 @@ impl Morphism {
                 return false;
             }
 
-            if let Some(&phi_reversed) = self.seam_map.get(&seam.reversed()) {
+            if let Some(&phi_reversed) = self.seam_map.get(&seam.atom_reversed()) {
                 if !phi_seam.is_atom() {
                     // phi(seam^-1) = phi(seam)^-1 means phi(seam) must be an atom, otherwise it is not reversible.
                     return false;
                 }
 
-                if phi_reversed != phi_seam.reversed() {
+                if phi_reversed != phi_seam.atom_reversed() {
                     return false;
                 }
             }

@@ -4,7 +4,9 @@ use crate::{
     material::Material,
     math::rect::Rect,
     pixmap::MaterialMap,
-    topology::{FillRegion, RegionKey, Topology},
+    regions::left_of_boundary,
+    rule::FillBoundary,
+    topology::{RegionKey, Topology},
 };
 
 #[derive(Debug, Clone)]
@@ -74,44 +76,24 @@ impl World {
         self.material_map.bounding_rect()
     }
 
-    /// Invalidates all regions keys
-    /// Returns true if any regions were changed
-    /// Very naive implementation, checks if any Region actually changes material and if
-    /// yes recreates the whole topology.
-    #[inline(never)]
-    pub fn fill_regions(&mut self, fill_regions: &Vec<FillRegion>) -> bool {
-        let mut modified = false;
-        let topology = self
-            .topology
-            .get()
-            .expect("Requires topology, otherwise region ids will be invalid.");
-
-        for &fill_region in fill_regions {
-            if topology[fill_region.region_key].material == fill_region.material {
-                // already has desired color, skip
-                continue;
-            }
-
-            modified = true;
-            topology.fill_region(
-                fill_region.region_key,
-                fill_region.material,
-                &mut self.material_map,
-            );
+    pub fn fill_boundary(&mut self, fill: &FillBoundary) {
+        self.topology = CachedTopology::empty();
+        for pixel in left_of_boundary(fill.boundary.iter().copied()) {
+            // TODO: Setting material map one pixel at a time is very slow
+            self.material_map.set(pixel, fill.material);
         }
-
-        if modified {
-            self.topology = CachedTopology::empty();
-        }
-        modified
     }
 
     pub fn fill_region(&mut self, region_key: RegionKey, material: Material) -> bool {
-        let fill_regions = vec![FillRegion {
-            region_key,
-            material,
-        }];
-        self.fill_regions(&fill_regions)
+        let topology = self.topology.get_or_init(&self.material_map);
+        if topology[region_key].material == material {
+            // already has desired color, skip
+            return false;
+        }
+
+        topology.fill_region(region_key, material, &mut self.material_map);
+        self.topology = CachedTopology::empty();
+        true
     }
 
     /// Blit passed Pixmap to self.material_map but only where material_map is already defined.

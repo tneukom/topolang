@@ -9,7 +9,7 @@ use crate::{
     },
     pixmap::{MaterialMap, Pixmap},
     regions::{
-        left_of_border, pixmap_regions, region_boundaries, right_of_border,
+        left_of_boundary, pixmap_regions, region_boundaries, right_of_boundary,
         split_boundary_into_cycles,
     },
     utils::{UndirectedEdge, UndirectedGraph},
@@ -53,7 +53,8 @@ impl Seam {
         self.atoms == 1
     }
 
-    pub fn reversed(&self) -> Seam {
+    /// The reverse of a non-atomic Seam is in general not a Seam.
+    pub fn atom_reversed(&self) -> Seam {
         assert!(self.is_atom());
         Self::new_atom(self.stop.reversed(), self.start.reversed())
     }
@@ -140,12 +141,12 @@ impl Border {
 
     /// All pixels that are left of `self`
     pub fn left_pixels(&self) -> Vec<Pixel> {
-        left_of_border(self.sides())
+        left_of_boundary(self.sides())
     }
 
     /// All pixels that are right of `self`
     pub fn right_pixels(&self) -> Vec<Pixel> {
-        right_of_border(self.sides())
+        right_of_boundary(self.sides())
     }
 
     /// self + offset == other
@@ -179,6 +180,26 @@ impl Border {
         self.cycle_segments
             .iter()
             .map(|segment| self.seam_from_segment(segment))
+    }
+
+    pub fn iter_atomic_seam_sides(
+        &self,
+        i_seam: usize,
+    ) -> impl DoubleEndedIterator<Item = Side> + Clone + '_ {
+        let segment = self.cycle_segments.segment(i_seam);
+        segment.iter().map(|i_side| self.cycle[i_side].0)
+    }
+
+    /// Iterate over the side of a seam (atomic or not)
+    pub fn iter_seam_sides(
+        &self,
+        start_seam: usize,
+        count: usize,
+    ) -> impl DoubleEndedIterator<Item = Side> + Clone + '_ {
+        (0..count).flat_map(move |offset| {
+            let i_seam = (start_seam + offset) % self.cycle_segments.len();
+            self.iter_atomic_seam_sides(i_seam)
+        })
     }
 }
 
@@ -215,6 +236,14 @@ impl Boundary {
             .zip(&other.borders)
             .all(|(self_border, other_border)| self_border.translated_eq(offset, other_border))
     }
+
+    pub fn iter_seams(&self) -> impl Iterator<Item = Seam> + Clone + '_ {
+        self.borders.iter().flat_map(|border| border.iter_seams())
+    }
+
+    pub fn iter_sides(&self) -> impl Iterator<Item = Side> + Clone + '_ {
+        self.borders.iter().flat_map(|border| border.sides())
+    }
 }
 
 /// The boundary is counterclockwise. Is mutable so material can be changed.
@@ -231,18 +260,14 @@ pub struct Region {
 }
 
 impl Region {
+    #[deprecated = "Use Boundary::iter_seams"]
     pub fn iter_seams(&self) -> impl Iterator<Item = Seam> + Clone + '_ {
-        self.boundary
-            .borders
-            .iter()
-            .flat_map(|border| border.iter_seams())
+        self.boundary.iter_seams()
     }
 
+    #[deprecated = "Use Boundary::iter_sides"]
     pub fn iter_boundary_sides(&self) -> impl Iterator<Item = Side> + Clone + '_ {
-        self.boundary
-            .borders
-            .iter()
-            .flat_map(|border| border.sides())
+        self.boundary.iter_sides()
     }
 
     /// Pixels touching border on the left side, each pixel might appear more than once.
@@ -494,7 +519,7 @@ impl Topology {
     pub fn right_of(&self, seam: Seam) -> Option<RegionKey> {
         assert!(seam.is_atom());
         // TODO: Use `seam_index`
-        let seam_index = self.seam_indices.get(&seam.reversed().start)?;
+        let seam_index = self.seam_indices.get(&seam.atom_reversed().start)?;
         Some(seam_index.region_key)
     }
 
@@ -607,6 +632,39 @@ impl Topology {
         }
 
         edges
+    }
+
+    /// See Border::iter_seam_sides
+    pub fn iter_seam_sides(
+        &self,
+        seam: Seam,
+    ) -> Option<impl DoubleEndedIterator<Item = Side> + Clone + '_> {
+        let index = self.seam_index(seam)?;
+        let region = &self.regions[&index.region_key];
+        let border = &region.boundary.borders[index.i_border];
+        Some(border.iter_seam_sides(index.i_seam, seam.atoms))
+    }
+
+    // Split a Seam into atoms
+    pub fn seam_atoms(&self, seam: Seam) -> Option<impl ExactSizeIterator<Item = Seam> + '_> {
+        let &first_index = self.seam_indices.get(&seam.start)?;
+        let region = &self.regions[&first_index.region_key];
+        let border = &region.boundary.borders[first_index.i_border];
+
+        let iter = (0..seam.atoms).map(move |offset| {
+            let i_seam = (first_index.i_seam + offset) % border.seams_len();
+            border.seam(i_seam)
+        });
+        Some(iter)
+    }
+
+    /// Unlike Seam::atom_reversed, this also works not non-atomic Seams, however it returns
+    /// a list of Seams
+    pub fn reverse_seam(&self, seam: Seam) -> Option<impl ExactSizeIterator<Item = Seam> + '_> {
+        let iter = self
+            .seam_atoms(seam)?
+            .map(|seam_atom| seam_atom.atom_reversed());
+        Some(iter)
     }
 }
 

@@ -93,7 +93,7 @@ impl UnassignedSeam {
                 phi_left: phi.region_map.get(&pattern.left_of(seam)).copied(),
                 phi_start_corner: phi.corner_map.get(&seam.start_corner()).copied(),
                 phi_stop_corner: phi.corner_map.get(&seam.stop_corner()).copied(),
-                reverse_in_pattern: pattern.contains_seam(seam.reversed()),
+                reverse_in_pattern: pattern.contains_seam(seam.atom_reversed()),
                 materials: pattern.seam_materials(seam),
             })
             .collect()
@@ -395,7 +395,7 @@ mod test {
         field::RgbaField,
         material::Material,
         math::rgba8::Rgba8,
-        pattern::{CoutTrace, NullTrace, SearchMorphism},
+        pattern::{CoutTrace, SearchMorphism},
         pixmap::MaterialMap,
         topology::Topology,
         utils::IntoT,
@@ -519,8 +519,8 @@ mod test {
     #[test]
     fn pattern_matches_c() {
         assert_pattern_match("c/pattern.png", "c/match_1.png", 1);
-        assert_pattern_match("c/pattern.png", "c/match_2.png", 2);
         assert_pattern_match("c/pattern.png", "c/miss_1.png", 0);
+        assert_pattern_match("c/pattern.png", "c/miss_2.png", 0);
     }
 
     #[test]
@@ -582,10 +582,10 @@ mod test {
     #[test]
     fn pattern_matches_solid_a() {
         assert_pattern_match("solid/a/pattern.png", "solid/a/match_1.png", 1);
-        assert_pattern_match("solid/a/pattern.png", "solid/a/match_2.png", 2);
         assert_pattern_match("solid/a/pattern.png", "solid/a/miss_1.png", 0);
         assert_pattern_match("solid/a/pattern.png", "solid/a/miss_2.png", 0);
         assert_pattern_match("solid/a/pattern.png", "solid/a/miss_3.png", 0);
+        assert_pattern_match("solid/a/pattern.png", "solid/a/miss_4.png", 0);
     }
 
     #[test]

@@ -122,13 +122,13 @@ impl Interpreter {
             .collect();
 
         for CompiledRule { rule, .. } in &compiled_rules {
-            let mut search = SearchMorphism::new(world.topology(), &rule.pattern);
+            let mut search = SearchMorphism::new(world.topology(), &rule.before);
             search.hidden = Some(&hidden);
 
             let solutions = search.find_matches(NullTrace::new());
 
             for phi in solutions {
-                let modified = rule.apply_ops(&phi, world);
+                let modified = rule.substitute(&phi, world);
                 if modified {
                     return true;
                 }
@@ -203,7 +203,7 @@ mod test {
 
     #[test]
     fn a() {
-        assert_execute_world("a", 4);
+        assert_execute_world("a", 3);
     }
 
     #[test]

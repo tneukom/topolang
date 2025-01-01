@@ -1,102 +1,145 @@
-use itertools::Itertools;
-
 use crate::{
     material::Material,
-    math::pixel::Pixel,
+    math::pixel::Side,
     morphism::Morphism,
     pattern::{NullTrace, SearchMorphism},
-    pixmap::Pixmap,
-    topology::{FillRegion, Topology},
+    topology::{Boundary, Region, Seam, Topology},
     world::World,
 };
+use itertools::Itertools;
+
+pub struct FillBoundary {
+    pub boundary: Vec<Side>,
+    pub material: Material,
+}
 
 pub struct Rule {
-    pub pattern: Topology,
-    pub fill_regions: Vec<FillRegion>,
+    /// The pattern
+    pub before: Topology,
+
+    /// The substitution
+    pub after: Topology,
 }
 
 impl Rule {
     #[inline(never)]
     pub fn new(before: Topology, after: Topology) -> anyhow::Result<Self> {
-        let mut fill_regions: Vec<FillRegion> = Vec::new();
-
-        // For debugging save before and after as pngs
-        // before
-        //     .material_map
-        //     .to_field(Material::BLACK)
-        //     .into_rgba()
-        //     .save("before.png")
-        //     .unwrap();
-        //
-        // after
-        //     .material_map
-        //     .to_field(Material::BLACK)
-        //     .into_rgba()
-        //     .save("after.png")
-        //     .unwrap();
-
-        // Build the rigid map from `before` and replace rigid colors with normal ones.
-        // NOTE: rigid map will contain many empty tiles, ignore for now
-        // NOTE: How to map and filter at the same time?
-
-        // TODO: Build rigid map and replace with normal colors in two passes.
-
-        // Collect regions that change their color
-        for (&before_region_key, _before_region) in &before.regions {
-            let before_region = &before[before_region_key];
-
-            let Some(after_fill_color) = Self::fill_material(
-                &after.material_map,
-                before.iter_region_interior(before_region_key),
-            ) else {
-                anyhow::bail!(
-                    "Region {} color not constant.",
-                    before_region.arbitrary_interior_pixel()
-                )
-            };
-
-            if after_fill_color != before_region.material {
-                let fill_region = FillRegion {
-                    region_key: before_region_key,
-                    material: after_fill_color,
-                };
-                fill_regions.push(fill_region);
+        // Make sure after region map is constant on each region in before.
+        for (&region_key, region) in before.regions.iter() {
+            // REVISIT: Could be faster by iterating over both before.region_map and
+            //   after.region_map in parallel.
+            let all_equal = before
+                .iter_region_interior(region_key)
+                .map(|pixel| after.material_map[pixel])
+                .all_equal();
+            if !all_equal {
+                anyhow::bail!("Invalid rule, substitution region not constant.")
             }
         }
 
-        Ok(Rule {
-            pattern: before,
-            fill_regions,
-        })
+        Ok(Rule { before, after })
     }
 
-    /// The fill color of a given region or None if the color is not constant on the region
-    /// pixels.
-    #[inline(never)]
-    pub fn fill_material(
-        pixmap: &Pixmap<Material>,
-        pixels: impl IntoIterator<Item = Pixel>,
-    ) -> Option<Material> {
-        pixels
-            .into_iter()
-            .map(|pixel| pixmap[pixel])
-            .all_equal_value()
-            .ok()
+    /// Extend the seam mapping of `phi` to reversed seams.
+    pub fn extended_morphism_seam_map(
+        codom: &Topology,
+        phi: &Morphism,
+        seam: Seam,
+    ) -> Option<Vec<Seam>> {
+        // TODO: Could return Option<Iterator> instead!
+        // Try to map seam directly
+        if let Some(&phi_seam) = phi.seam_map.get(&seam) {
+            return Some(codom.seam_atoms(phi_seam).unwrap().collect());
+        }
+
+        // Try to map seam.reversed() instead, and then reverse it back
+        if let Some(&phi_reversed_seam) = phi.seam_map.get(&seam.atom_reversed()) {
+            // phi_reversed_seam is possible not an atom, so we cannot simply reverse it back.
+            let phi_seam = codom.reverse_seam(phi_reversed_seam).unwrap().collect();
+            return Some(phi_seam);
+        }
+
+        None
     }
 
-    /// Returns true if there were any changes to the world
-    pub fn apply_ops(&self, phi: &Morphism, world: &mut World) -> bool {
-        let phi_fill_regions = self
-            .fill_regions
+    /// Map the boundary a region `region` in the domain of phi to its boundary in the co-domain.
+    /// This works if for every `seam` in the boundary of region, `phi_hat(seam)` is defined.
+    /// `phi_hat` is the unique extension of `phi` that for each `seam` also maps `seam.reversed()`.
+    /// The result is a set of seams in `codom` but not necessarily the boundary of a Region, we
+    /// return directly the
+    pub fn map_region_boundary(
+        &self,
+        codom: &Topology,
+        phi: &Morphism,
+        boundary: &Boundary,
+    ) -> Vec<Seam> {
+        let mut phi_boundary: Vec<Seam> = Vec::new();
+
+        // Maps seams into world to construct new boundary.
+        for seam in boundary.iter_seams() {
+            let phi_seam = Self::extended_morphism_seam_map(codom, phi, seam).unwrap();
+            phi_boundary.extend(phi_seam)
+            // let sides = Self::extended_topology_iter_seam_sides(codom, phi_seam).unwrap();
+            // boundary.extend(sides);
+        }
+
+        phi_boundary
+    }
+
+    /// Compute the fill operation for the before -> after substitution for the given
+    /// `before_region`.
+    /// To fill a region with a material we need to map its boundary into `world` using the Morphism
+    /// phi. The result is in general not a Seam, but a SeamPath. We directly return the sides
+    /// in the SeamPath.
+    pub fn region_substitution(
+        &self,
+        world: &Topology,
+        phi: &Morphism,
+        before_region: &Region,
+    ) -> Option<FillBoundary> {
+        let after_material = self.after.material_map[before_region.arbitrary_interior_pixel()];
+        if before_region.material == after_material {
+            // No painting necessary
+            return None;
+        }
+
+        // A seam path
+        let phi_boundary = self.map_region_boundary(world, phi, &before_region.boundary);
+
+        let phi_boundary_sides = phi_boundary
             .iter()
-            .map(|fill_region| FillRegion {
-                region_key: phi[fill_region.region_key],
-                material: fill_region.material,
+            .flat_map(|&seam| {
+                assert!(seam.is_atom());
+                println!("seam: {seam}");
+                world.iter_seam_sides(seam).unwrap()
             })
             .collect();
 
-        let modified = world.fill_regions(&phi_fill_regions);
-        modified
+        let fill = FillBoundary {
+            boundary: phi_boundary_sides,
+            material: after_material,
+        };
+
+        Some(fill)
+    }
+
+    /// Given a match for the pattern `self.before` and the world, apply the substitution determined
+    /// by `self.before` and `self.after`
+    /// Returns true if there were any changes to the world
+    pub fn substitute(&self, phi: &Morphism, world: &mut World) -> bool {
+        let mut fills = Vec::new();
+
+        for before_region in self.before.regions.values() {
+            if let Some(fill) = self.region_substitution(world.topology(), phi, before_region) {
+                fills.push(fill);
+            }
+        }
+
+        for fill in &fills {
+            world.fill_boundary(fill);
+        }
+
+        fills.len() > 0
     }
 }
 
@@ -105,10 +148,10 @@ pub fn stabilize(world: &mut World, rules: &Vec<Rule>) -> usize {
     loop {
         let mut applied = false;
         for rule in rules {
-            if let Some(phi) = SearchMorphism::new(world.topology(), &rule.pattern)
+            if let Some(phi) = SearchMorphism::new(world.topology(), &rule.before)
                 .find_first_match(NullTrace::new())
             {
-                rule.apply_ops(&phi, world);
+                rule.substitute(&phi, world);
                 steps += 1;
                 applied = true;
             }
@@ -157,9 +200,9 @@ mod test {
 
         let mut application_count: usize = 0;
         while let Some(phi) =
-            SearchMorphism::new(world.topology(), &rule.pattern).find_first_match(NullTrace::new())
+            SearchMorphism::new(world.topology(), &rule.before).find_first_match(NullTrace::new())
         {
-            rule.apply_ops(&phi, &mut world);
+            rule.substitute(&phi, &mut world);
 
             // Save world to image for debugging!
             // world
@@ -182,16 +225,22 @@ mod test {
             .into();
 
         // result_pixmap
-        //     .to_bitmap_with_size(world_bitmap.size())
+        //     .to_field(Material::TRANSPARENT)
+        //     .into_rgba()
         //     .save(format!("{folder}/world_result.png"))
         //     .unwrap();
 
         assert_eq!(result_pixmap, &expected_result_pixmap);
     }
 
+    // #[test]
+    // fn hunt_bug() {
+    //     assert_rule_application("hunt_bug", 1)
+    // }
+
     #[test]
     fn rule_a() {
-        assert_rule_application("a", 4)
+        assert_rule_application("a", 3)
     }
 
     #[test]
@@ -202,11 +251,6 @@ mod test {
     #[test]
     fn rule_c() {
         assert_rule_application("c", 3)
-    }
-
-    #[test]
-    fn rule_d() {
-        assert_rule_application("d", 3)
     }
 
     #[test]
@@ -222,5 +266,15 @@ mod test {
     #[test]
     fn rule_gate_a() {
         assert_rule_application("gate_a", 2)
+    }
+
+    #[test]
+    fn rule_interior_hole() {
+        assert_rule_application("interior_hole", 1)
+    }
+
+    #[test]
+    fn rule_two_regions_failure_case() {
+        assert_rule_application("two_regions_failure_case", 1)
     }
 }

@@ -35,8 +35,8 @@ impl CycleSegment {
     }
 
     /// Iterate over the indices contained in the segment.
-    pub fn iter(&self) -> impl DoubleEndedIterator<Item = usize> + '_ {
-        (self.start..self.end).map(|i| i % self.cycle_len)
+    pub fn iter(self) -> impl DoubleEndedIterator<Item = usize> + Clone {
+        (self.start..self.end).map(move |i| i % self.cycle_len)
     }
 }
 
