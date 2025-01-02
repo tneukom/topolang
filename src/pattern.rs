@@ -93,7 +93,7 @@ impl UnassignedSeam {
                 phi_left: phi.region_map.get(&pattern.left_of(seam)).copied(),
                 phi_start_corner: phi.corner_map.get(&seam.start_corner()).copied(),
                 phi_stop_corner: phi.corner_map.get(&seam.stop_corner()).copied(),
-                reverse_in_pattern: pattern.contains_seam(seam.reversed()),
+                reverse_in_pattern: pattern.contains_seam(seam.atom_reversed()),
                 materials: pattern.seam_materials(seam),
             })
             .collect()
@@ -269,9 +269,7 @@ impl<'a> SearchMorphism<'a> {
 
         let assignment_candidates = unassigned.assignment_candidates(self.world, self.pattern);
         if assignment_candidates.is_empty() {
-            trace.failed(&format!(
-                "No assignment candidates for UnassignedSeam {unassigned:?}"
-            ));
+            trace.failed(&format!("No assignment candidates for {unassigned:?}"));
             return;
         }
 
@@ -395,7 +393,7 @@ mod test {
         field::RgbaField,
         material::Material,
         math::rgba8::Rgba8,
-        pattern::{CoutTrace, NullTrace, SearchMorphism},
+        pattern::{CoutTrace, SearchMorphism},
         pixmap::MaterialMap,
         topology::Topology,
         utils::IntoT,
@@ -465,9 +463,8 @@ mod test {
         let folder = "test_resources/patterns";
         let pattern_material_map = RgbaField::load(format!("{folder}/{pattern_path}"))
             .unwrap()
-            .intot::<MaterialMap>()
-            .without(&Material::VOID);
-        let pattern = Topology::new(pattern_material_map);
+            .intot::<MaterialMap>();
+        let pattern = Topology::new(pattern_material_map).filter_by_material(Material::is_not_rule);
 
         let world_material_map = RgbaField::load(format!("{folder}/{world_path}"))
             .unwrap()
@@ -519,8 +516,8 @@ mod test {
     #[test]
     fn pattern_matches_c() {
         assert_pattern_match("c/pattern.png", "c/match_1.png", 1);
-        assert_pattern_match("c/pattern.png", "c/match_2.png", 2);
         assert_pattern_match("c/pattern.png", "c/miss_1.png", 0);
+        assert_pattern_match("c/pattern.png", "c/miss_2.png", 0);
     }
 
     #[test]
@@ -582,10 +579,10 @@ mod test {
     #[test]
     fn pattern_matches_solid_a() {
         assert_pattern_match("solid/a/pattern.png", "solid/a/match_1.png", 1);
-        assert_pattern_match("solid/a/pattern.png", "solid/a/match_2.png", 2);
         assert_pattern_match("solid/a/pattern.png", "solid/a/miss_1.png", 0);
         assert_pattern_match("solid/a/pattern.png", "solid/a/miss_2.png", 0);
         assert_pattern_match("solid/a/pattern.png", "solid/a/miss_3.png", 0);
+        assert_pattern_match("solid/a/pattern.png", "solid/a/miss_4.png", 0);
     }
 
     #[test]

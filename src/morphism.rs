@@ -168,6 +168,15 @@ impl Morphism {
     ///   phi * reversed = reversed * phi
     #[inline(never)]
     pub fn preserves_structure(&self, dom: &Topology, codom: &Topology) -> bool {
+        // No spare borders!
+        for (&region_key, &phi_region_key) in &self.region_map {
+            let region = &dom[region_key];
+            let phi_region = &codom[phi_region_key];
+            if region.boundary.borders.len() != phi_region.boundary.borders.len() {
+                return false;
+            }
+        }
+
         for (&seam, &phi_seam) in &self.seam_map {
             if self[seam.start_corner()] != phi_seam.start_corner() {
                 return false;
@@ -181,13 +190,13 @@ impl Morphism {
                 return false;
             }
 
-            if let Some(&phi_reversed) = self.seam_map.get(&seam.reversed()) {
+            if let Some(&phi_reversed) = self.seam_map.get(&seam.atom_reversed()) {
                 if !phi_seam.is_atom() {
                     // phi(seam^-1) = phi(seam)^-1 means phi(seam) must be an atom, otherwise it is not reversible.
                     return false;
                 }
 
-                if phi_reversed != phi_seam.reversed() {
+                if phi_reversed != phi_seam.atom_reversed() {
                     return false;
                 }
             }
@@ -229,18 +238,15 @@ impl Morphism {
             && self.preserves_solids(dom, codom)
     }
 
-    /// Maps all regions, seams, seam corners of dom
+    /// Maps all regions, seams, seam corners of dom.
     #[inline(never)]
-    pub fn is_total(&self, dom: &Topology, include_void_seams: bool) -> bool {
-        let seam_total = dom
-            .iter_seams()
-            .filter(|&seam| include_void_seams || !dom.touches_void(seam))
-            .all(|seam| {
-                // Seams & corners
-                self.seam_map.contains_key(&seam)
-                    && self.corner_map.contains_key(&seam.start_corner())
-                    && self.corner_map.contains_key(&seam.stop_corner())
-            });
+    pub fn is_total(&self, dom: &Topology) -> bool {
+        let seam_total = dom.iter_seams().all(|seam| {
+            // Seams & corners
+            self.seam_map.contains_key(&seam)
+                && self.corner_map.contains_key(&seam.start_corner())
+                && self.corner_map.contains_key(&seam.stop_corner())
+        });
 
         if !seam_total {
             return false;
@@ -418,7 +424,7 @@ mod test {
                 .into();
             let seam_phi = trivial_seam_automorphism(&topology);
             let phi = Morphism::induced_from_seam_map(&topology, &topology, seam_phi).unwrap();
-            assert!(phi.is_total(&topology, true));
+            assert!(phi.is_total(&topology));
             assert!(phi.is_homomorphism(&topology, &topology));
         }
     }
@@ -440,7 +446,7 @@ mod test {
         let phi = Morphism::induced_from_seam_map(&dom, &codom, seam_phi).unwrap();
 
         assert!(phi.is_homomorphism(&dom, &codom));
-        assert!(phi.is_total(&dom, true));
+        assert!(phi.is_total(&dom));
     }
 
     #[test]

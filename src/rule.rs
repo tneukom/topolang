@@ -1,101 +1,69 @@
-use itertools::Itertools;
-
 use crate::{
-    material::Material,
-    math::pixel::Pixel,
     morphism::Morphism,
     pattern::{NullTrace, SearchMorphism},
-    pixmap::Pixmap,
-    topology::{FillRegion, Topology},
+    topology::{FillRegion, RegionKey, Topology},
     world::World,
 };
+use itertools::Itertools;
 
 pub struct Rule {
-    pub pattern: Topology,
-    pub fill_regions: Vec<FillRegion>,
+    /// The pattern
+    pub before: Topology,
+
+    /// The substitution
+    pub after: Topology,
 }
 
 impl Rule {
-    #[inline(never)]
-    pub fn new(before: Topology, after: Topology) -> anyhow::Result<Self> {
-        let mut fill_regions: Vec<FillRegion> = Vec::new();
-
-        // For debugging save before and after as pngs
-        // before
-        //     .material_map
-        //     .to_field(Material::BLACK)
-        //     .into_rgba()
-        //     .save("before.png")
-        //     .unwrap();
-        //
-        // after
-        //     .material_map
-        //     .to_field(Material::BLACK)
-        //     .into_rgba()
-        //     .save("after.png")
-        //     .unwrap();
-
-        // Build the rigid map from `before` and replace rigid colors with normal ones.
-        // NOTE: rigid map will contain many empty tiles, ignore for now
-        // NOTE: How to map and filter at the same time?
-
-        // TODO: Build rigid map and replace with normal colors in two passes.
-
-        // Collect regions that change their color
-        for (&before_region_key, _before_region) in &before.regions {
-            let before_region = &before[before_region_key];
-
-            let Some(after_fill_color) = Self::fill_material(
-                &after.material_map,
-                before.iter_region_interior(before_region_key),
-            ) else {
-                anyhow::bail!(
-                    "Region {} color not constant.",
-                    before_region.arbitrary_interior_pixel()
-                )
-            };
-
-            if after_fill_color != before_region.material {
-                let fill_region = FillRegion {
-                    region_key: before_region_key,
-                    material: after_fill_color,
-                };
-                fill_regions.push(fill_region);
-            }
+    pub fn assert_phi_region_constant(
+        dom: &Topology,
+        codom: &Topology,
+        region_key: RegionKey,
+    ) -> anyhow::Result<()> {
+        // REVISIT: Could be faster by iterating over both before.region_map and
+        //   after.region_map in parallel.
+        let all_equal = dom
+            .iter_region_interior(region_key)
+            .map(|pixel| codom.material_map[pixel])
+            .all_equal();
+        if !all_equal {
+            anyhow::bail!("Invalid rule, substitution region not constant.")
         }
 
-        Ok(Rule {
-            pattern: before,
-            fill_regions,
-        })
+        Ok(())
     }
 
-    /// The fill color of a given region or None if the color is not constant on the region
-    /// pixels.
     #[inline(never)]
-    pub fn fill_material(
-        pixmap: &Pixmap<Material>,
-        pixels: impl IntoIterator<Item = Pixel>,
-    ) -> Option<Material> {
-        pixels
-            .into_iter()
-            .map(|pixel| pixmap[pixel])
-            .all_equal_value()
-            .ok()
+    pub fn new(before: Topology, after: Topology) -> anyhow::Result<Self> {
+        // Make sure after region map is constant on each region in `before` and `holes`.
+        for &region_key in before.regions.keys() {
+            Self::assert_phi_region_constant(&before, &after, region_key)?
+        }
+
+        Ok(Rule { before, after })
     }
 
+    /// Given a match for the pattern `self.before` and the world, apply the substitution determined
+    /// by `self.before` and `self.after`
     /// Returns true if there were any changes to the world
-    pub fn apply_ops(&self, phi: &Morphism, world: &mut World) -> bool {
-        let phi_fill_regions = self
-            .fill_regions
-            .iter()
-            .map(|fill_region| FillRegion {
-                region_key: phi[fill_region.region_key],
-                material: fill_region.material,
-            })
-            .collect();
+    pub fn substitute(&self, phi: &Morphism, world: &mut World) -> bool {
+        let mut fill_regions = Vec::new();
+        for (region_key, before_region) in &self.before.regions {
+            let after_material = self.after.material_map[before_region.arbitrary_interior_pixel()];
+            if before_region.material == after_material {
+                continue;
+            }
 
-        let modified = world.fill_regions(&phi_fill_regions);
+            let phi_region_key = phi.region_map[region_key];
+            let fill_region = FillRegion {
+                region_key: phi_region_key,
+                material: after_material,
+            };
+
+            fill_regions.push(fill_region);
+        }
+
+        let modified = world.fill_regions(&fill_regions);
         modified
     }
 }
@@ -105,10 +73,10 @@ pub fn stabilize(world: &mut World, rules: &Vec<Rule>) -> usize {
     loop {
         let mut applied = false;
         for rule in rules {
-            if let Some(phi) = SearchMorphism::new(world.topology(), &rule.pattern)
+            if let Some(phi) = SearchMorphism::new(world.topology(), &rule.before)
                 .find_first_match(NullTrace::new())
             {
-                rule.apply_ops(&phi, world);
+                rule.substitute(&phi, world);
                 steps += 1;
                 applied = true;
             }
@@ -138,14 +106,13 @@ mod test {
 
         let before_material_map = RgbaField::load(format!("{folder}/before.png"))
             .unwrap()
-            .intot::<MaterialMap>()
-            .without(&Material::VOID);
+            .intot::<MaterialMap>();
         let before = Topology::new(before_material_map);
+        let before = before.filter_by_material(Material::is_not_rule);
 
         let after_material_map = RgbaField::load(format!("{folder}/after.png"))
             .unwrap()
-            .intot::<MaterialMap>()
-            .without(&Material::VOID);
+            .intot::<MaterialMap>();
         let after = Topology::new(after_material_map);
 
         let rule = Rule::new(before, after).unwrap();
@@ -157,9 +124,9 @@ mod test {
 
         let mut application_count: usize = 0;
         while let Some(phi) =
-            SearchMorphism::new(world.topology(), &rule.pattern).find_first_match(NullTrace::new())
+            SearchMorphism::new(world.topology(), &rule.before).find_first_match(NullTrace::new())
         {
-            rule.apply_ops(&phi, &mut world);
+            rule.substitute(&phi, &mut world);
 
             // Save world to image for debugging!
             // world
@@ -182,7 +149,8 @@ mod test {
             .into();
 
         // result_pixmap
-        //     .to_bitmap_with_size(world_bitmap.size())
+        //     .to_field(Material::TRANSPARENT)
+        //     .into_rgba()
         //     .save(format!("{folder}/world_result.png"))
         //     .unwrap();
 
@@ -191,7 +159,7 @@ mod test {
 
     #[test]
     fn rule_a() {
-        assert_rule_application("a", 4)
+        assert_rule_application("a", 3)
     }
 
     #[test]
@@ -202,11 +170,6 @@ mod test {
     #[test]
     fn rule_c() {
         assert_rule_application("c", 3)
-    }
-
-    #[test]
-    fn rule_d() {
-        assert_rule_application("d", 3)
     }
 
     #[test]
@@ -222,5 +185,9 @@ mod test {
     #[test]
     fn rule_gate_a() {
         assert_rule_application("gate_a", 2)
+    }
+    #[test]
+    fn rule_two_regions_failure_case() {
+        assert_rule_application("two_regions_failure_case", 1)
     }
 }

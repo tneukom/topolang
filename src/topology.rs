@@ -9,7 +9,7 @@ use crate::{
     },
     pixmap::{MaterialMap, Pixmap},
     regions::{
-        left_of_border, pixmap_regions, region_boundaries, right_of_border,
+        left_of_boundary, pixmap_regions, region_boundaries, right_of_boundary,
         split_boundary_into_cycles,
     },
     utils::{UndirectedEdge, UndirectedGraph},
@@ -53,7 +53,8 @@ impl Seam {
         self.atoms == 1
     }
 
-    pub fn reversed(&self) -> Seam {
+    /// The reverse of a non-atomic Seam is in general not a Seam.
+    pub fn atom_reversed(&self) -> Seam {
         assert!(self.is_atom());
         Self::new_atom(self.stop.reversed(), self.start.reversed())
     }
@@ -140,12 +141,12 @@ impl Border {
 
     /// All pixels that are left of `self`
     pub fn left_pixels(&self) -> Vec<Pixel> {
-        left_of_border(self.sides())
+        left_of_boundary(self.sides())
     }
 
     /// All pixels that are right of `self`
     pub fn right_pixels(&self) -> Vec<Pixel> {
-        right_of_border(self.sides())
+        right_of_boundary(self.sides())
     }
 
     /// self + offset == other
@@ -494,7 +495,7 @@ impl Topology {
     pub fn right_of(&self, seam: Seam) -> Option<RegionKey> {
         assert!(seam.is_atom());
         // TODO: Use `seam_index`
-        let seam_index = self.seam_indices.get(&seam.reversed().start)?;
+        let seam_index = self.seam_indices.get(&seam.atom_reversed().start)?;
         Some(seam_index.region_key)
     }
 
@@ -574,9 +575,8 @@ impl Topology {
         Self::new(self.material_map.right_of_border(border))
     }
 
-    /// Remove all regions of the given material
-    pub fn without_material(self, material: Material) -> Self {
-        Self::new(self.material_map.without(&material))
+    pub fn filter_by_material(&self, mut pred: impl FnMut(Material) -> bool) -> Self {
+        Self::new(self.material_map.filter(|_, &material| pred(material)))
     }
 
     /// Blit the given region to the material_map with the given material.

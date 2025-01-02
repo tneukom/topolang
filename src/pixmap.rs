@@ -566,7 +566,7 @@ impl<T: PartialEq + Clone> PartialEq for Pixmap<T> {
         self.tiles.iter().all(|(&tile_index, tile)| {
             let other_tile = other.get_tile(tile_index);
             if let Some(other_tile) = other_tile {
-                println!("Comparing tiles");
+                // println!("Comparing tiles");
                 tile.deref() == other_tile
             } else {
                 tile.is_empty()

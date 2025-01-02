@@ -72,6 +72,10 @@ impl Material {
         self.flags & Self::RULE_FLAG != 0
     }
 
+    pub fn is_not_rule(self) -> bool {
+        !self.is_rule()
+    }
+
     pub fn is_solid(self) -> bool {
         self.flags & Self::SOLID_FLAG != 0
     }
