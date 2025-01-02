@@ -464,7 +464,7 @@ mod test {
         let pattern_material_map = RgbaField::load(format!("{folder}/{pattern_path}"))
             .unwrap()
             .intot::<MaterialMap>();
-        let pattern = Topology::new(pattern_material_map).filter_by_material(Material::is_not_rule);
+        let pattern = Topology::new(pattern_material_map).filter_by_material(Material::is_not_void);
 
         let world_material_map = RgbaField::load(format!("{folder}/{world_path}"))
             .unwrap()
@@ -595,5 +595,23 @@ mod test {
     fn pattern_matches_solid_c() {
         assert_pattern_match("solid/c/pattern.png", "solid/c/match_1.png", 1);
         assert_pattern_match("solid/c/pattern.png", "solid/c/miss_1.png", 0);
+    }
+
+    #[test]
+    fn wildcard_a() {
+        assert_pattern_match("wildcard_a/pattern.png", "wildcard_a/match_1.png", 1);
+        assert_pattern_match("wildcard_a/pattern.png", "wildcard_a/match_2.png", 1);
+        assert_pattern_match("wildcard_a/pattern.png", "wildcard_a/miss_1.png", 0);
+        assert_pattern_match("wildcard_a/pattern.png", "wildcard_a/miss_2.png", 0);
+        assert_pattern_match("wildcard_a/pattern.png", "wildcard_a/miss_3.png", 0);
+        assert_pattern_match("wildcard_a/pattern.png", "wildcard_a/miss_4.png", 0);
+    }
+
+    #[test]
+    fn wildcard_b() {
+        // Can be mirrored so there's 2 solutions
+        assert_pattern_match("wildcard_b/pattern.png", "wildcard_b/match_1.png", 1);
+        assert_pattern_match("wildcard_b/pattern.png", "wildcard_b/miss_1.png", 0);
+        assert_pattern_match("wildcard_b/pattern.png", "wildcard_b/miss_2.png", 0);
     }
 }

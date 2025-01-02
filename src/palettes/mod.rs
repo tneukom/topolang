@@ -58,15 +58,17 @@ impl Palette {
 pub enum SystemPalette {
     Rule,
     Arrow,
+    Wildcard,
 }
 
 impl SystemPalette {
-    pub const ALL: [Self; 2] = [Self::Rule, Self::Arrow];
+    pub const ALL: [Self; 3] = [Self::Rule, Self::Arrow, Self::Wildcard];
 
     pub const fn rgba(self) -> Rgba8 {
         match self {
             Self::Rule => Material::RULE_FRAME.to_rgba(),
             Self::Arrow => Material::RULE_ARROW.to_rgba(),
+            Self::Wildcard => Material::WILDCARD.to_rgba(),
         }
     }
 }
@@ -80,6 +82,7 @@ impl ReflectEnum for SystemPalette {
         match self {
             Self::Rule => "Rule",
             Self::Arrow => "Arrow",
+            Self::Wildcard => "Hole",
         }
     }
 }

@@ -22,13 +22,17 @@ impl Material {
     /// Strips properties that are irrelevant to region equivalence relation
     pub const REGION_EQ_MASK: u8 = 0b1111_1110;
 
-    /// Hex 360c29
+    /// #360c29
     pub const VOID_COLOR: Rgba8 = Rgba8::new(0x36, 0x0C, 0x29, Self::RULE_ALPHA);
+    /// #FF6E00
     pub const RULE_ARROW_COLOR: Rgba8 = Rgba8::new(0xFF, 0x6E, 0x00, Self::RULE_ALPHA);
+    /// #0C3619
+    pub const WILDCARD_COLOR: Rgba8 = Rgba8::new(0x0C, 0x36, 0x19, Self::RULE_ALPHA);
 
     pub const VOID: Self = Self::from_rgba(Self::VOID_COLOR);
     pub const RULE_FRAME: Self = Self::VOID;
     pub const RULE_ARROW: Self = Self::from_rgba(Self::RULE_ARROW_COLOR);
+    pub const WILDCARD: Self = Self::from_rgba(Self::WILDCARD_COLOR);
     pub const TRANSPARENT: Self = Self::from_rgba(Rgba8::TRANSPARENT);
     pub const BLACK: Self = Self::from_rgba(Rgba8::BLACK);
 
@@ -68,12 +72,12 @@ impl Material {
         Rgba8::from_rgb_a(self.rgb, Self::flags_to_alpha(self.flags))
     }
 
-    pub fn is_rule(self) -> bool {
-        self.flags & Self::RULE_FLAG != 0
+    pub fn is_void(self) -> bool {
+        self == Self::VOID
     }
 
-    pub fn is_not_rule(self) -> bool {
-        !self.is_rule()
+    pub fn is_not_void(self) -> bool {
+        !self.is_void()
     }
 
     pub fn is_solid(self) -> bool {
@@ -98,14 +102,11 @@ impl Material {
 
     /// Can a matching map a region with material `self` to a region with material `other`?
     pub fn matches(self, other: Self) -> bool {
-        self == other
-        // if self.is_solid() {
-        //     // match rigid rgb or normal rgb
-        //     (other.is_normal() || other.is_solid()) && self.rgb() == other.rgb()
-        // } else {
-        //     // exact color match otherwise
-        //     self == other
-        // }
+        if self == Self::WILDCARD {
+            true
+        } else {
+            self == other
+        }
     }
 }
 

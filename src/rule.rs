@@ -108,7 +108,7 @@ mod test {
             .unwrap()
             .intot::<MaterialMap>();
         let before = Topology::new(before_material_map);
-        let before = before.filter_by_material(Material::is_not_rule);
+        let before = before.filter_by_material(Material::is_not_void);
 
         let after_material_map = RgbaField::load(format!("{folder}/after.png"))
             .unwrap()
@@ -126,7 +126,10 @@ mod test {
         while let Some(phi) =
             SearchMorphism::new(world.topology(), &rule.before).find_first_match(NullTrace::new())
         {
-            rule.substitute(&phi, &mut world);
+            let changed = rule.substitute(&phi, &mut world);
+            if !changed {
+                break;
+            }
 
             // Save world to image for debugging!
             // world
@@ -186,8 +189,19 @@ mod test {
     fn rule_gate_a() {
         assert_rule_application("gate_a", 2)
     }
+
+    #[test]
+    fn rule_interior_hole() {
+        assert_rule_application("interior_hole", 1)
+    }
+
     #[test]
     fn rule_two_regions_failure_case() {
         assert_rule_application("two_regions_failure_case", 1)
+    }
+
+    #[test]
+    fn wildcard_1() {
+        assert_rule_application("wildcard_1", 1)
     }
 }

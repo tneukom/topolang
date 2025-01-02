@@ -92,8 +92,8 @@ impl Interpreter {
                 source.push(topology[phi_region_key].arbitrary_interior_pixel());
             }
 
-            let before = before.filter_by_material(Material::is_not_rule);
-            let after = after.filter_by_material(Material::is_not_rule);
+            let before = before.filter_by_material(Material::is_not_void);
+            let after = after.filter_by_material(Material::is_not_void);
 
             // Find translation from after to before
             let before_bounds = before.bounding_rect();
