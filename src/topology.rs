@@ -1,5 +1,4 @@
 use crate::{
-    area_cover::AreaCover,
     cycle_segments::{CycleSegment, CycleSegments},
     material::Material,
     math::{
@@ -224,8 +223,6 @@ pub struct Region {
     /// First item is outer Border
     pub boundary: Boundary,
 
-    pub cover: AreaCover,
-
     pub material: Material,
 
     pub bounds: Rect<i64>,
@@ -358,17 +355,24 @@ impl Topology {
         self.bounding_rect
     }
 
+    /// Bounding rect of all pixels that are not None
+    pub fn not_none_bounding_rect(&self) -> Rect<i64> {
+        self.material_map.not_none_bounding_rect()
+    }
+
     #[inline(never)]
     pub fn new(material_map: MaterialMap) -> Self {
-        let (region_map, area_covers) = pixmap_regions(&material_map);
-        let n_regions = area_covers.len();
+        let (region_map, region_bounding_rects) = pixmap_regions(&material_map);
+        let n_regions = region_bounding_rects.len();
 
         let mut regions: BTreeMap<usize, Region> = BTreeMap::new();
 
         let region_boundaries = region_boundaries(&region_map, n_regions);
 
-        for (region_id, (pre_boundary, area_cover)) in
-            region_boundaries.into_iter().zip(area_covers).enumerate()
+        for (region_id, (pre_boundary, region_bounding_rect)) in region_boundaries
+            .into_iter()
+            .zip(region_bounding_rects)
+            .enumerate()
         {
             let mut borders = Vec::new();
             for (i_border, cycle) in split_boundary_into_cycles(pre_boundary)
@@ -389,13 +393,12 @@ impl Topology {
 
             let boundary = Boundary::new(borders);
 
-            let bounds = Rect::index_bounds(region_map.iter_where_value(&area_cover, region_id));
-
             let region = Region {
-                material: material_map[boundary.arbitrary_interior_pixel()],
+                material: material_map
+                    .get(boundary.arbitrary_interior_pixel())
+                    .unwrap(),
                 boundary: boundary,
-                cover: area_cover,
-                bounds,
+                bounds: region_bounding_rect,
             };
             regions.insert(region_id, region);
         }
@@ -422,7 +425,7 @@ impl Topology {
     }
 
     pub fn translated(&self, offset: Point<i64>) -> Self {
-        Self::new(self.material_map.translated(offset))
+        Self::new(self.material_map.clone().translated(offset))
     }
 
     pub fn iter_borders(&self) -> impl Iterator<Item = &Border> + Clone {
@@ -488,7 +491,7 @@ impl Topology {
     }
 
     pub fn material_left_of(&self, seam: Seam) -> Material {
-        self.material_map[seam.start.left_pixel]
+        self.material_map.get(seam.start.left_pixel).unwrap()
     }
 
     /// Not every seam has a region on the right, it can be empty space
@@ -500,7 +503,7 @@ impl Topology {
     }
 
     pub fn material_right_of(&self, seam: Seam) -> Option<Material> {
-        self.material_map.get(seam.start.right_pixel()).cloned()
+        self.material_map.get(seam.start.right_pixel())
     }
 
     pub fn seam_materials(&self, seam: Seam) -> SeamMaterials {
@@ -527,7 +530,7 @@ impl Topology {
         pixels
             .into_iter()
             .flat_map(|pixel| pixel.touching())
-            .flat_map(|touched| self.region_map.get(touched).copied())
+            .flat_map(|touched| self.region_map.get(touched))
             .collect()
     }
 
@@ -545,11 +548,11 @@ impl Topology {
         region_key: RegionKey,
     ) -> impl Iterator<Item = Pixel> + Clone + 'a {
         let region = &self.regions[&region_key];
-        self.region_map.iter_where_value(&region.cover, region_key)
+        self.region_map.iter_where_value(region.bounds, region_key)
     }
 
     pub fn region_at(&self, pixel: Pixel) -> Option<RegionKey> {
-        self.region_map.get(pixel).copied()
+        self.region_map.get(pixel)
     }
 
     pub fn border_containing_side(&self, side: &Side) -> Option<(BorderKey, &Border)> {
@@ -576,7 +579,7 @@ impl Topology {
     }
 
     pub fn filter_by_material(&self, mut pred: impl FnMut(Material) -> bool) -> Self {
-        Self::new(self.material_map.filter(|_, &material| pred(material)))
+        Self::new(self.material_map.filter(|_, material| pred(material)))
     }
 
     /// Blit the given region to the material_map with the given material.
@@ -586,16 +589,9 @@ impl Topology {
         material: Material,
         material_map: &mut MaterialMap,
     ) {
-        let region = &self[region_key];
-        material_map.blit_op(
-            &self.region_map,
-            &region.cover,
-            |blit_material, &blit_region| {
-                if blit_region == region_key {
-                    *blit_material = Some(material);
-                }
-            },
-        );
+        for pixel in self.iter_region_interior(region_key) {
+            material_map.set(pixel, material);
+        }
     }
 
     pub fn material_seam_graph(&self) -> UndirectedGraph<Option<Material>> {

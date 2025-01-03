@@ -35,7 +35,7 @@ impl Interpreter {
         let rule_frame_pixmap = RgbaField::load_from_memory(include_bytes!("rule_frame.png"))
             .unwrap()
             .intot::<MaterialMap>()
-            .without(&Self::RULE_FRAME_MATERIAL);
+            .without(Self::RULE_FRAME_MATERIAL);
         let rule_frame = Topology::new(rule_frame_pixmap);
 
         // Side on the before border (inner border of the frame)
@@ -96,8 +96,8 @@ impl Interpreter {
             let after = after.filter_by_material(Material::is_not_void);
 
             // Find translation from after to before
-            let before_bounds = before.bounding_rect();
-            let after_bounds = after.bounding_rect();
+            let before_bounds = before.not_none_bounding_rect();
+            let after_bounds = after.not_none_bounding_rect();
             assert_eq!(before_bounds.size(), after_bounds.size());
 
             let after = after.translated(before_bounds.low() - after_bounds.low());
@@ -190,7 +190,7 @@ mod test {
         }
 
         // let steps = stabilize(&mut world, &rules);
-        println!("Number of steps: {steps}");
+        // println!("Number of steps: {steps}");
         assert_eq!(steps, expected_steps);
 
         let result_pixmap = world.material_map();
@@ -199,6 +199,11 @@ mod test {
             .unwrap()
             .into();
         assert_eq!(result_pixmap, &expected_pixmap);
+    }
+
+    #[test]
+    fn basic_1() {
+        assert_execute_world("basic_1", 1);
     }
 
     #[test]

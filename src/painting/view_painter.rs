@@ -31,8 +31,8 @@ impl ViewPainter {
             grid_painter: GridPainter::new(gl.clone()),
             tile_painter: RectPainter::new(gl.clone()),
             line_painter: LinePainter::new(gl.clone()),
-            world_painter: MaterialMapPainter::new(gl.clone(), 1024),
-            selection_painter: MaterialMapPainter::new(gl.clone(), 1024),
+            world_painter: MaterialMapPainter::new(gl.clone()),
+            selection_painter: MaterialMapPainter::new(gl.clone()),
             selection_outline_painter: SelectionOutlinePainter::new(gl.clone()),
             i_frame: 0,
         }
@@ -47,14 +47,13 @@ impl ViewPainter {
 
     pub unsafe fn draw_material_map(
         painter: &mut MaterialMapPainter,
-        material_map: MaterialMap,
+        material_map: &MaterialMap,
         camera: &Camera,
         frames: &CoordinateFrames,
         time: f64,
     ) {
-        painter.update(material_map);
         let world_to_device = frames.view_to_device() * camera.world_to_view();
-        painter.draw(world_to_device, time);
+        painter.draw_material_map(material_map, world_to_device, time);
     }
 
     pub unsafe fn draw_bounds(
@@ -88,7 +87,7 @@ impl ViewPainter {
         // actual scene
         Self::draw_material_map(
             &mut self.world_painter,
-            view.world.material_map().clone(),
+            view.world.material_map(),
             &view.camera,
             &frames,
             time,
@@ -102,15 +101,17 @@ impl ViewPainter {
 
         // Draw selection rectangle and content
         if let Some(selection) = &view.selection {
-            Self::draw_material_map(
-                &mut self.selection_painter,
-                selection.material_map().clone(),
-                &view.camera,
-                &frames,
-                time,
-            );
+            if !selection.is_empty() {
+                Self::draw_material_map(
+                    &mut self.selection_painter,
+                    selection.material_map(),
+                    &view.camera,
+                    &frames,
+                    time,
+                );
 
-            self.draw_selection_outline(selection.bounding_rect(), &view.camera, frames, time);
+                self.draw_selection_outline(selection.bounding_rect(), &view.camera, frames, time);
+            }
         }
 
         // Draw selection rectangle currently being drawn

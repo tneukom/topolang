@@ -393,11 +393,12 @@ mod test {
         field::RgbaField,
         material::Material,
         math::rgba8::Rgba8,
-        pattern::{CoutTrace, SearchMorphism},
+        pattern::{CoutTrace, NullTrace, SearchMorphism},
         pixmap::MaterialMap,
         topology::Topology,
         utils::IntoT,
     };
+    use std::path::Path;
 
     const PATTERN_FRAME_MATERIAL: Material = Material::from_rgba(Rgba8::MAGENTA);
 
@@ -422,11 +423,11 @@ mod test {
         material_map.extract_right_of_border(inner_border)
     }
 
-    fn pixmap_with_void_from_path(path: &str) -> MaterialMap {
+    fn pixmap_with_void_from_path(path: impl AsRef<Path>) -> MaterialMap {
         RgbaField::load(path)
             .unwrap()
             .intot::<MaterialMap>()
-            .without(&Material::VOID)
+            .without(Material::VOID)
     }
 
     fn assert_extract_inner_outer(name: &str) {
@@ -437,10 +438,11 @@ mod test {
         let inner = extract_pattern(&mut pixmap);
 
         // Load expected inner and outer pixmaps
-        let expected_inner = pixmap_with_void_from_path(&format!("{folder}/{name}_inner.png"));
+        let expected_inner = pixmap_with_void_from_path(format!("{folder}/{name}_inner.png"));
         assert_eq!(inner, expected_inner);
 
-        let expected_outer = pixmap_with_void_from_path(&format!("{folder}/{name}_outer.png"));
+        let expected_outer = pixmap_with_void_from_path(format!("{folder}/{name}_outer.png"));
+        // pixmap.save(format!("{folder}/{name}_outer_actual.png")).unwrap();
         assert_eq!(pixmap, expected_outer);
     }
 
@@ -471,8 +473,8 @@ mod test {
             .into();
         let world = Topology::new(world_material_map);
 
-        // let trace = NullTrace::new();
-        let trace = CoutTrace::new();
+        let trace = NullTrace::new();
+        // let trace = CoutTrace::new();
 
         let matches = SearchMorphism::new(&world, &pattern).find_matches(trace);
         assert_eq!(matches.len(), n_solutions);

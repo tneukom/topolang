@@ -24,7 +24,7 @@ impl Rule {
         //   after.region_map in parallel.
         let all_equal = dom
             .iter_region_interior(region_key)
-            .map(|pixel| codom.material_map[pixel])
+            .map(|pixel| codom.material_map.get(pixel).unwrap())
             .all_equal();
         if !all_equal {
             anyhow::bail!("Invalid rule, substitution region not constant.")
@@ -49,7 +49,11 @@ impl Rule {
     pub fn substitute(&self, phi: &Morphism, world: &mut World) -> bool {
         let mut fill_regions = Vec::new();
         for (region_key, before_region) in &self.before.regions {
-            let after_material = self.after.material_map[before_region.arbitrary_interior_pixel()];
+            let after_material = self
+                .after
+                .material_map
+                .get(before_region.arbitrary_interior_pixel())
+                .unwrap();
             if before_region.material == after_material {
                 continue;
             }
@@ -135,8 +139,6 @@ mod test {
             // world
             //     .topology()
             //     .material_map
-            //     .to_field(Material::BLACK)
-            //     .into_rgba()
             //     .save(format!("{folder}/run_{application_count}.png"))
             //     .unwrap();
 
@@ -152,12 +154,15 @@ mod test {
             .into();
 
         // result_pixmap
-        //     .to_field(Material::TRANSPARENT)
-        //     .into_rgba()
         //     .save(format!("{folder}/world_result.png"))
         //     .unwrap();
 
         assert_eq!(result_pixmap, &expected_result_pixmap);
+    }
+
+    #[test]
+    fn basic_1() {
+        assert_rule_application("basic_1", 1)
     }
 
     #[test]

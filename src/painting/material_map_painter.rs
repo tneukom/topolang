@@ -1,128 +1,97 @@
 use std::sync::Arc;
 
 use crate::{
-    field::{Field, RgbaField},
+    field::RgbaField,
     material::Material,
     math::{affine_map::AffineMap, point::Point, rect::Rect, rgba8::Rgba8},
     painting::{
         gl_texture::{Filter, GlTexture},
         rect_painter::{DrawRect, RectPainter},
     },
-    pixmap,
-    pixmap::{MaterialMap, Tile},
+    pixmap::MaterialMap,
 };
 
-enum Diff {
-    Modified,
-    Added,
-    Removed,
-}
-
 pub struct MaterialMapPainter {
-    clear_tile: Field<Rgba8>,
-    color_map: MaterialMap,
     rect_painter: RectPainter,
-    texture: GlTexture,
+    texture: Option<(GlTexture, Point<i64>)>,
+    gl: Arc<glow::Context>,
 }
 
 impl MaterialMapPainter {
-    pub unsafe fn new(gl: Arc<glow::Context>, size: i64) -> Self {
-        let mut texture = GlTexture::from_size(gl.clone(), size, size, Filter::Nearest);
-        // TODO:SPEEDUP: Do we need to create an empty bitmap just to clear the texture?
-        let bitmap = RgbaField::filled(Rect::low_size([0, 0], [size, size]), Rgba8::TRANSPARENT);
-        texture.texture_image(&bitmap);
-
-        let color_map = MaterialMap::new();
-        let clear_tile = Tile::new().fill_none(Material::TRANSPARENT).into_rgba();
-
+    pub unsafe fn new(gl: Arc<glow::Context>) -> Self {
         Self {
-            clear_tile,
-            color_map,
-            texture,
-            rect_painter: RectPainter::new(gl),
+            texture: None,
+            rect_painter: RectPainter::new(gl.clone()),
+            gl: gl,
         }
     }
 
-    fn diffs(before: &MaterialMap, after: &MaterialMap) -> Vec<(Point<i64>, Diff)> {
-        let mut diffs = Vec::new();
-
-        for (&tile_index, before_tile) in &before.tiles {
-            let after_tile = after.tiles.get(&tile_index);
-            if let Some(after_tile) = after_tile {
-                if before_tile != after_tile {
-                    diffs.push((tile_index, Diff::Modified));
-                }
-            } else {
-                diffs.push((tile_index, Diff::Removed));
-            }
-        }
-
-        for &tile_index in after.tiles.keys() {
-            let before_tile = before.tiles.get(&tile_index);
-            if before_tile.is_none() {
-                diffs.push((tile_index, Diff::Added));
-            }
-        }
-
-        diffs
+    pub unsafe fn draw_material_map(
+        &mut self,
+        material_map: &MaterialMap,
+        to_device: AffineMap<f64>,
+        time: f64,
+    ) {
+        let rgba_field = material_map.to_field(Material::TRANSPARENT).into_rgba();
+        self.draw(&rgba_field, to_device, time);
     }
 
-    pub unsafe fn update(&mut self, material_map: MaterialMap) {
-        let diffs = Self::diffs(&self.color_map, &material_map);
-
-        for (tile_index, _) in diffs {
-            let after_tile = material_map.tiles.get(&tile_index);
-
-            // let color_field = if let Some(new_tile) = new_tile {
-            //     new_tile
-            //         .fill_none(Material::TRANSPARENT)
-            //         .map_into::<Rgba8>()
-            // } else {
-            //     // TODO: Directly use Field<Rgba8> of appropriate size, cache
-            //     Tile::new()
-            //         .fill_none(Material::TRANSPARENT)
-            //         .map_into::<Rgba8>()
-            // };
-
-            let color_field = match after_tile {
-                // TODO: Store empty Field<Rgba8>
-                None => &self.clear_tile,
-                Some(after_tile) => &after_tile
-                    .fill_none(Material::TRANSPARENT)
-                    .map_into::<Rgba8>(),
-            };
-
-            // blit sub texture
-            let tile_offset = pixmap::tile_rect(tile_index).low();
-            self.texture.texture_sub_image(tile_offset, color_field);
+    fn next_power_of_two(n: i64) -> i64 {
+        assert!(n >= 0);
+        let mut power = 1;
+        while power <= n {
+            power *= 2;
         }
-
-        // for tile_index in RgbaMap::tile_indices() {
-        //     let current_tile = self.color_map.get_rc_tile(tile_index);
-        //     let new_tile = material_map.get_rc_tile(tile_index);
-        //     if MaterialMap::tile_ptr_eq(current_tile, new_tile) {
-        //         continue;
-        //     }
-        //
-        //     let tile_offset = RgbaMap::tile_rect(tile_index).low();
-        //
-        //
-        //     // blit sub texture
-        //     self.texture.texture_sub_image(tile_offset, &color_field);
-        // }
-
-        self.color_map = material_map;
+        power
     }
 
     /// Draw whole texture as a single rectangle
-    pub unsafe fn draw(&mut self, to_device: AffineMap<f64>, time: f64) {
-        let texture_rect = Rect::low_size([0, 0], self.texture.size());
+    pub unsafe fn draw(&mut self, rgba_field: &RgbaField, to_device: AffineMap<f64>, time: f64) {
+        if !rgba_field.bounds().has_positive_area() {
+            println!("Trying to draw empty field.");
+            return;
+        }
+
+        // If rgba_field size is different from texture size, reset texture
+        if let Some((_, bitmap_size)) = &self.texture {
+            if *bitmap_size != rgba_field.bounds().size() {
+                self.texture = None;
+            }
+        }
+
+        // New texture in case it is None
+        let (texture, bitmap_size) = self.texture.get_or_insert_with(|| {
+            // WebGL support for non-power of 2 doesn't seem to be very good
+            // See https://www.khronos.org/webgl/wiki/WebGL_and_OpenGL_Differences#Non-Power_of_Two_Texture_Support
+            let texture_width = Self::next_power_of_two(rgba_field.width());
+            let texture_height = Self::next_power_of_two(rgba_field.height());
+            let texture_size = Point(texture_width, texture_height);
+
+            // TODO: Check mipmap generation
+            let mut texture = GlTexture::from_size(
+                self.gl.clone(),
+                texture_width,
+                texture_height,
+                Filter::Nearest,
+            );
+            let transparent = RgbaField::filled(
+                Rect::low_size(Point::ZERO, texture_size),
+                Rgba8::TRANSPARENT,
+            );
+            texture.texture_image(&transparent);
+            (texture, rgba_field.bounds().size())
+        });
+
+        texture.texture_sub_image(Point::ZERO, &rgba_field);
+
+        let texture_rect = Rect::low_size([0, 0], *bitmap_size);
+        let rect = texture_rect + rgba_field.bounds().low();
         let draw_tile = DrawRect {
             texture_rect,
-            corners: texture_rect.cwise_cast().corners(),
+            corners: rect.cwise_cast().corners(),
         };
 
         self.rect_painter
-            .draw(&[draw_tile], &self.texture, to_device, time);
+            .draw(&[draw_tile], texture, to_device, time);
     }
 }

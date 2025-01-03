@@ -7,47 +7,17 @@
 ///
 /// https://docs.rs/petgraph/latest/src/petgraph/unionfind.rs.html#16-27
 use crate::{
-    area_cover::AreaCover,
     field::Field,
-    math::{
-        pixel::{Side, SideName},
-        point::Point,
-        rgba8::Rgba8,
-    },
-    pixmap::{Pixmap, Tile, TileSideClass, TileSidesForEach},
+    math::pixel::{Side, SideName},
     union_find::UnionFind,
 };
 use ahash::{HashMap, HashMapExt};
 use itertools::Itertools;
 
-use crate::math::pixel::Pixel;
-use std::{collections::BTreeMap, rc::Rc};
-
-pub trait RegionEq {
-    fn region_eq(self, other: Self) -> bool;
-}
-
-impl<T: RegionEq> RegionEq for Option<T> {
-    fn region_eq(self, other: Self) -> bool {
-        match (self, other) {
-            (Some(this), Some(other)) => this.region_eq(other),
-            (None, None) => true,
-            _ => false,
-        }
-    }
-}
-
-impl RegionEq for () {
-    fn region_eq(self, _other: Self) -> bool {
-        true
-    }
-}
-
-impl RegionEq for Rgba8 {
-    fn region_eq(self, other: Self) -> bool {
-        self == other
-    }
-}
+use crate::{
+    math::{pixel::Pixel, rect::Rect},
+    pixmap::Pixmap,
+};
 
 pub struct CompactLabels {
     remap: Vec<usize>,
@@ -139,13 +109,13 @@ struct BuildRegionsUnionFind {
     union_find: UnionFind,
 }
 
-impl<T: Copy + RegionEq> NeighborsFn<T> for BuildRegionsUnionFind {
+impl<T: Copy + Eq> NeighborsFn<T> for BuildRegionsUnionFind {
     // Build UnionFind data structure for equivalent regions
     fn call<const N: usize>(&mut self, field: &Field<T>, center: usize, neighbors: [usize; N]) {
         let center_value = field.as_slice()[center];
         for neighbor in neighbors {
             let neighbor_value = field.as_slice()[neighbor];
-            if neighbor_value.region_eq(center_value) {
+            if neighbor_value == center_value {
                 self.union_find.union(center, neighbor);
             }
         }
@@ -153,7 +123,7 @@ impl<T: Copy + RegionEq> NeighborsFn<T> for BuildRegionsUnionFind {
 }
 
 #[inline(never)]
-pub fn field_regions_fast<T: Copy + RegionEq>(field: &Field<T>) -> Field<usize> {
+pub fn field_regions_fast<T: Copy + Eq>(field: &Field<T>) -> Field<usize> {
     let union_find = UnionFind::new(field.len());
     let mut build_union_find = BuildRegionsUnionFind { union_find };
     build_union_find.for_each(field);
@@ -163,7 +133,7 @@ pub fn field_regions_fast<T: Copy + RegionEq>(field: &Field<T>) -> Field<usize> 
 
 /// Returns connected components of `field`
 #[inline(never)]
-pub fn field_regions<T: Copy + RegionEq>(field: &Field<T>) -> Field<usize> {
+pub fn field_regions<T: Copy + Eq>(field: &Field<T>) -> Field<usize> {
     // TODO: Reuse UnionFind so we don't allocate each time
     let mut union_find = UnionFind::new(field.len());
 
@@ -171,7 +141,7 @@ pub fn field_regions<T: Copy + RegionEq>(field: &Field<T>) -> Field<usize> {
         for side in [SideName::TopLeft, SideName::Top, SideName::Left] {
             let neighbor = center.neighbor(side);
             if let Some(neighbor_color) = field.get(neighbor).copied() {
-                if color.region_eq(neighbor_color) {
+                if color == neighbor_color {
                     union_find.union(
                         field.linear_index(center).unwrap(),
                         field.linear_index(neighbor).unwrap(),
@@ -196,108 +166,60 @@ pub fn mask_field<T: Copy, S>(field: &Field<T>, mask: &Field<Option<S>>) -> Fiel
 }
 
 #[inline(never)]
-pub fn tile_regions<T: Copy + RegionEq>(tile: &Tile<T>) -> (Tile<usize>, usize) {
-    let mut region_field = field_regions_fast(&tile.field);
-    let mut region_field = mask_field(&mut region_field, &tile.field);
+pub fn pixmap_regions<T: Copy + Eq>(pixmap: &Pixmap<T>) -> (Pixmap<usize>, Vec<Rect<i64>>) {
+    let mut region_field = field_regions_fast(&pixmap.field);
+
+    // TODO: field_regions_fast should directly ignore Nones
+    // Remove regions from None
+    let mut region_field = mask_field(&mut region_field, &pixmap.field);
 
     // TODO: Reuse CompactLabels so we don't allocate each time
     let mut compact_labels = CompactLabels::new(region_field.len());
     compact_labels.compact_masked(region_field.iter_mut());
-    (Tile::from_field(region_field), compact_labels.counter)
-}
 
-/// Returns the region map and the number of regions
-#[inline(never)]
-pub fn pixmap_regions<T: Copy + RegionEq>(
-    color_map: &Pixmap<T>,
-) -> (Pixmap<usize>, Vec<AreaCover>) {
-    // Map pixmap tile wise (not regarding interface between tiles)
-
-    // Maps each region_id to the tile it is in
-    let mut region_to_tile: Vec<Point<i64>> = Vec::new();
-
-    let region_map_tiles: BTreeMap<_, _> = color_map
-        .tiles
-        .iter()
-        .map(|(&tile_index, tile)| {
-            // Compute regions of the tile independent of the rest of the pixmap
-            let (mut tile_region_map, tile_n_regions) = tile_regions(tile);
-
-            // Offset region ids
-            for (_, region_id) in tile_region_map.iter_mut() {
-                *region_id += region_to_tile.len();
-            }
-
-            // Map region_id to tile_index
-            for _ in 0..tile_n_regions {
-                region_to_tile.push(tile_index);
-            }
-
-            (tile_index, Rc::new(tile_region_map))
-        })
-        .collect();
-    let mut region_map = Pixmap {
-        tiles: region_map_tiles,
-    };
-
-    // Build UnionFind to merge tiled regions that are connected
-    let mut union_find = UnionFind::new(region_to_tile.len());
-
-    let tile_sides_for_each = TileSidesForEach::cached();
-    tile_sides_for_each.for_each_zip(
-        color_map,
-        &region_map,
-        TileSideClass::Boundary,
-        |_side, left, right| {
-            if let Some(right) = right {
-                let (left_color, right_color) = (left.0, right.0);
-                if left_color.region_eq(right_color) {
-                    union_find.union(left.1, right.1);
-                }
-            }
-        },
-    );
-
-    let mut roots = union_find.into_roots();
-
-    // Make sure labels are in range 0,...,n_regions
-    let mut compact_labels = CompactLabels::new(region_to_tile.len());
-    let n_regions = compact_labels.compact(&mut roots);
-    for (_, region_id) in region_map.iter_mut() {
-        *region_id = roots[*region_id]
+    // Compute bounding rect for each region
+    let n_regions = compact_labels.counter;
+    let mut region_bounding_rects = vec![Rect::EMPTY; n_regions];
+    for (pixel, &region_id) in region_field.enumerate() {
+        if let Some(region_id) = region_id {
+            let region_bounding_rect = &mut region_bounding_rects[region_id];
+            *region_bounding_rect = region_bounding_rect.bounds_with(pixel);
+        }
     }
 
-    // Create AreaCover for each region
-    let mut area_covers = vec![AreaCover::new(); n_regions];
-    for (region_id, &tile_index) in region_to_tile.iter().enumerate() {
-        let merged_region_id = roots[region_id];
-        area_covers[merged_region_id].add_tile(tile_index);
+    // Bounding box upper bound is exclusive
+    // TODO: Ugly
+    for rect in &mut region_bounding_rects {
+        *rect = rect.inc_high();
     }
 
-    (region_map, area_covers)
+    (Pixmap::new(region_field), region_bounding_rects)
 }
 
 /// Mapping each side to the region_id on its right side
 pub type RegionBoundary = HashMap<Side, Option<usize>>;
 
+pub fn iter_pixmap_sides<T: Copy>(
+    pixmap: &Pixmap<T>,
+) -> impl Iterator<Item = (Side, T, Option<T>)> + '_ {
+    pixmap.iter().flat_map(|(pixel, left)| {
+        pixel.sides_ccw().map(|side| {
+            let right = pixmap.get(side.right_pixel());
+            (side, left, right)
+        })
+    })
+}
+
 #[inline(never)]
 pub fn region_boundaries(region_map: &Pixmap<usize>, n_regions: usize) -> Vec<RegionBoundary> {
     let mut boundaries = vec![RegionBoundary::new(); n_regions];
 
-    let tile_sides_for_each = TileSidesForEach::cached();
-    tile_sides_for_each.for_each(region_map, TileSideClass::All, |side, left, right| {
+    for (side, left, right) in iter_pixmap_sides(region_map) {
         let boundary = &mut boundaries[left];
         if Some(left) != right {
             boundary.insert(side, right);
         }
-    });
-
-    // region_map.for_each_side_neighbors(|side, neighbors| {
-    //     let boundary = &mut boundaries[*neighbors.left];
-    //     if Some(neighbors.left) != neighbors.right {
-    //         boundary.insert(side, neighbors.right.cloned());
-    //     }
-    // });
+    }
 
     boundaries
 }
@@ -381,7 +303,7 @@ mod test {
     use crate::{
         field::{Field, RgbaField},
         math::{generic::EuclidDivRem, pixel::Side, point::Point, rect::Rect, rgba8::Rgba8},
-        pixmap::{iter_sides_in_rect, split_index, MaterialMap, Pixmap, RgbaMap, TILE_SIZE},
+        pixmap::{iter_sides_in_rect, MaterialMap, Pixmap, RgbaMap},
         regions::{
             left_of_boundary, pixmap_regions, region_boundaries, right_of_boundary,
             split_boundary_into_cycles,
@@ -392,18 +314,6 @@ mod test {
     use itertools::Itertools;
     use std::collections::{BTreeMap, HashSet};
 
-    pub fn pixel_touches_tile_boundary(index: Point<i64>) -> bool {
-        let (_, pixel_index) = split_index(index);
-        pixel_index.x == 0
-            || pixel_index.x == TILE_SIZE - 1
-            || pixel_index.y == 0
-            || pixel_index.y == TILE_SIZE - 1
-    }
-
-    pub fn side_lies_on_tile_boundary(side: Side) -> bool {
-        pixel_touches_tile_boundary(side.left_pixel)
-    }
-
     fn generate_field(bounds: Rect<i64>) -> Field<Rgba8> {
         Field::from_map(bounds, |index| {
             let red = index.x.euclid_rem(256) as u8;
@@ -412,40 +322,15 @@ mod test {
         })
     }
 
-    fn field_bounds_cases() -> Vec<Rect<i64>> {
-        vec![
-            Rect::low_high([0, 0], [1, 1]),
-            Rect::low_high([-1, -1], [0, 0]),
-            Rect::low_high([0, 0], [TILE_SIZE - 1, TILE_SIZE - 1]),
-            Rect::low_high([0, 0], [TILE_SIZE + 1, TILE_SIZE - 1]),
-            Rect::low_high([-391, 234], [519, 748]),
-        ]
-    }
-
-    #[test]
-    fn convert_field() {
-        for bounds in field_bounds_cases() {
-            let field = generate_field(bounds);
-            let pixmap = Pixmap::from_field(&field);
-            assert_eq!(pixmap.bounding_rect(), bounds);
-
-            for (index, value) in field.enumerate() {
-                assert_eq!(Some(value), pixmap.get(index));
-            }
-
-            assert_eq!(pixmap.to_field(Rgba8::ZERO), field);
-        }
-    }
-
     /// Collect the boundary of the area with the given value, in other words the sides that have
     /// a pixel of the given value on the left side and a different value on the right side.
-    fn boundary_of<T: Ord + Clone>(map: &Pixmap<T>, interior: &T) -> HashMap<Side, Option<T>> {
+    fn boundary_of<T: Ord + Copy>(map: &Pixmap<T>, interior: T) -> HashMap<Side, Option<T>> {
         let mut boundary = HashMap::new();
         for side in iter_sides_in_rect(map.bounding_rect()) {
             if map.get(side.left_pixel) == Some(interior) {
                 let right_color = map.get(side.right_pixel());
                 if right_color != Some(interior) {
-                    boundary.insert(side, right_color.cloned());
+                    boundary.insert(side, right_color);
                 }
             }
         }
@@ -456,8 +341,8 @@ mod test {
     /// color.
     fn pixmap_region_given_distinct_colors(color_map: &Pixmap<Rgba8>) -> Pixmap<usize> {
         let mut color_to_region = BTreeMap::new();
-        let mut region_map = Pixmap::new();
-        for (pixel, &color) in color_map.iter() {
+        let mut region_map = Pixmap::nones(color_map.bounding_rect());
+        for (pixel, color) in color_map.iter() {
             let len = color_to_region.len();
             let region_id = color_to_region.entry(color).or_insert(len);
             region_map.set(pixel, *region_id);
@@ -487,7 +372,7 @@ mod test {
         let (region_map, area_covers) = pixmap_regions(&color_map);
 
         let n_regions = area_covers.len();
-        for &region_id in region_map.values() {
+        for region_id in region_map.values() {
             assert!(region_id < n_regions, "region_ids should be 0,...,n");
         }
 
@@ -507,12 +392,9 @@ mod test {
         test_pixmap_regions("a.png");
     }
 
+    // TODO: Is this still required now that tiled Pixmap is gone?
     #[test]
     fn regions_multiple_tiles() {
-        // Images must be updated if TILE_SIZE changes!
-        const {
-            assert!(TILE_SIZE == 64);
-        }
         test_pixmap_regions("multiple_tiles_a.png");
         test_pixmap_regions("multiple_tiles_b.png");
         test_pixmap_regions("multiple_tiles_c.png");
@@ -530,7 +412,7 @@ mod test {
 
         // Compare each region boundary with reference implementation
         for (region_id, boundary) in boundaries.iter().enumerate() {
-            let expected_boundary = boundary_of(&region_map, &region_id);
+            let expected_boundary = boundary_of(&region_map, region_id);
             assert_eq!(boundary, &expected_boundary);
         }
     }
@@ -540,12 +422,9 @@ mod test {
         test_region_boundaries("a.png");
     }
 
+    // TODO: Is this still required now that tiled Pixmap is gone?
     #[test]
     fn region_boundaries_multiple_tiles() {
-        // Images must be updated if TILE_SIZE changes!
-        const {
-            assert!(TILE_SIZE == 64);
-        }
         test_region_boundaries("multiple_tiles_a.png");
         test_region_boundaries("multiple_tiles_b.png");
         test_region_boundaries("multiple_tiles_c.png");
@@ -620,10 +499,10 @@ mod test {
     }
 
     /// Set of pixels with the given color
-    fn pixmap_color_area<T: Eq>(pixmap: &Pixmap<T>, area_color: &T) -> HashSet<Point<i64>> {
+    fn pixmap_color_area<T: Eq + Copy>(pixmap: &Pixmap<T>, area_color: T) -> HashSet<Point<i64>> {
         pixmap
             .iter()
-            .filter(|(_, pixel_color)| pixel_color == &area_color)
+            .filter(|&(_, pixel_color)| pixel_color == area_color)
             .map(|kv| kv.0)
             .collect()
     }
@@ -632,8 +511,8 @@ mod test {
         let folder = "test_resources/regions/right_of_border";
         let path = format!("{folder}/{filename}");
         let color_map: RgbaMap = RgbaField::load(path).unwrap().into();
-        let red_area = pixmap_color_area(&color_map, &Rgba8::RED);
-        let blue_area = pixmap_color_area(&color_map, &Rgba8::BLUE);
+        let red_area = pixmap_color_area(&color_map, Rgba8::RED);
+        let blue_area = pixmap_color_area(&color_map, Rgba8::BLUE);
 
         let red_boundary = area_boundary(&red_area);
         let red_borders = split_set_boundary_into_cycles(red_boundary.into());

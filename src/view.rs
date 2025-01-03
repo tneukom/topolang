@@ -171,6 +171,10 @@ impl Selection {
         self.material_map.bounding_rect()
     }
 
+    pub fn is_empty(&self) -> bool {
+        !self.material_map.bounding_rect().has_positive_area()
+    }
+
     pub fn with_center_at(self, center: Point<i64>) -> Self {
         let current_center = self.bounding_rect().center();
         self.translated(center - current_center)
@@ -186,7 +190,7 @@ impl Selection {
     }
 
     pub fn blit(&self, target: &mut MaterialMap) {
-        target.blit_over(&self.material_map);
+        target.blit(&self.material_map);
     }
 }
 
@@ -283,7 +287,11 @@ impl View {
         op.world_mouse = input.world_mouse;
 
         self.world.mut_material_map(|material_map| {
-            material_map.blit_over(&change);
+            for (pixel, material) in change {
+                if material_map.bounding_rect().half_open_contains(pixel) {
+                    material_map.set(pixel, material);
+                }
+            }
         });
 
         UiState::Brushing(op)
@@ -305,7 +313,8 @@ impl View {
                 .world
                 .material_map()
                 .clip_rect(selection_rect)
-                .without(&Material::TRANSPARENT);
+                .without(Material::TRANSPARENT);
+
             self.world.fill_rect(selection_rect, Material::TRANSPARENT);
             self.selection = Some(Selection::new(selection));
             return UiState::Idle;
@@ -483,9 +492,8 @@ impl View {
     }
 
     pub fn resize(&mut self, bounds: Rect<i64>) {
-        let mut resized = MaterialMap::new();
-        resized.fill_rect(bounds, Material::TRANSPARENT);
-        resized.blit_over(self.world.material_map());
+        let mut resized = MaterialMap::filled(bounds, Material::TRANSPARENT);
+        resized.blit(self.world.material_map());
         self.world = World::from_material_map(resized);
 
         self.history

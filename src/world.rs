@@ -65,7 +65,7 @@ impl World {
         &self.material_map
     }
 
-    pub fn mut_material_map(&mut self, mut f: impl FnMut(&mut MaterialMap)) {
+    pub fn mut_material_map(&mut self, f: impl FnOnce(&mut MaterialMap)) {
         f(&mut self.material_map);
         self.topology = CachedTopology::empty();
     }
@@ -115,8 +115,8 @@ impl World {
     }
 
     /// Blit passed Pixmap to self.material_map but only where material_map is already defined.
-    pub fn blit_over(&mut self, other: &MaterialMap) {
-        self.material_map.blit_over(other);
+    pub fn blit(&mut self, other: &MaterialMap) {
+        self.material_map.blit(other);
         self.topology = CachedTopology::empty();
     }
 
@@ -148,14 +148,14 @@ mod test {
         let blit = RgbaField::load(format!("{folder}/blit.png"))
             .unwrap()
             .intot::<MaterialMap>()
-            .without(&Material::TRANSPARENT);
+            .without(Material::TRANSPARENT);
 
         let mut expected_pixmap = world_pixmap.clone();
-        expected_pixmap.blit_over(&blit);
+        expected_pixmap.blit(&blit);
         let expected_world = World::from_material_map(expected_pixmap);
 
         let mut world = World::from_material_map(world_pixmap);
-        world.blit_over(&blit);
+        world.blit(&blit);
 
         assert_eq!(world.material_map(), expected_world.material_map());
         assert_eq!(world.topology(), expected_world.topology());

@@ -1,4 +1,4 @@
-use crate::{math::rgba8::Rgba8, regions::RegionEq};
+use crate::math::rgba8::Rgba8;
 
 // TODO: Material should be optimized for RegionEq, not converting from and to Rgba8!
 // TODO: TRANSPARENT | SOLID should be possible, unclear how to represent as Rgba8 or on screen
@@ -28,6 +28,8 @@ impl Material {
     pub const RULE_ARROW_COLOR: Rgba8 = Rgba8::new(0xFF, 0x6E, 0x00, Self::RULE_ALPHA);
     /// #0C3619
     pub const WILDCARD_COLOR: Rgba8 = Rgba8::new(0x0C, 0x36, 0x19, Self::RULE_ALPHA);
+
+    pub const UNDEF_COLOR: Rgba8 = Rgba8::new(0xFF, 0xFF, 0xFF, 0x00);
 
     pub const VOID: Self = Self::from_rgba(Self::VOID_COLOR);
     pub const RULE_FRAME: Self = Self::VOID;
@@ -125,12 +127,5 @@ impl From<&Rgba8> for Material {
 impl From<Material> for Rgba8 {
     fn from(material: Material) -> Self {
         material.to_rgba()
-    }
-}
-
-impl RegionEq for Material {
-    fn region_eq(self, other: Self) -> bool {
-        ((self.flags & Self::REGION_EQ_MASK) == (other.flags & Self::REGION_EQ_MASK))
-            && (self.rgb == other.rgb)
     }
 }

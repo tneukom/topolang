@@ -1,8 +1,8 @@
 use crate::{
     material::Material,
-    math::{arrow::Arrow, point::Point, rect::Rect},
-    pixmap::MaterialMap,
+    math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect},
 };
+use ahash::HashMap;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Brush {
@@ -26,7 +26,7 @@ impl Brush {
             .collect()
     }
 
-    pub fn draw_line(&self, line: Arrow<f64>) -> MaterialMap {
+    pub fn draw_line(&self, line: Arrow<f64>) -> HashMap<Pixel, Material> {
         // for point in Self::points_within_radius(line, self.radius) {
         //     target.set(point.into(), self.color);
         // }
@@ -36,10 +36,10 @@ impl Brush {
         let pixel_line: Arrow<i64> =
             Arrow(line.a.floor().cwise_cast(), line.b.floor().cwise_cast());
 
-        let mut result = MaterialMap::new();
+        let mut result = HashMap::default();
         for point in pixel_line.draw() {
             for &offset in &stamp {
-                result.set(point + offset, self.material);
+                result.insert(point + offset, self.material);
             }
         }
 
