@@ -33,7 +33,7 @@ use crate::{
     painting::view_painter::ViewPainter,
     pixmap::MaterialMap,
     utils::{IntoT, ReflectEnum},
-    view::{EditMode, View, ViewButton, ViewInput, ViewSettings},
+    view::{EditMode, View, ViewInput, ViewSettings},
     widgets::{BrushChooser, ColorChooser, FileChooser},
     world::World,
 };
@@ -181,7 +181,6 @@ pub struct EguiApp {
 
     gl: Arc<glow::Context>,
     view: View,
-    mouse_button_states: HashMap<MouseButton, MouseButtonState>,
 
     view_input: ViewInput,
 
@@ -215,40 +214,6 @@ impl EguiApp {
         (Instant::now() - self.start_time).as_secs_f64()
     }
 
-    fn key_button(ctx: &egui::Context, key: egui::Key) -> ViewButton {
-        if ctx.wants_keyboard_input() {
-            ViewButton::up()
-        } else {
-            ViewButton {
-                is_down: ctx.input(|input| input.key_down(key)),
-                is_pressed: ctx.input(|input| input.key_pressed(key)),
-            }
-        }
-    }
-
-    fn ctrl_key(ctx: &egui::Context) -> ViewButton {
-        ViewButton {
-            is_down: ctx.input(|input| input.modifiers.ctrl),
-            // TODO: Not great, is there no function to check if a modifier was pressed?
-            is_pressed: false,
-        }
-    }
-
-    fn shift_key(ctx: &egui::Context) -> ViewButton {
-        ViewButton {
-            is_down: ctx.input(|input| input.modifiers.shift),
-            is_pressed: false,
-        }
-    }
-
-    fn mouse_button(&self, mouse_button: MouseButton) -> ViewButton {
-        let state = self.mouse_button_states[&mouse_button];
-        ViewButton {
-            is_down: state.is_down(),
-            is_pressed: state == MouseButtonState::Pressed,
-        }
-    }
-
     pub unsafe fn new(cc: &eframe::CreationContext<'_>) -> Self {
         let scene_painter = ViewPainter::new(cc.gl.as_ref().unwrap().clone());
         let start_time = Instant::now();
@@ -264,11 +229,6 @@ impl EguiApp {
         let world = World::from_material_map(world_color_map);
         // let world = Topology::from_bitmap_path("test_resources/compiler/gate/world.png").unwrap();
         let view = View::new(world);
-
-        let mouse_button_states: HashMap<_, _> = MouseButton::VALUES
-            .into_iter()
-            .map(|button| (button, MouseButtonState::Up))
-            .collect();
 
         let gl = cc.gl.clone().unwrap();
 
@@ -322,14 +282,10 @@ impl EguiApp {
             view,
             view_settings,
             view_rect: Rect::low_size([0, 0], [1, 1]),
-            mouse_button_states,
             gl,
             new_size: Point(512, 512),
             file_name: "".to_string(),
             run: false,
-            // stabilize: false,
-            // stabilize_count: 0,
-            // current_folder: PathBuf::from("resources/saves"),
             view_input: ViewInput::EMPTY,
             edit_mode_icons,
             file_chooser: FileChooser::new(saves_path),
@@ -354,28 +310,7 @@ impl EguiApp {
     }
 
     pub fn view_input_from(&mut self, ctx: &egui::Context) -> ViewInput {
-        for button in MouseButton::VALUES {
-            let egui_button = egui::PointerButton::from(button);
-            let state = self.mouse_button_states[&button];
-            let egui_button_down = ctx.input(|input| input.pointer.button_down(egui_button));
-
-            let new_state = if egui_button_down {
-                match state {
-                    MouseButtonState::Up => {
-                        if ctx.is_pointer_over_area() {
-                            MouseButtonState::Rejected
-                        } else {
-                            MouseButtonState::Pressed
-                        }
-                    }
-                    MouseButtonState::Pressed => MouseButtonState::Down,
-                    other => other,
-                }
-            } else {
-                MouseButtonState::Up
-            };
-            self.mouse_button_states.insert(button, new_state);
-        }
+        let input = ctx.input(|input| input.clone());
 
         let window_mouse = match ctx.pointer_latest_pos() {
             Some(egui_mouse) => Point::new(egui_mouse.x as f64, egui_mouse.y as f64),
@@ -398,15 +333,13 @@ impl EguiApp {
             world_mouse: Point::ZERO,
             world_snapped: Point::ZERO,
 
-            left_mouse: self.mouse_button(MouseButton::Left),
-            middle_mouse: self.mouse_button(MouseButton::Middle),
-            right_mouse: self.mouse_button(MouseButton::Right),
+            left_mouse_down: input.pointer.button_down(egui::PointerButton::Primary),
+            middle_mouse_down: input.pointer.button_down(egui::PointerButton::Middle),
 
-            shift_key: Self::shift_key(ctx),
-            ctrl_key: Self::ctrl_key(ctx),
-            delete_key: Self::key_button(ctx, egui::Key::Delete),
-            enter_key: Self::key_button(ctx, egui::Key::Enter),
-            escape_key: Self::key_button(ctx, egui::Key::Escape),
+            escape_down: input.key_down(egui::Key::Escape),
+            enter_down: input.key_down(egui::Key::Enter),
+            ctrl_down: input.modifiers.ctrl,
+            delete_down: input.key_down(egui::Key::Delete),
 
             mouse_wheel: scroll_delta,
         };

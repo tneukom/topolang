@@ -15,25 +15,6 @@ use crate::{
     world::World,
 };
 
-#[derive(Debug, Clone, Copy)]
-pub struct ViewButton {
-    pub is_down: bool,
-    pub is_pressed: bool,
-}
-
-impl ViewButton {
-    pub const fn up() -> Self {
-        Self {
-            is_down: false,
-            is_pressed: false,
-        }
-    }
-
-    pub fn is_up(&self) -> bool {
-        !self.is_down
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct ViewInput {
     pub view_size: Point<i64>,
@@ -42,15 +23,13 @@ pub struct ViewInput {
     pub world_mouse: Point<f64>,
     pub world_snapped: Point<f64>,
 
-    pub left_mouse: ViewButton,
-    pub middle_mouse: ViewButton,
-    pub right_mouse: ViewButton,
+    pub left_mouse_down: bool,
+    pub middle_mouse_down: bool,
 
-    pub shift_key: ViewButton,
-    pub ctrl_key: ViewButton,
-    pub delete_key: ViewButton,
-    pub enter_key: ViewButton,
-    pub escape_key: ViewButton,
+    pub escape_down: bool,
+    pub enter_down: bool,
+    pub ctrl_down: bool,
+    pub delete_down: bool,
 
     pub mouse_wheel: f64,
 }
@@ -67,22 +46,20 @@ impl ViewInput {
         world_mouse: Point::ZERO,
         world_snapped: Point::ZERO,
 
-        left_mouse: ViewButton::up(),
-        middle_mouse: ViewButton::up(),
-        right_mouse: ViewButton::up(),
+        left_mouse_down: false,
+        middle_mouse_down: false,
 
-        shift_key: ViewButton::up(),
-        ctrl_key: ViewButton::up(),
-        delete_key: ViewButton::up(),
-        enter_key: ViewButton::up(),
-        escape_key: ViewButton::up(),
+        escape_down: false,
+        enter_down: false,
+        ctrl_down: false,
+        delete_down: false,
 
         mouse_wheel: 0.0,
     };
 
     /// Either middle mouse or ctrl + left mouse
     pub fn move_camera_down(&self) -> bool {
-        self.middle_mouse.is_down || (self.left_mouse.is_down && self.ctrl_key.is_down)
+        self.middle_mouse_down || (self.left_mouse_down && self.ctrl_down)
     }
 }
 
@@ -267,7 +244,7 @@ impl View {
         // Because the brushing op is started even if left mouse is not down, we need to exit if
         // mode changes.
         let mode_exited = ![EditMode::Brush, EditMode::Eraser].contains(&settings.edit_mode);
-        let stop = mode_exited || !input.left_mouse.is_down;
+        let stop = mode_exited || !input.left_mouse_down;
         if stop {
             let cause = if op.brush.material == Material::TRANSPARENT {
                 SnapshotCause::Erase
@@ -279,7 +256,7 @@ impl View {
             return UiState::Idle;
         }
 
-        if !input.left_mouse.is_down {
+        if !input.left_mouse_down {
             return UiState::Idle;
         }
 
@@ -303,7 +280,7 @@ impl View {
         input: &ViewInput,
         _settings: &ViewSettings,
     ) -> UiState {
-        if input.left_mouse.is_up() {
+        if !input.left_mouse_down {
             self.cancel_selection();
 
             // set selection by cutting the selected rectangle out of the world
@@ -330,7 +307,7 @@ impl View {
         input: &ViewInput,
         _settings: &ViewSettings,
     ) -> UiState {
-        if input.left_mouse.is_up() {
+        if !input.left_mouse_down {
             return UiState::Idle;
         }
 
@@ -383,7 +360,7 @@ impl View {
 
         match settings.edit_mode {
             EditMode::Brush | EditMode::Eraser => {
-                if input.left_mouse.is_down {
+                if input.left_mouse_down {
                     let mut brush = settings.brush;
                     // Clear is brushing with transparent color
                     if settings.edit_mode == EditMode::Eraser {
@@ -398,7 +375,7 @@ impl View {
                 }
             }
             EditMode::Fill => {
-                if input.left_mouse.is_down {
+                if input.left_mouse_down {
                     let pixel: Pixel = input.world_mouse.floor().cwise_cast().into();
                     if let Some(region_key) = self.world.topology().region_at(pixel) {
                         self.world.fill_region(region_key, settings.brush.material);
@@ -408,7 +385,7 @@ impl View {
                 }
             }
             EditMode::SelectRect => {
-                if input.left_mouse.is_down {
+                if input.left_mouse_down {
                     return self.begin_selection_action(input, settings);
                 }
             }
@@ -434,11 +411,11 @@ impl View {
     pub fn handle_input(&mut self, input: &mut ViewInput, settings: &ViewSettings) {
         self.handle_camera_input(input);
 
-        if input.escape_key.is_down {
+        if input.escape_down {
             self.cancel_selection();
         }
 
-        if input.delete_key.is_down {
+        if input.delete_down {
             self.selection = None;
         }
 
