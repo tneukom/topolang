@@ -1,5 +1,5 @@
-use crate::math::generic::{Cast, CwiseDiv, CwiseInv, CwiseMul, Dot, EuclidDivRem, Num, SignedNum};
-use num_traits::{real::Real, Inv};
+use crate::math::generic::{Cast, Dot, Num, SignedNum};
+use num_traits::real::Real;
 use std::{
     cmp::Ordering,
     fmt::{Display, Formatter},
@@ -86,20 +86,6 @@ impl<T: Num> Point<T> {
     pub fn inf_norm(self) -> T {
         self.x.abs().max(self.y.abs())
     }
-
-    pub fn cwise_min(self, rhs: Self) -> Self {
-        Self {
-            x: self.x.min(rhs.x),
-            y: self.y.min(rhs.y),
-        }
-    }
-
-    pub fn cwise_max(self, rhs: Self) -> Self {
-        Self {
-            x: self.x.max(rhs.x),
-            y: self.y.max(rhs.y),
-        }
-    }
 }
 
 impl<T: SignedNum> Point<T> {
@@ -184,7 +170,7 @@ where
     type Output = Point<T>;
 
     fn add(self, rhs: Point<T>) -> Self::Output {
-        Self::Output::new(self.x + rhs.x, self.y + rhs.y)
+        Point::new(self.x + rhs.x, self.y + rhs.y)
     }
 }
 
@@ -195,7 +181,7 @@ where
     type Output = Point<T>;
 
     fn add(self, rhs: T) -> Self::Output {
-        Self::Output::new(self.x + rhs, self.y + rhs)
+        Point::new(self.x + rhs, self.y + rhs)
     }
 }
 
@@ -206,7 +192,7 @@ where
     type Output = Point<T>;
 
     fn sub(self, rhs: Point<T>) -> Self::Output {
-        Self::Output::new(self.x - rhs.x, self.y - rhs.y)
+        Point::new(self.x - rhs.x, self.y - rhs.y)
     }
 }
 
@@ -217,7 +203,7 @@ where
     type Output = Point<T>;
 
     fn sub(self, rhs: T) -> Self::Output {
-        Self::Output::new(self.x - rhs, self.y - rhs)
+        Point::new(self.x - rhs, self.y - rhs)
     }
 }
 
@@ -239,31 +225,9 @@ where
     type Output = Point<T>;
 
     fn neg(self) -> Self::Output {
-        Self::Output::new(-self.x, -self.y)
+        Point::new(-self.x, -self.y)
     }
 }
-
-impl<T> CwiseInv for Point<T>
-where
-    T: Inv<Output = T>,
-{
-    type Output = Point<T>;
-
-    fn cwise_inv(self) -> Self::Output {
-        Self::Output::new(self.x.inv(), self.y.inv())
-    }
-}
-
-// impl<T> Mul<T> for Point<T>
-// where
-//     T: Mul<Output = T>,
-// {
-//     type Output = Point<T>
-//
-//     fn mul(self, rhs: Rhs) -> Self::Output {
-//         Self::Output::new(self.x * rhs, self.y * rhs)
-//     }
-// }
 
 /// Right multiplication because Rust cannot handle generic left multiplication
 impl<T> Mul<T> for Point<T>
@@ -273,7 +237,7 @@ where
     type Output = Point<T>;
 
     fn mul(self, rhs: T) -> Self::Output {
-        Self::Output::new(self.x * rhs, self.y * rhs)
+        Point::new(self.x * rhs, self.y * rhs)
     }
 }
 
@@ -284,7 +248,7 @@ where
     type Output = Point<T>;
 
     fn div(self, rhs: T) -> Self::Output {
-        Self::Output::new(self.x.div(rhs), self.y.div(rhs))
+        Point::new(self.x.div(rhs), self.y.div(rhs))
     }
 }
 
@@ -295,59 +259,7 @@ where
     type Output = Point<T>;
 
     fn rem(self, rhs: T) -> Self::Output {
-        Self::Output::new(self.x.rem(rhs), self.y.rem(rhs))
-    }
-}
-
-impl<T> CwiseMul<Point<T>> for Point<T>
-where
-    T: Mul<Output = T>,
-{
-    type Output = Point<T>;
-
-    fn cwise_mul(self, rhs: Point<T>) -> Self::Output {
-        Self::Output::new(self.x * rhs.x, self.y * rhs.y)
-    }
-}
-
-impl<T> CwiseDiv<Point<T>> for Point<T>
-where
-    T: Div<Output = T>,
-{
-    type Output = Point<T>;
-
-    fn cwise_div(self, rhs: Point<T>) -> Self::Output {
-        Self::Output::new(self.x / rhs.x, self.y / rhs.y)
-    }
-}
-
-impl<T> EuclidDivRem for Point<T>
-where
-    T: EuclidDivRem<Output = T>,
-{
-    type Output = Point<T>;
-
-    fn euclid_div(self, rhs: Point<T>) -> Self::Output {
-        Self::Output::new(self.x.euclid_div(rhs.x), self.y.euclid_div(rhs.y))
-    }
-
-    fn euclid_rem(self, rhs: Point<T>) -> Self::Output {
-        Self::Output::new(self.x.euclid_rem(rhs.x), self.y.euclid_rem(rhs.y))
-    }
-}
-
-impl<T> EuclidDivRem<T> for Point<T>
-where
-    T: EuclidDivRem<Output = T> + Copy,
-{
-    type Output = Point<T>;
-
-    fn euclid_div(self, rhs: T) -> Self::Output {
-        Self::Output::new(self.x.euclid_div(rhs), self.y.euclid_div(rhs))
-    }
-
-    fn euclid_rem(self, rhs: T) -> Self::Output {
-        Self::Output::new(self.x.euclid_rem(rhs), self.y.euclid_rem(rhs))
+        Point::new(self.x.rem(rhs), self.y.rem(rhs))
     }
 }
 

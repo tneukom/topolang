@@ -1,9 +1,9 @@
+use crate::math::generic::{Cast, Num};
+use num_traits::ConstZero;
 use std::{
     hash::{Hash, Hasher},
     ops::{Add, Mul, Range, RangeInclusive, Sub},
 };
-
-use crate::math::generic::{Cast, ConstZero, Num};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Interval<T> {
@@ -188,7 +188,8 @@ impl<T: Num> Interval<T> {
 
     pub fn center(self) -> T {
         assert!(!self.is_empty());
-        (self.high + self.low) / T::TWO
+        let two = T::ONE + T::ONE;
+        (self.high + self.low) / two
     }
 }
 

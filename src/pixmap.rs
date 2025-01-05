@@ -2,7 +2,6 @@ use crate::{
     field::{Field, FieldIndex, MaterialField, RgbaField},
     material::Material,
     math::{
-        pixel::Side,
         point::Point,
         rect::{Rect, RectBounds},
         rgba8::Rgba8,
@@ -11,18 +10,6 @@ use crate::{
     topology::Border,
 };
 use std::path::Path;
-
-/// Contains interior and boundary sides
-pub fn iter_sides_in_rect(rect: Rect<i64>) -> impl Iterator<Item = Side> + Clone {
-    let pixel_iter = rect.iter_half_open();
-    pixel_iter.flat_map(|pixel| pixel.sides_ccw().into_iter())
-}
-
-#[derive(Debug, Clone)]
-pub struct SideNeighbors<T> {
-    pub left: T,
-    pub right: Option<T>,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pixmap<T> {

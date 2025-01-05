@@ -223,18 +223,6 @@ impl Region {
             .flat_map(|border| border.iter_seams())
     }
 
-    pub fn iter_boundary_sides(&self) -> impl Iterator<Item = Side> + Clone + '_ {
-        self.boundary
-            .borders
-            .iter()
-            .flat_map(|border| border.sides())
-    }
-
-    /// Pixels touching border on the left side, each pixel might appear more than once.
-    pub fn interior_padding<'a>(&'a self) -> impl Iterator<Item = Pixel> + Clone + 'a {
-        self.iter_boundary_sides().map(|side| side.left_pixel())
-    }
-
     pub fn arbitrary_interior_pixel(&self) -> Pixel {
         self.boundary.arbitrary_interior_pixel()
     }

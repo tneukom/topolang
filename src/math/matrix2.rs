@@ -16,8 +16,6 @@ pub struct Matrix2<T> {
     pub a22: T,
 }
 
-pub type Matrix2F = Matrix2<f64>;
-
 impl<T> Matrix2<T> {
     pub const fn new(a11: T, a12: T, a21: T, a22: T) -> Self {
         Self { a11, a12, a21, a22 }

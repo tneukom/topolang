@@ -4,8 +4,6 @@
 use log::warn;
 
 use seamlang::app::EguiApp;
-use std::time::{Duration, Instant};
-use walkdir::WalkDir;
 // pub fn color_replace() {
 //     for entry in WalkDir::new("./").into_iter().filter_map(Result::ok) {
 //         let extension = entry

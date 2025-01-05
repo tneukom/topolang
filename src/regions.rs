@@ -132,8 +132,10 @@ pub fn field_regions_fast<T: Copy + Eq>(field: &Field<T>) -> Field<usize> {
     Field::from_linear(field.bounds(), labeling)
 }
 
-/// Returns connected components of `field`
+/// Returns connected components of `field`, slower legacy function
 #[inline(never)]
+#[deprecated]
+#[allow(dead_code)]
 pub fn field_regions<T: Copy + Eq>(field: &Field<T>) -> Field<usize> {
     // TODO: Reuse UnionFind so we don't allocate each time
     let mut union_find = UnionFind::new(field.len());
@@ -311,8 +313,8 @@ pub fn area_right_of_boundary_bounds(boundary: impl Iterator<Item = Side>) -> Re
 mod test {
     use crate::{
         field::{Field, RgbaField},
-        math::{pixel::Side, point::Point, rgba8::Rgba8},
-        pixmap::{iter_sides_in_rect, MaterialMap, Pixmap, RgbaMap},
+        math::{pixel::Side, point::Point, rect::Rect, rgba8::Rgba8},
+        pixmap::{MaterialMap, Pixmap, RgbaMap},
         regions::{
             area_left_of_boundary, area_right_of_boundary, pixmap_regions, region_boundaries,
             split_boundary_into_cycles,
@@ -322,6 +324,12 @@ mod test {
     use ahash::{HashMap, HashMapExt};
     use itertools::Itertools;
     use std::collections::{BTreeMap, HashSet};
+
+    /// Contains interior and boundary sides
+    pub fn iter_sides_in_rect(rect: Rect<i64>) -> impl Iterator<Item = Side> + Clone {
+        let pixel_iter = rect.iter_half_open();
+        pixel_iter.flat_map(|pixel| pixel.sides_ccw().into_iter())
+    }
 
     /// Collect the boundary of the area with the given value, in other words the sides that have
     /// a pixel of the given value on the left side and a different value on the right side.

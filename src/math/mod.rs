@@ -1,6 +1,5 @@
 pub(crate) mod affine_map;
 pub(crate) mod arrow;
-pub(crate) mod direction;
 pub(crate) mod generic;
 pub(crate) mod interval;
 pub(crate) mod matrix2;

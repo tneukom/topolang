@@ -85,6 +85,7 @@ impl Rgba8 {
 // TODO: Is this the idiomatic way of putting constants in a namespace?
 pub struct Pico8Palette {}
 
+#[allow(dead_code)]
 impl Pico8Palette {
     pub const BLACK: Rgba8 = rgb8(0, 0, 0);
     pub const DARK_BLUE: Rgba8 = rgb8(29, 43, 83);

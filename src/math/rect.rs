@@ -1,13 +1,11 @@
-use crate::{
-    math::{
-        arrow::Arrow,
-        generic::{Cast, ConstZero, CwiseMul, Num},
-        interval::Interval,
-        point::Point,
-    },
-    utils::ReflectEnum,
+use crate::math::{
+    arrow::Arrow,
+    generic::{Cast, Num},
+    interval::Interval,
+    point::Point,
 };
 use itertools::Itertools;
+use num_traits::ConstZero;
 use std::{
     fmt::Debug,
     hash::{Hash, Hasher},
@@ -52,16 +50,6 @@ impl<T> Rect<T> {
         }
     }
 
-    pub fn cwise_into<S>(self) -> Rect<S>
-    where
-        T: Into<S>,
-    {
-        Rect {
-            x: self.x.cwise_into(),
-            y: self.y.cwise_into(),
-        }
-    }
-
     pub fn cwise_cast<S>(self) -> Rect<S>
     where
         T: Cast<S>,
@@ -70,16 +58,6 @@ impl<T> Rect<T> {
             x: self.x.cwise_cast(),
             y: self.y.cwise_cast(),
         }
-    }
-
-    pub fn cwise_try_into<S>(self) -> Result<Rect<S>, <T as TryInto<S>>::Error>
-    where
-        T: TryInto<S>,
-    {
-        Ok(Rect::new(
-            self.x.cwise_try_into()?,
-            self.y.cwise_try_into()?,
-        ))
     }
 }
 
@@ -111,16 +89,7 @@ where
         Point::new(self.x.high, self.y.high)
     }
 
-    pub fn corner(&self, corner: RectCorner) -> Point<T> {
-        match corner {
-            RectCorner::TopLeft => self.top_left(),
-            RectCorner::TopRight => self.top_right(),
-            RectCorner::BottomLeft => self.bottom_left(),
-            RectCorner::BottomRight => self.bottom_right(),
-        }
-    }
-
-    /// Counter clockwise
+    /// Counter-clockwise
     pub fn corners(&self) -> [Point<T>; 4] {
         [
             self.top_left(),
@@ -134,41 +103,17 @@ where
         self.y.low
     }
 
-    pub fn mut_bottom(&mut self) -> &mut T {
-        &mut self.y.low
-    }
-
     pub fn top(&self) -> T {
         self.y.high
-    }
-
-    pub fn mut_top(&mut self) -> &mut T {
-        &mut self.y.high
     }
 
     pub fn right(&self) -> T {
         self.x.high
     }
 
-    pub fn mut_right(&mut self) -> &mut T {
-        &mut self.x.high
-    }
 
     pub fn left(&self) -> T {
         self.x.low
-    }
-
-    pub fn mut_left(&mut self) -> &mut T {
-        &mut self.x.low
-    }
-
-    pub fn mut_side(&mut self, side: RectSide) -> &mut T {
-        match side {
-            RectSide::Left => self.mut_left(),
-            RectSide::Right => self.mut_right(),
-            RectSide::Bottom => self.mut_bottom(),
-            RectSide::Top => self.mut_top(),
-        }
     }
 
     pub fn point(p: Point<T>) -> Self {
@@ -244,11 +189,6 @@ impl<T: Num> Rect<T> {
         self.x.intersects(rhs.x) && self.y.intersects(rhs.y)
     }
 
-    /// interior(lhs) intersects closed(rhs) iff interior(lhs) intersects interior(rhs)
-    pub fn interior_intersects(self, rhs: Self) -> bool {
-        self.x.interior_intersects(rhs.x) && self.y.interior_intersects(rhs.y)
-    }
-
     pub fn ccw_left_arrow(self) -> Arrow<T> {
         Arrow::new(self.top_left(), self.bottom_left())
     }
@@ -263,15 +203,6 @@ impl<T: Num> Rect<T> {
 
     pub fn ccw_top_arrow(self) -> Arrow<T> {
         Arrow::new(self.top_right(), self.top_left())
-    }
-
-    pub fn ccw_side_arrow(self, side: RectSide) -> Arrow<T> {
-        match side {
-            RectSide::Left => self.ccw_left_arrow(),
-            RectSide::Right => self.ccw_right_arrow(),
-            RectSide::Bottom => self.ccw_bottom_arrow(),
-            RectSide::Top => self.ccw_top_arrow(),
-        }
     }
 
     pub fn ccw_side_arrows(self) -> [Arrow<T>; 4] {
@@ -315,17 +246,8 @@ impl<T: Num> Rect<T> {
         Self::new(self.x.inc_high(), self.y.inc_high())
     }
 
-    pub fn is_corner(self, corner: Point<T>) -> bool {
-        // TODO: Write a faster method: corner.real in {low.real, high.real} ...
-        self.corners().contains(&corner)
-    }
-
     pub fn contains_point(self, p: Point<T>) -> bool {
         self.x.contains(p.x) && self.y.contains(p.y)
-    }
-
-    pub fn interior_contains_point(self, p: Point<T>) -> bool {
-        self.x.interior_contains(p.x) && self.y.interior_contains(p.y)
     }
 
     pub fn contains_rect(self, rect: Self) -> bool {
@@ -335,82 +257,8 @@ impl<T: Num> Rect<T> {
         self.x.contains_interval(rect.x) && self.y.contains_interval(rect.y)
     }
 
-    pub fn interior_contains_rect(self, rect: Self) -> bool {
-        self.x.interior_contains_interval(rect.x) && self.y.interior_contains_interval(rect.y)
-    }
-
-    pub fn contains_line_segment(self, line: Arrow<T>) -> bool {
-        self.contains_point(line.a) && self.contains_point(line.b)
-    }
-
-    pub fn interior_contains_line_segment(self, line: Arrow<T>) -> bool {
-        self.interior_contains_point(line.a) && self.interior_contains_point(line.b)
-    }
-
-    /// Keep bottom left fixed
-    pub fn move_top_right_corner(self, top_right_corner: Point<T>) -> Self {
-        assert!(!self.is_empty());
-        [self.bottom_left(), top_right_corner].bounds()
-    }
-
-    /// Keep bottom right fixed
-    pub fn move_top_left_corner(self, top_left_corner: Point<T>) -> Self {
-        assert!(!self.is_empty());
-        [self.bottom_right(), top_left_corner].bounds()
-
-        // Alternative: If top left corner is moved below or to the right of the
-        // top right corner, returns an empty QiRect.
-        // Self::from_sides(top_left.real, self.right(), self.bottom(), top_left.imag)
-    }
-
-    /// Keep top right fixed
-    pub fn move_bottom_left_corner(self, bottom_left_corner: Point<T>) -> Self {
-        assert!(!self.is_empty());
-        [self.top_right(), bottom_left_corner].bounds()
-    }
-
-    /// Keep top left fixed
-    pub fn move_bottom_right_corner(self, bottom_right_corner: Point<T>) -> Self {
-        assert!(!self.is_empty());
-        [self.top_left(), bottom_right_corner].bounds()
-    }
-
-    pub fn move_corner(self, corner: RectCorner, location: Point<T>) -> Self {
-        match corner {
-            RectCorner::TopLeft => self.move_top_left_corner(location),
-            RectCorner::TopRight => self.move_top_right_corner(location),
-            RectCorner::BottomLeft => self.move_bottom_left_corner(location),
-            RectCorner::BottomRight => self.move_bottom_right_corner(location),
-        }
-    }
-
     pub fn distance_squared(self, p: Point<T>) -> T {
         self.clamp(p).distance_squared(p)
-    }
-
-    pub fn top_center(self) -> Point<T> {
-        Point::new(self.x.center(), self.y.low)
-    }
-
-    pub fn bottom_center(self) -> Point<T> {
-        Point::new(self.x.center(), self.y.high)
-    }
-
-    pub fn left_center(self) -> Point<T> {
-        Point::new(self.x.low, self.y.center())
-    }
-
-    pub fn right_center(self) -> Point<T> {
-        Point::new(self.x.high, self.y.center())
-    }
-
-    pub fn side_center(self, side: RectSide) -> Point<T> {
-        match side {
-            RectSide::Bottom => self.bottom_center(),
-            RectSide::Top => self.top_center(),
-            RectSide::Left => self.left_center(),
-            RectSide::Right => self.right_center(),
-        }
     }
 
     pub fn center(self) -> Point<T> {
@@ -455,18 +303,6 @@ where
     }
 }
 
-/// Right hand component wise mul with Point, panics if rhs.x <= or rhs.y <= 0
-impl<T> CwiseMul<Point<T>> for Rect<T>
-where
-    T: Mul<Output = T> + Copy + PartialOrd + ConstZero,
-{
-    type Output = Rect<T>;
-
-    fn cwise_mul(self, rhs: Point<T>) -> Self::Output {
-        Self::Output::new(self.x * rhs.x, self.y * rhs.y)
-    }
-}
-
 impl<T: Num> PartialEq for Rect<T> {
     fn eq(&self, other: &Self) -> bool {
         (self.is_empty() && other.is_empty()) || (self.x == other.x && self.y == other.y)
@@ -484,65 +320,6 @@ impl<T: Num + Hash> Hash for Rect<T> {
         } else {
             // Both x and y interval are not empty
             (self.x, self.y).hash(state)
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum RectCorner {
-    TopLeft,
-    TopRight,
-    BottomLeft,
-    BottomRight,
-}
-
-impl RectCorner {
-    pub const ALL: [Self; 4] = [
-        Self::TopLeft,
-        Self::TopRight,
-        Self::BottomLeft,
-        Self::BottomRight,
-    ];
-}
-
-impl ReflectEnum for RectCorner {
-    fn all() -> &'static [Self] {
-        &Self::ALL
-    }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::TopLeft => "TopLeft",
-            Self::TopRight => "TopRight",
-            Self::BottomLeft => "BottomLeft",
-            Self::BottomRight => "BottomRight",
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum RectSide {
-    Left,
-    Right,
-    Bottom,
-    Top,
-}
-
-impl RectSide {
-    pub const ALL: [Self; 4] = [Self::Left, Self::Right, Self::Bottom, Self::Top];
-}
-
-impl ReflectEnum for RectSide {
-    fn all() -> &'static [Self] {
-        &Self::ALL
-    }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Left => "Left",
-            Self::Right => "Right",
-            Self::Bottom => "Bottom",
-            Self::Top => "Top",
         }
     }
 }

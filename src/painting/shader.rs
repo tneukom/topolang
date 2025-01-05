@@ -8,6 +8,7 @@ pub struct VertexAttribDesc {
     normalized: bool,
 }
 
+#[allow(dead_code)]
 impl VertexAttribDesc {
     pub const VEC2: VertexAttribDesc = VertexAttribDesc {
         components: 2,

@@ -1,7 +1,5 @@
 /// See pixel_pattern.jpg, sides_and_corners.jpg
 use crate::math::point::Point;
-use crate::math::rect::Rect;
-use std::collections::BTreeSet;
 /// The centers of a hexagon grid form a lattice but the corners do not! However, the corners
 /// can be split into two sets each of which forms a lattice. Corners are more cumbersome to handle
 /// than cells and sides and terminology is less clear.
@@ -282,14 +280,6 @@ impl Debug for Side {
     }
 }
 
-/// Very slow, cache the result!
-pub fn rect_boundary_sides(rect: Rect<i64>) -> BTreeSet<Side> {
-    rect.iter_half_open()
-        .flat_map(Pixel::sides_ccw)
-        .filter(|side| !rect.half_open_contains(side.right_pixel()))
-        .collect()
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CornerName {
     /// Start corner of top side
@@ -356,12 +346,7 @@ impl Corner {
 
 #[cfg(test)]
 mod test {
-    use crate::math::{
-        pixel::{Pixel, Side, SideName},
-        rect::Rect,
-    };
-
-    use super::rect_boundary_sides;
+    use crate::math::pixel::{Pixel, Side, SideName};
 
     const PIXELS: [Pixel; 3] = [Pixel::new(0, 0), Pixel::new(-2, 4), Pixel::new(9, 17)];
 
@@ -497,22 +482,5 @@ mod test {
         let &ccw_min_side = p.sides_ccw().iter().min().unwrap();
         let &cw_min_side = p.sides_cw().iter().min().unwrap();
         assert_eq!(ccw_min_side.start_corner(), cw_min_side.start_corner());
-    }
-
-    /// Test rect_boundary_sides
-    #[test]
-    fn test_rect_boundary_sides() {
-        let rects: [Rect<i64>; 3] = [
-            Rect::low_size([0, 0], [1, 1]),
-            Rect::low_size([-1, 1], [2, 1]),
-            Rect::low_size([-2, 2], [5, 7]),
-        ];
-
-        for rect in rects {
-            for side in rect_boundary_sides(rect) {
-                assert!(rect.half_open_contains(side.left_pixel));
-                assert!(!rect.half_open_contains(side.right_pixel()));
-            }
-        }
     }
 }
