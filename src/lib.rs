@@ -3,29 +3,31 @@
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
+pub(crate) mod brush;
+pub(crate) mod camera;
+pub(crate) mod coordinate_frame;
+pub(crate) mod cycle_segments;
+pub(crate) mod field;
+pub(crate) mod history;
+pub(crate) mod interpreter;
+pub(crate) mod material;
+pub(crate) mod math;
+pub(crate) mod morphism;
+pub(crate) mod painting;
+pub(crate) mod palettes;
+pub(crate) mod pattern;
+pub(crate) mod pixmap;
+pub(crate) mod regions;
+pub(crate) mod rule;
+pub(crate) mod topology;
+pub(crate) mod union_find;
+pub(crate) mod utils;
+pub(crate) mod view;
+pub(crate) mod widgets;
+pub(crate) mod world;
+
 pub mod app;
-pub mod brush;
-pub mod camera;
-pub mod coordinate_frame;
-pub mod cycle_segments;
-pub mod field;
-pub mod history;
-pub mod interpreter;
-pub mod material;
-pub mod math;
-pub mod morphism;
-pub mod painting;
-pub mod palettes;
-pub mod pattern;
-pub mod pixmap;
-pub mod regions;
-pub mod rule;
-pub mod topology;
-mod union_find;
-pub mod utils;
-pub mod view;
-pub mod widgets;
-pub mod world;
+pub mod benchmarks;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
