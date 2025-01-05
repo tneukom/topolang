@@ -311,7 +311,7 @@ pub fn area_right_of_boundary_bounds(boundary: impl Iterator<Item = Side>) -> Re
 mod test {
     use crate::{
         field::{Field, RgbaField},
-        math::{generic::EuclidDivRem, pixel::Side, point::Point, rect::Rect, rgba8::Rgba8},
+        math::{pixel::Side, point::Point, rgba8::Rgba8},
         pixmap::{iter_sides_in_rect, MaterialMap, Pixmap, RgbaMap},
         regions::{
             area_left_of_boundary, area_right_of_boundary, pixmap_regions, region_boundaries,
@@ -322,14 +322,6 @@ mod test {
     use ahash::{HashMap, HashMapExt};
     use itertools::Itertools;
     use std::collections::{BTreeMap, HashSet};
-
-    fn generate_field(bounds: Rect<i64>) -> Field<Rgba8> {
-        Field::from_map(bounds, |index| {
-            let red = index.x.euclid_rem(256) as u8;
-            let green = index.y.euclid_rem(256) as u8;
-            Rgba8::new(red, green, 255, 255)
-        })
-    }
 
     /// Collect the boundary of the area with the given value, in other words the sides that have
     /// a pixel of the given value on the left side and a different value on the right side.

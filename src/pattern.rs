@@ -5,19 +5,10 @@ use std::{
 
 use crate::{
     material::Material,
-    math::{pixel::Corner, point::Point},
+    math::pixel::Corner,
     morphism::Morphism,
     topology::{RegionKey, Seam, SeamMaterials, StrongRegionKey, Topology},
 };
-
-pub struct Solid {
-    pixels: Vec<Point<i64>>,
-}
-
-pub struct Pattern {
-    topology: Topology,
-    solids: Vec<Solid>,
-}
 
 /// Returns all seams (including non-atomic ones) in topo
 /// Returns all Seams `seam` (including non-atomic ones) where the material on the left of `seam`
@@ -393,7 +384,7 @@ mod test {
         field::RgbaField,
         material::Material,
         math::rgba8::Rgba8,
-        pattern::{CoutTrace, NullTrace, SearchMorphism},
+        pattern::{NullTrace, SearchMorphism},
         pixmap::MaterialMap,
         topology::Topology,
         utils::IntoT,

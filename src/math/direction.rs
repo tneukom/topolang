@@ -1,5 +1,5 @@
 use crate::{
-    math::{arrow::Arrow, axis_line::AxisArrow, generic::Num, point::Point},
+    math::{arrow::Arrow, generic::Num, point::Point},
     utils::ReflectEnum,
 };
 
@@ -46,29 +46,6 @@ impl Direction {
 
     pub fn from_arrow<T: Num>(arrow: Arrow<T>) -> Option<Self> {
         Self::from_dir(arrow.dir())
-    }
-
-    pub fn from_axis_arrow<T: Num>(arrow: AxisArrow<T>) -> Option<Self> {
-        match arrow {
-            AxisArrow::Vertical { y, .. } => {
-                if y.is_increasing() {
-                    Some(Self::Down)
-                } else if y.is_decreasing() {
-                    Some(Self::Up)
-                } else {
-                    None
-                }
-            }
-            AxisArrow::Horizontal { x, .. } => {
-                if x.is_increasing() {
-                    Some(Self::Right)
-                } else if x.is_decreasing() {
-                    Some(Self::Left)
-                } else {
-                    None
-                }
-            }
-        }
     }
 
     pub fn unicode_symbol(self) -> char {

@@ -1,7 +1,6 @@
 use crate::{
     math::{
         arrow::Arrow,
-        axis_line::AxisLine,
         generic::{Cast, ConstZero, CwiseMul, Num},
         interval::Interval,
         point::Point,
@@ -176,22 +175,6 @@ where
         Self::new(Interval::point(p.x), Interval::point(p.y))
     }
 
-    pub fn left_line(&self) -> AxisLine<T> {
-        AxisLine::vertical(self.x.low, self.y)
-    }
-
-    pub fn right_line(&self) -> AxisLine<T> {
-        AxisLine::vertical(self.x.high, self.y)
-    }
-
-    pub fn top_line(&self) -> AxisLine<T> {
-        AxisLine::horizontal(self.x, self.y.low)
-    }
-
-    pub fn bottom_line(&self) -> AxisLine<T> {
-        AxisLine::horizontal(self.x, self.y.high)
-    }
-
     pub const TRIANGLE_INDICES: [u32; 6] = [0, 1, 2, 0, 2, 3];
 }
 
@@ -261,34 +244,9 @@ impl<T: Num> Rect<T> {
         self.x.intersects(rhs.x) && self.y.intersects(rhs.y)
     }
 
-    pub fn intersects_axis_line(self, rhs: AxisLine<T>) -> bool {
-        match rhs {
-            AxisLine::Vertical { x, y } => self.x.contains(x) && self.y.intersects(y),
-            AxisLine::Horizontal { x, y } => self.x.intersects(x) && self.y.contains(y),
-        }
-    }
-
-    pub fn interior_intersects_axis_line(self, rhs: AxisLine<T>) -> bool {
-        match rhs {
-            AxisLine::Vertical { x, y } => {
-                self.x.interior_contains(x) && self.y.interior_intersects(y)
-            }
-            AxisLine::Horizontal { x, y } => {
-                self.x.interior_intersects(x) && self.x.interior_contains(y)
-            }
-        }
-    }
-
     /// interior(lhs) intersects closed(rhs) iff interior(lhs) intersects interior(rhs)
     pub fn interior_intersects(self, rhs: Self) -> bool {
         self.x.interior_intersects(rhs.x) && self.y.interior_intersects(rhs.y)
-    }
-
-    pub fn boundary_contains_point(&self, p: Point<T>) -> bool {
-        self.left_line().contains_point(p)
-            || self.right_line().contains_point(p)
-            || self.top_line().contains_point(p)
-            || self.bottom_line().contains_point(p)
     }
 
     pub fn ccw_left_arrow(self) -> Arrow<T> {
@@ -562,40 +520,6 @@ impl ReflectEnum for RectCorner {
     }
 }
 
-/// Bitmap rectangle zero is at top left
-///    top left    top right
-///      0,0         1,0
-///       ┌───────────┐
-///       │           │
-///       └───────────┘
-///      0,1         1,1
-/// bottom left   bottom right
-const fn unit_bitmap_corner(corner: RectCorner) -> Point<i64> {
-    match corner {
-        RectCorner::TopLeft => Point::new(0, 0),
-        RectCorner::BottomLeft => Point::new(0, 1),
-        RectCorner::BottomRight => Point::new(1, 1),
-        RectCorner::TopRight => Point::new(1, 0),
-    }
-}
-
-/// OpenGL UV rectangle
-///    top left    top right
-///      0,1         1,1
-///       ┌───────────┐
-///       │           │
-///       └───────────┘
-///      0,0         1,0
-/// bottom left   bottom right
-const fn uv_corner(corner: RectCorner) -> Point<i64> {
-    match corner {
-        RectCorner::TopLeft => Point::new(0, 1),
-        RectCorner::BottomLeft => Point::new(0, 0),
-        RectCorner::BottomRight => Point::new(1, 0),
-        RectCorner::TopRight => Point::new(1, 1),
-    }
-}
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RectSide {
     Left,
@@ -690,25 +614,5 @@ where
         (self.y.low..=self.y.high)
             .cartesian_product(self.x.low..=self.x.high)
             .map(|(y, x)| Point::new(x, y))
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use crate::math::rect::Rect;
-
-    #[test]
-    fn test_boundary_contains_point() {
-        let rect = Rect::<i64>::intervals([0, 2], [0, 2]);
-        // Corners
-        assert!(rect.boundary_contains_point([0, 0].into()));
-        assert!(rect.boundary_contains_point([2, 0].into()));
-        assert!(rect.boundary_contains_point([0, 2].into()));
-        assert!(rect.boundary_contains_point([2, 2].into()));
-        // Sides
-        assert!(rect.boundary_contains_point([0, 1].into()));
-        assert!(rect.boundary_contains_point([1, 0].into()));
-        assert!(rect.boundary_contains_point([2, 1].into()));
-        assert!(rect.boundary_contains_point([1, 2].into()));
     }
 }

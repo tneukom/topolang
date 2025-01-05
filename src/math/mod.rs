@@ -1,6 +1,5 @@
 pub mod affine_map;
 pub mod arrow;
-pub mod axis_line;
 pub mod direction;
 pub mod generic;
 pub mod interval;
@@ -10,4 +9,3 @@ pub mod pixel;
 pub mod point;
 pub mod rect;
 pub mod rgba8;
-pub mod turn;
