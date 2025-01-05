@@ -21,32 +21,17 @@ wasm-bindgen-futures = "0.4"
 log = "0.4"
 env_logger = "0.11.3"
 
-# memoffset = "0.9.1"
-by_address = "1.2.1"
-image = { version = "0.25.1", default-features = false, features = [ "png", "gif" ] }
-itertools = "0.13.0"
-petgraph = "0.6.5"
-#arboard = "3.2.1"
-#weak-table = "0.3.2"
+image = { version = "0.25.5", default-features = false, features = [ "png", "gif" ] }
+itertools = "0.14.0"
 bytemuck = { version = "1.16.1", features = ["derive"] }
 data-encoding = "2.6.0"
 smallvec = { version = "1.13.1", features = ["union", "const_generics", "const_new"] }
-# num-integer = { version = "0.1.45", features = ["i128"] }
-bimap = "0.6.3"
 num-traits = "0.2.19"
-anyhow = { version = "1.0.86", features = ["backtrace"] }
-hex = "0.4.3"
-arrayvec = "0.7.4"
-pretty_assertions = "1.4.0"
+anyhow = { version = "1.0.95", features = ["backtrace"] }
 instant = { version = "0.1.13", features = ["wasm-bindgen"] }
-rfd = "0.14.1"
-static_assertions = "1.1.0"
-walkdir = "2.5.0"
+rfd = "0.15.2"
+#walkdir = "2.5.0"
 ahash = "0.8.11"
-
-#slotmap = "1.0.7"
-# dlv-list = "0.5.1"
-# fastrand = "2.0.1"
 
 #[dev-dependencies]
 #rstest = "0.21.0"

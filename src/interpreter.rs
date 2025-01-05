@@ -150,8 +150,6 @@ impl Interpreter {
 
 #[cfg(test)]
 mod test {
-    use pretty_assertions::assert_eq;
-
     use crate::{
         field::RgbaField, interpreter::Interpreter, pixmap::MaterialMap, utils::IntoT, world::World,
     };
