@@ -1,27 +1,3 @@
-use anyhow::Context;
-use data_encoding::BASE64;
-use std::{
-    collections::HashMap,
-    fs,
-    fs::File,
-    hash::Hash,
-    path::{Path, PathBuf},
-    rc::Rc,
-    sync::{mpsc, Arc},
-};
-
-use egui::{
-    load::SizedTexture, scroll_area::ScrollBarVisibility, style::ScrollStyle, CursorIcon, Event,
-    Sense, TextureOptions, Widget,
-};
-use glow::HasContext;
-use image::{
-    codecs::gif::{GifEncoder, Repeat},
-    ExtendedColorType,
-};
-use instant::Instant;
-use log::{info, warn};
-
 use crate::{
     brush::Brush,
     coordinate_frame::CoordinateFrames,
@@ -30,59 +6,32 @@ use crate::{
     interpreter::Interpreter,
     material::Material,
     math::{point::Point, rect::Rect, rgba8::Pico8Palette},
-    painting::view_painter::ViewPainter,
+    painting::view_painter::{DrawView, ViewPainter},
     pixmap::MaterialMap,
     utils::{IntoT, ReflectEnum},
     view::{EditMode, View, ViewInput, ViewSettings},
     widgets::{BrushChooser, ColorChooser, FileChooser},
     world::World,
 };
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum MouseButton {
-    Left,
-    Middle,
-    Right,
-}
-
-impl MouseButton {
-    const VALUES: [MouseButton; 3] = [MouseButton::Left, MouseButton::Middle, MouseButton::Right];
-}
-
-impl From<egui::PointerButton> for MouseButton {
-    fn from(egui_button: egui::PointerButton) -> Self {
-        match egui_button {
-            egui::PointerButton::Primary => MouseButton::Left,
-            egui::PointerButton::Secondary => MouseButton::Right,
-            egui::PointerButton::Middle => MouseButton::Middle,
-            _ => unimplemented!("Not handling any other mouse buttons"),
-        }
-    }
-}
-
-impl From<MouseButton> for egui::PointerButton {
-    fn from(button: MouseButton) -> Self {
-        match button {
-            MouseButton::Left => egui::PointerButton::Primary,
-            MouseButton::Right => egui::PointerButton::Secondary,
-            MouseButton::Middle => egui::PointerButton::Middle,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum MouseButtonState {
-    Up,
-    Pressed,
-    Down,
-    Rejected,
-}
-
-impl MouseButtonState {
-    pub fn is_down(self) -> bool {
-        self == Self::Down || self == Self::Pressed
-    }
-}
+use anyhow::Context;
+use data_encoding::BASE64;
+use egui::Widget;
+use glow::HasContext;
+use image::{
+    codecs::gif::{GifEncoder, Repeat},
+    ExtendedColorType,
+};
+use instant::Instant;
+use log::{info, warn};
+use std::{
+    collections::HashMap,
+    fs,
+    fs::File,
+    hash::Hash,
+    path::{Path, PathBuf},
+    rc::Rc,
+    sync::{mpsc, Arc, Mutex},
+};
 
 pub struct GifRecorder {
     start: Option<Rc<Snapshot<Material>>>,
@@ -122,8 +71,7 @@ impl GifRecorder {
             // TODO: Paint over white background to remove transparency or use apng instead
             let image = snapshot
                 .material_map()
-                .to_field(Material::TRANSPARENT)
-                .into_rgba();
+                .to_rgba8_field(Material::TRANSPARENT);
 
             gif_encoder.encode(
                 image.as_raw(),
@@ -162,10 +110,7 @@ impl Clipboard {
     }
 
     pub fn encode(&self) -> String {
-        let rgba_field = self
-            .material_map
-            .to_field(Material::TRANSPARENT)
-            .into_rgba();
+        let rgba_field = self.material_map.to_rgba8_field(Material::TRANSPARENT);
         let png = rgba_field.to_png().unwrap();
         let base64_png = BASE64.encode(&png);
         format!("{}{}", Self::DATA_URL_HEADER, base64_png)
@@ -173,7 +118,7 @@ impl Clipboard {
 }
 
 pub struct EguiApp {
-    view_painter: ViewPainter,
+    view_painter: Arc<Mutex<ViewPainter>>,
     start_time: Instant,
     pub view_settings: ViewSettings,
 
@@ -215,7 +160,7 @@ impl EguiApp {
     }
 
     pub unsafe fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let scene_painter = ViewPainter::new(cc.gl.as_ref().unwrap().clone());
+        let view_painter = ViewPainter::new(cc.gl.as_ref().unwrap().clone());
         let start_time = Instant::now();
 
         // Load topology from file
@@ -240,7 +185,7 @@ impl EguiApp {
                 egui::ColorImage::from_rgba_unmultiplied([size[0] as usize, size[1] as usize], raw);
 
             cc.egui_ctx
-                .load_texture(name, egui_image, TextureOptions::LINEAR)
+                .load_texture(name, egui_image, egui::TextureOptions::LINEAR)
         };
 
         let edit_mode_icons = HashMap::from([
@@ -277,11 +222,11 @@ impl EguiApp {
             .expect("Failed to canonicalize saves path");
 
         Self {
-            view_painter: scene_painter,
+            view_painter: Arc::new(Mutex::new(view_painter)),
             start_time,
             view,
             view_settings,
-            view_rect: Rect::low_size([0, 0], [1, 1]),
+            view_rect: Rect::low_size(Point::ZERO, Point::ONE),
             gl,
             new_size: Point(512, 512),
             file_name: "".to_string(),
@@ -302,49 +247,6 @@ impl EguiApp {
     fn view_size(ctx: &egui::Context) -> Point<i64> {
         let egui_view_size = ctx.input(|input| input.screen_rect.size());
         Point::new(egui_view_size.x as i64, egui_view_size.y as i64)
-    }
-
-    fn frames(ctx: &egui::Context) -> CoordinateFrames {
-        let view_size = Self::view_size(ctx);
-        CoordinateFrames::new(view_size.x as i64, view_size.y as i64)
-    }
-
-    pub fn view_input_from(&mut self, ctx: &egui::Context) -> ViewInput {
-        let input = ctx.input(|input| input.clone());
-
-        let window_mouse = match ctx.pointer_latest_pos() {
-            Some(egui_mouse) => Point::new(egui_mouse.x as f64, egui_mouse.y as f64),
-            None => Point::ZERO,
-        };
-
-        let frames = Self::frames(ctx);
-        let view_mouse = frames.window_to_view() * window_mouse;
-
-        let scroll_delta = if ctx.wants_pointer_input() {
-            0.0
-        } else {
-            ctx.input(|input| input.smooth_scroll_delta.y as f64 / 50.0)
-        };
-
-        let input = ViewInput {
-            view_size: Self::view_size(ctx),
-            view_mouse,
-
-            world_mouse: Point::ZERO,
-            world_snapped: Point::ZERO,
-
-            left_mouse_down: input.pointer.button_down(egui::PointerButton::Primary),
-            middle_mouse_down: input.pointer.button_down(egui::PointerButton::Middle),
-
-            escape_down: input.key_down(egui::Key::Escape),
-            enter_down: input.key_down(egui::Key::Enter),
-            ctrl_down: input.modifiers.ctrl,
-            delete_down: input.key_down(egui::Key::Delete),
-
-            mouse_wheel: scroll_delta,
-        };
-
-        input
     }
 
     pub fn reset_camera(&mut self) {
@@ -374,10 +276,12 @@ impl EguiApp {
                 // the button and then released, it counts as a click.
                 // Egui aborts the clicked state if the mouse is moved too much. So we also consider
                 // dragging and check if the pointer is still over the button.
-                let button =
-                    egui::widgets::ImageButton::new(SizedTexture::new(texture_id, (20.0, 20.0)))
-                        .selected(mode == self.view_settings.edit_mode)
-                        .sense(Sense::click_and_drag());
+                let button = egui::widgets::ImageButton::new(egui::load::SizedTexture::new(
+                    texture_id,
+                    (20.0, 20.0),
+                ))
+                .selected(mode == self.view_settings.edit_mode)
+                .sense(egui::Sense::click_and_drag());
                 let response = ui.add(button);
 
                 if response.clicked() || response.drag_stopped() && response.hover_pos().is_some() {
@@ -497,8 +401,7 @@ impl EguiApp {
                     .view
                     .world
                     .material_map()
-                    .to_field(Material::TRANSPARENT)
-                    .into_rgba();
+                    .to_rgba8_field(Material::TRANSPARENT);
                 if let Err(err) = bitmap.save(path) {
                     warn!("Failed to save with error {err}");
                 }
@@ -529,8 +432,7 @@ impl EguiApp {
                 .view
                 .world
                 .material_map()
-                .to_field(Material::TRANSPARENT)
-                .into_rgba();
+                .to_rgba8_field(Material::TRANSPARENT);
             match bitmap.save(&path) {
                 Ok(_) => println!("Saved {path:?}"),
                 Err(err) => println!("Failed to save {path:?} with error {err}"),
@@ -613,12 +515,12 @@ impl EguiApp {
 
         // Floating scroll bars, see
         // https://github.com/emilk/egui/pull/3539
-        ui.style_mut().spacing.scroll = ScrollStyle::solid();
+        ui.style_mut().spacing.scroll = egui::style::ScrollStyle::solid();
 
         egui::scroll_area::ScrollArea::vertical()
             .auto_shrink([false, false])
             .max_height(200.0)
-            .scroll_bar_visibility(ScrollBarVisibility::AlwaysVisible)
+            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
             .show(ui, |ui| {
                 for snapshot in path.into_iter() {
                     ui.horizontal(|ui| {
@@ -706,7 +608,7 @@ impl EguiApp {
             warn!("Failed to load png file!");
             return;
         };
-        self.new_size = rgba_field.bounds().size();
+        self.new_size = rgba_field.size();
         let world = rgba_field.intot::<MaterialMap>().into();
         self.view = View::new(world);
         self.reset_camera();
@@ -722,6 +624,110 @@ impl EguiApp {
             }
         };
         self.load_file(&content);
+    }
+
+    fn central_panel(&mut self, ui: &mut egui::Ui) {
+        let input = ui.ctx().input(|input| input.clone());
+        let window_size: Point<f64> = input.screen_rect.size().into();
+
+        let size = ui.available_size_before_wrap();
+        let (egui_rect, response) = ui.allocate_exact_size(size, egui::Sense::click_and_drag());
+        let viewport: Rect<f64> = egui_rect.into();
+
+        let frames = CoordinateFrames {
+            window_size,
+            viewport,
+        };
+
+        if response.is_pointer_button_down_on() {
+            response.request_focus();
+        }
+
+        self.view_input = {
+            let has_focus = response.has_focus();
+
+            let window_mouse = match ui.ctx().pointer_latest_pos() {
+                Some(egui_mouse) => Point::new(egui_mouse.x as f64, egui_mouse.y as f64),
+                None => Point::ZERO,
+            };
+
+            let view_mouse = frames.window_to_view() * window_mouse;
+            println!("view_mouse: {view_mouse}");
+
+            let scroll_delta = if !has_focus {
+                0.0
+            } else {
+                input.smooth_scroll_delta.y as f64 / 50.0
+            };
+
+            let input = ViewInput {
+                frames,
+                view_mouse,
+
+                world_mouse: Point::ZERO,
+                world_snapped: Point::ZERO,
+
+                left_mouse_down: has_focus
+                    && input.pointer.button_down(egui::PointerButton::Primary),
+                middle_mouse_down: has_focus
+                    && input.pointer.button_down(egui::PointerButton::Middle),
+
+                escape_down: has_focus && input.key_down(egui::Key::Escape),
+                enter_down: has_focus && input.key_down(egui::Key::Enter),
+                ctrl_down: has_focus && input.modifiers.ctrl,
+                delete_down: has_focus && input.key_down(egui::Key::Delete),
+
+                mouse_wheel: scroll_delta,
+            };
+
+            input
+        };
+
+        let time = self.time();
+        let draw_view = DrawView::from_view(&self.view, frames, time);
+
+        let mut view_painter = self.view_painter.clone();
+
+        let cb = egui_glow::CallbackFn::new(move |_info, painter| {
+            let gl = painter.gl().clone();
+            let mut view_painter = view_painter.lock().unwrap();
+
+            unsafe {
+                let mut gl_viewport = [0; 4];
+                unsafe {
+                    gl.get_parameter_i32_slice(glow::VIEWPORT, &mut gl_viewport);
+                }
+                println!(
+                    "glViewport(x: {}, y: {}, width: {}, height: {})",
+                    gl_viewport[0], gl_viewport[1], gl_viewport[2], gl_viewport[3]
+                );
+
+                // gl.scissor(
+                //     viewport.left() as i32,
+                //     (window_size.y - viewport.bottom()) as i32,
+                //     viewport.width() as i32,
+                //     viewport.height() as i32,
+                // );
+
+                // gl.enable(glow::SCISSOR_TEST);
+                // gl.clear_color(1.0f32, 0.0f32, 0.0f32, 1.0f32);
+                // gl.clear(glow::COLOR_BUFFER_BIT);
+
+                gl.disable(glow::BLEND);
+                gl.disable(glow::SCISSOR_TEST);
+                gl.disable(glow::CULL_FACE);
+                gl.disable(glow::DEPTH_TEST);
+                // self.gl.enable(glow::FRAMEBUFFER_SRGB);
+
+                view_painter.draw_view(&draw_view);
+            }
+        });
+
+        let callback = egui::PaintCallback {
+            rect: egui_rect,
+            callback: Arc::new(cb),
+        };
+        ui.painter().add(callback);
     }
 }
 
@@ -742,16 +748,16 @@ impl eframe::App for EguiApp {
         let events = ctx.input(|input| input.events.clone());
         for event in events {
             match event {
-                Event::Paste(paste) => {
+                egui::Event::Paste(paste) => {
                     if let Some(clipboard) = Clipboard::decode(&paste) {
                         self.view
                             .clipboard_paste(&self.view_input, clipboard.material_map);
                     }
                 }
-                Event::Copy => {
+                egui::Event::Copy => {
                     self.clipboard_copy(ctx);
                 }
-                Event::Cut => {
+                egui::Event::Cut => {
                     self.clipboard_cut(ctx);
                 }
                 _ => {}
@@ -782,16 +788,17 @@ impl eframe::App for EguiApp {
             .response
             .rect;
 
-        let _top_panel_rect = egui::TopBottomPanel::top("top_panel")
-            .show(ctx, |ui| {
-                self.top_ui(ui);
-                // ui.allocate_space(ui.available_size());
-            })
-            .response
-            .rect;
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            self.top_ui(ui);
+            // ui.allocate_space(ui.available_size());
+        });
 
         let view_size = Self::view_size(ctx);
-        self.view_rect = Rect::low_high([side_panel_rect.right() as i64, 0], view_size);
+        self.view_rect = Rect::low_high(Point(side_panel_rect.right() as i64, 0), view_size);
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            self.central_panel(ui);
+        });
 
         // Reset camera requested, for example from loading World in Self::new
         if self.reset_camera_requested {
@@ -799,38 +806,16 @@ impl eframe::App for EguiApp {
             self.reset_camera_requested = false;
         }
 
-        // view_input after the UI has been drawn, so we know if the cursor is
-        // over an element.
-        self.view_input = self.view_input_from(ctx);
-        let time = self.time();
-
         self.view
             .handle_input(&mut self.view_input, &self.view_settings);
-        let frames = self.view_input.frames();
-        // let preview = self.view.preview(&self.view_settings);
 
         let cursor_icon =
             if self.view.ui_state.is_idle() && self.view.is_hovering_selection(&self.view_input) {
-                CursorIcon::Move
+                egui::CursorIcon::Move
             } else {
-                CursorIcon::Default
+                egui::CursorIcon::Default
             };
         ctx.set_cursor_icon(cursor_icon);
-
-        unsafe {
-            self.gl.disable(glow::BLEND);
-            self.gl.disable(glow::SCISSOR_TEST);
-            self.gl.disable(glow::CULL_FACE);
-            self.gl.disable(glow::DEPTH_TEST);
-            // self.gl.enable(glow::FRAMEBUFFER_SRGB);
-
-            self.gl
-                .clear_color(89.0 / 255.0, 124.0 / 255.0, 149.0 / 255.0, 1.0);
-            // self.gl.clear_color(1.0, 1.0, 0.0, 1.0);
-            self.gl.clear(glow::COLOR_BUFFER_BIT);
-
-            self.view_painter.draw_view(&self.view, &frames, time);
-        }
 
         ctx.request_repaint();
     }

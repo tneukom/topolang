@@ -2131,6 +2131,7 @@ dependencies = [
  "data-encoding",
  "eframe",
  "egui",
+ "egui_glow",
  "env_logger",
  "glow",
  "image",

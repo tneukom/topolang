@@ -11,29 +11,19 @@ use crate::{
     pixmap::MaterialMap,
 };
 
-pub struct MaterialMapPainter {
+pub struct RgbaFieldPainter {
     rect_painter: RectPainter,
     texture: Option<(GlTexture, Point<i64>)>,
     gl: Arc<glow::Context>,
 }
 
-impl MaterialMapPainter {
+impl RgbaFieldPainter {
     pub unsafe fn new(gl: Arc<glow::Context>) -> Self {
         Self {
             texture: None,
             rect_painter: RectPainter::new(gl.clone()),
             gl: gl,
         }
-    }
-
-    pub unsafe fn draw_material_map(
-        &mut self,
-        material_map: &MaterialMap,
-        to_device: AffineMap<f64>,
-        time: f64,
-    ) {
-        let rgba_field = material_map.to_field(Material::TRANSPARENT).into_rgba();
-        self.draw(&rgba_field, to_device, time);
     }
 
     fn next_power_of_two(n: i64) -> i64 {
@@ -54,7 +44,7 @@ impl MaterialMapPainter {
 
         // If rgba_field size is different from texture size, reset texture
         if let Some((_, bitmap_size)) = &self.texture {
-            if *bitmap_size != rgba_field.bounds().size() {
+            if *bitmap_size != rgba_field.size() {
                 self.texture = None;
             }
         }
@@ -79,12 +69,12 @@ impl MaterialMapPainter {
                 Rgba8::TRANSPARENT,
             );
             texture.texture_image(&transparent);
-            (texture, rgba_field.bounds().size())
+            (texture, rgba_field.size())
         });
 
         texture.texture_sub_image(Point::ZERO, &rgba_field);
 
-        let texture_rect = Rect::low_size([0, 0], *bitmap_size);
+        let texture_rect = Rect::low_size(Point::ZERO, *bitmap_size);
         let rect = texture_rect + rgba_field.bounds().low();
         let draw_tile = DrawRect {
             texture_rect,

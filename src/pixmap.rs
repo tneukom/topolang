@@ -126,13 +126,6 @@ impl<T: Copy> Pixmap<T> {
         }
     }
 
-    pub fn blit_field(&mut self, field: &Field<T>) {
-        let rect = field.bounds().intersect(self.bounding_rect());
-        for pixel in rect.iter_half_open() {
-            self.set(pixel, *field.get(pixel).unwrap());
-        }
-    }
-
     pub fn fill_rect(&mut self, rect: Rect<i64>, fill: T) {
         for pixel in rect.intersect(self.bounding_rect()).iter_half_open() {
             self.set(pixel, fill);
@@ -218,6 +211,11 @@ impl Pixmap<Rgba8> {
 impl Pixmap<Material> {
     pub fn into_rgba8(self) -> Pixmap<Rgba8> {
         self.into_map(|material| material.to_rgba())
+    }
+
+    pub fn to_rgba8_field(&self, default: Material) -> Field<Rgba8> {
+        self.field
+            .map(|material| material.unwrap_or(default).to_rgba())
     }
 
     pub fn save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {

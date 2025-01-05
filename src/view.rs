@@ -17,7 +17,8 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct ViewInput {
-    pub view_size: Point<i64>,
+    pub frames: CoordinateFrames,
+
     pub view_mouse: Point<f64>,
 
     pub world_mouse: Point<f64>,
@@ -35,12 +36,12 @@ pub struct ViewInput {
 }
 
 impl ViewInput {
-    pub fn frames(&self) -> CoordinateFrames {
-        CoordinateFrames::new(self.view_size.x, self.view_size.y)
-    }
-
     pub const EMPTY: Self = Self {
-        view_size: Point::new(100, 100),
+        frames: CoordinateFrames {
+            window_size: Point(640.0, 480.0),
+            viewport: Rect::low_high(Point::ZERO, Point(640.0, 480.0))
+        },
+
         view_mouse: Point::ZERO,
 
         world_mouse: Point::ZERO,
@@ -196,7 +197,7 @@ impl View {
     pub fn center_camera(&mut self, view_rect: Rect<f64>) {
         let mut world_bounds = self.world.bounding_rect();
         if world_bounds.is_empty() {
-            world_bounds = Rect::low_high([-128, -128], [128, 128])
+            world_bounds = Rect::low_high(Point(-128, -128), Point(128, 128))
         }
 
         self.camera = Camera::fit_world_into_view(world_bounds.cwise_cast(), view_rect).round();

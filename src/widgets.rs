@@ -5,7 +5,6 @@ use crate::{
     palettes::{Palette, SystemPalette},
     utils::ReflectEnum,
 };
-use eframe::epaint::text::TextWrapMode;
 use itertools::Itertools;
 use std::{ffi::OsStr, fs, ops::RangeInclusive, path::PathBuf};
 

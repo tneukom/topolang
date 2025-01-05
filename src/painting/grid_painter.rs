@@ -67,7 +67,7 @@ impl GridPainter {
     }
 
     // Draw a grid, the lines are 1 pixel wide.
-    // The offset and spacing are in the Glpixel coordinate system (pixel with origin at bottom left of the screen)
+    // The offset and spacing are in the view coordinate system
     pub unsafe fn draw(&self, offset: Point<f64>, spacing: Point<f64>, frames: &CoordinateFrames) {
         self.gl.enable(glow::BLEND);
         self.gl
@@ -78,9 +78,9 @@ impl GridPainter {
         self.shader.use_program();
         self.shader.uniform("offset", offset);
         self.shader.uniform("spacing", spacing);
-        let mat_device_to_window: Matrix3<_> = frames.device_to_window().into();
+        let mat_device_to_view: Matrix3<_> = frames.device_to_view().into();
         self.shader
-            .uniform("device_to_window", &mat_device_to_window);
+            .uniform("device_to_view", &mat_device_to_view);
 
         self.gl
             .draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0)

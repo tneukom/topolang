@@ -30,20 +30,16 @@ pub struct Rect<T> {
     pub y: Interval<T>,
 }
 
-impl<T> Rect<T> {
+impl<T: Copy> Rect<T> {
     pub const fn new(x: Interval<T>, y: Interval<T>) -> Self {
         Self { x, y }
     }
 
-    pub fn intervals(x: impl Into<Interval<T>>, y: impl Into<Interval<T>>) -> Self {
-        Self {
-            x: x.into(),
-            y: y.into(),
-        }
+    pub const fn intervals(x: Interval<T>, y: Interval<T>) -> Self {
+        Self { x, y }
     }
 
-    pub fn low_high(low: impl Into<Point<T>>, high: impl Into<Point<T>>) -> Self {
-        let (low, high) = (low.into(), high.into());
+    pub const fn low_high(low: Point<T>, high: Point<T>) -> Self {
         Self {
             x: Interval::new(low.x, high.x),
             y: Interval::new(low.y, high.y),
@@ -59,12 +55,7 @@ impl<T> Rect<T> {
             y: self.y.cwise_cast(),
         }
     }
-}
 
-impl<T> Rect<T>
-where
-    T: Copy,
-{
     pub fn low(&self) -> Point<T> {
         Point::new(self.x.low, self.y.low)
     }
@@ -99,21 +90,20 @@ where
         ]
     }
 
-    pub fn bottom(&self) -> T {
+    pub fn top(&self) -> T {
         self.y.low
     }
 
-    pub fn top(&self) -> T {
+    pub fn bottom(&self) -> T {
         self.y.high
+    }
+
+    pub fn left(&self) -> T {
+        self.x.low
     }
 
     pub fn right(&self) -> T {
         self.x.high
-    }
-
-
-    pub fn left(&self) -> T {
-        self.x.low
     }
 
     pub fn point(p: Point<T>) -> Self {
@@ -215,9 +205,7 @@ impl<T: Num> Rect<T> {
     }
 
     //size has to be positive (size.X >= 0, size.Y >= 0)
-    pub fn low_size(low: impl Into<Point<T>>, size: impl Into<Point<T>>) -> Self {
-        let low = low.into();
-        let size = size.into();
+    pub fn low_size(low: Point<T>, size: Point<T>) -> Self {
         Self::low_high(low, low + size)
     }
 
@@ -358,17 +346,17 @@ where
     }
 }
 
-/// Convert to egui
-impl From<Rect<f32>> for egui::Rect {
-    fn from(value: Rect<f32>) -> Self {
+/// Warning: casts f64 to f32
+impl From<Rect<f64>> for egui::Rect {
+    fn from(value: Rect<f64>) -> Self {
         Self::from_min_max(value.low().into(), value.high().into())
     }
 }
 
-impl From<egui::Rect> for Rect<f32> {
+impl From<egui::Rect> for Rect<f64> {
     fn from(value: egui::Rect) -> Self {
-        let low: Point<f32> = value.min.into();
-        let high: Point<f32> = value.max.into();
+        let low: Point<f64> = value.min.into();
+        let high: Point<f64> = value.max.into();
         Self::low_high(low, high)
     }
 }

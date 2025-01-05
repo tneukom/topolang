@@ -1,25 +1,59 @@
 use std::sync::Arc;
 
+use super::grid_painter::GridPainter;
 use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
+    field::RgbaField,
+    material::Material,
     math::{point::Point, rect::Rect},
     painting::{
-        line_painter::LinePainter, material_map_painter::MaterialMapPainter,
+        line_painter::LinePainter, material_map_painter::RgbaFieldPainter,
         rect_painter::RectPainter, selection_outline_painter::SelectionOutlinePainter,
     },
-    pixmap::MaterialMap,
     view::{UiState, View},
 };
 
-use super::grid_painter::GridPainter;
+/// What is necessary to paint the view
+pub struct DrawView {
+    camera: Camera,
+    frames: CoordinateFrames,
+    time: f64,
+    world_rgba_field: RgbaField,
+    // TODO: Can we use world_rgba_field for this?
+    selection_rgba_field: Option<RgbaField>,
+    ui_state: UiState,
+}
+
+impl DrawView {
+    pub fn from_view(view: &View, frames: CoordinateFrames, time: f64) -> Self {
+        let world_rgba_field = view
+            .world
+            .material_map()
+            .to_rgba8_field(Material::TRANSPARENT);
+        let selection_rgba_field = view.selection.as_ref().map(|selection| {
+            selection
+                .material_map()
+                .to_rgba8_field(Material::TRANSPARENT)
+        });
+
+        Self {
+            ui_state: view.ui_state.clone(),
+            camera: view.camera,
+            world_rgba_field,
+            selection_rgba_field,
+            frames,
+            time,
+        }
+    }
+}
 
 pub struct ViewPainter {
     pub grid_painter: GridPainter,
     pub tile_painter: RectPainter,
     pub line_painter: LinePainter,
-    pub world_painter: MaterialMapPainter,
-    pub selection_painter: MaterialMapPainter,
+    pub world_painter: RgbaFieldPainter,
+    pub selection_painter: RgbaFieldPainter,
     pub selection_outline_painter: SelectionOutlinePainter,
 
     pub i_frame: usize,
@@ -31,29 +65,17 @@ impl ViewPainter {
             grid_painter: GridPainter::new(gl.clone()),
             tile_painter: RectPainter::new(gl.clone()),
             line_painter: LinePainter::new(gl.clone()),
-            world_painter: MaterialMapPainter::new(gl.clone()),
-            selection_painter: MaterialMapPainter::new(gl.clone()),
+            world_painter: RgbaFieldPainter::new(gl.clone()),
+            selection_painter: RgbaFieldPainter::new(gl.clone()),
             selection_outline_painter: SelectionOutlinePainter::new(gl.clone()),
             i_frame: 0,
         }
     }
 
     pub unsafe fn draw_grid(&self, camera: &Camera, frames: &CoordinateFrames) {
-        let world_to_window = frames.view_to_window() * camera.world_to_view();
-        let origin = world_to_window * Point::ZERO;
-        let spacing = world_to_window.linear * Point::ONE;
+        let origin = camera.world_to_view() * Point::ZERO;
+        let spacing = camera.world_to_view().linear * Point::ONE;
         self.grid_painter.draw(origin, spacing, frames);
-    }
-
-    pub unsafe fn draw_material_map(
-        painter: &mut MaterialMapPainter,
-        material_map: &MaterialMap,
-        camera: &Camera,
-        frames: &CoordinateFrames,
-        time: f64,
-    ) {
-        let world_to_device = frames.view_to_device() * camera.world_to_view();
-        painter.draw_material_map(material_map, world_to_device, time);
     }
 
     pub unsafe fn draw_bounds(
@@ -80,43 +102,41 @@ impl ViewPainter {
             .draw(&[rect.cwise_cast()], world_to_device, time);
     }
 
-    pub unsafe fn draw_view(&mut self, view: &View, frames: &CoordinateFrames, time: f64) {
-        // Grid in the background
-        self.draw_grid(&view.camera, &frames);
+    pub unsafe fn draw_view(&mut self, draw: &DrawView) {
+        let world_to_device = draw.frames.view_to_device() * draw.camera.world_to_view();
 
-        // actual scene
-        Self::draw_material_map(
-            &mut self.world_painter,
-            view.world.material_map(),
-            &view.camera,
-            &frames,
-            time,
-        );
+        // Grid in the background
+        self.draw_grid(&draw.camera, &draw.frames);
+
+        self.world_painter
+            .draw(&draw.world_rgba_field, world_to_device, draw.time);
 
         // Draw a rectangle around the scene
-        // TODO:SPEEDUP: Use world.bounding_rect() instead, we don't want to call topology(),
-        //   might be expensive.
-        let bounding_rect = view.world.bounding_rect();
-        self.draw_bounds(bounding_rect, &view.camera, &frames, time);
+        self.draw_bounds(
+            draw.world_rgba_field.bounds(),
+            &draw.camera,
+            &draw.frames,
+            draw.time,
+        );
 
         // Draw selection rectangle and content
-        if let Some(selection) = &view.selection {
-            if !selection.is_empty() {
-                Self::draw_material_map(
-                    &mut self.selection_painter,
-                    selection.material_map(),
-                    &view.camera,
-                    &frames,
-                    time,
-                );
+        if let Some(selection_rgba_field) = &draw.selection_rgba_field {
+            if !selection_rgba_field.is_empty() {
+                self.selection_painter
+                    .draw(&selection_rgba_field, world_to_device, draw.time);
 
-                self.draw_selection_outline(selection.bounding_rect(), &view.camera, frames, time);
+                self.draw_selection_outline(
+                    selection_rgba_field.bounds(),
+                    &draw.camera,
+                    &draw.frames,
+                    draw.time,
+                );
             }
         }
 
         // Draw selection rectangle currently being drawn
-        if let UiState::SelectingRect(selecting) = &view.ui_state {
-            self.draw_selection_outline(selecting.rect(), &view.camera, frames, time);
+        if let UiState::SelectingRect(selecting) = &draw.ui_state {
+            self.draw_selection_outline(selecting.rect(), &draw.camera, &draw.frames, draw.time);
         }
 
         self.i_frame += 1;

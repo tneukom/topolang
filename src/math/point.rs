@@ -14,7 +14,7 @@ pub struct Point<T> {
 }
 
 #[allow(non_snake_case)]
-pub fn Point<T>(x: T, y: T) -> Point<T> {
+pub const fn Point<T>(x: T, y: T) -> Point<T> {
     Point::new(x, y)
 }
 
@@ -229,7 +229,7 @@ where
     }
 }
 
-/// Right multiplication because Rust cannot handle generic left multiplication
+/// Right multiplication
 impl<T> Mul<T> for Point<T>
 where
     T: Mul<Output = T> + Copy,
@@ -240,6 +240,32 @@ where
         Point::new(self.x * rhs, self.y * rhs)
     }
 }
+
+/// Left multiplication
+macro_rules! impl_left_mul {
+    ($t: ty) => {
+        impl Mul<Point<$t>> for $t {
+            type Output = Point<$t>;
+
+            fn mul(self, rhs: Point<$t>) -> Self::Output {
+                Point::new(self * rhs.x, self * rhs.y)
+            }
+        }
+    };
+}
+
+impl_left_mul!(f32);
+impl_left_mul!(f64);
+impl_left_mul!(u8);
+impl_left_mul!(u16);
+impl_left_mul!(u32);
+impl_left_mul!(u64);
+impl_left_mul!(i8);
+impl_left_mul!(i16);
+impl_left_mul!(i32);
+impl_left_mul!(i64);
+impl_left_mul!(usize);
+impl_left_mul!(isize);
 
 impl<T> Div<T> for Point<T>
 where
@@ -292,16 +318,28 @@ impl<T: Hash> Hash for Point<T> {
     }
 }
 
-/// Convert from Point<f32> to egui
-impl From<Point<f32>> for egui::Pos2 {
-    fn from(value: Point<f32>) -> Self {
-        Self::new(value.x, value.y)
+/// Warning: casts f64 to f32
+impl From<Point<f64>> for egui::Pos2 {
+    fn from(value: Point<f64>) -> Self {
+        Self::new(value.x as f32, value.y as f32)
     }
 }
 
-/// Convert from egui to Point<f32>
-impl From<egui::Pos2> for Point<f32> {
+/// Warning: casts f64 to f32
+impl From<Point<f64>> for egui::Vec2 {
+    fn from(value: Point<f64>) -> Self {
+        Self::new(value.x as f32, value.y as f32)
+    }
+}
+
+impl From<egui::Pos2> for Point<f64> {
     fn from(value: egui::Pos2) -> Self {
-        Self::new(value.x, value.y)
+        Self::new(value.x as f64, value.y as f64)
+    }
+}
+
+impl From<egui::Vec2> for Point<f64> {
+    fn from(value: egui::Vec2) -> Self {
+        Self::new(value.x as f64, value.y as f64)
     }
 }

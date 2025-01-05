@@ -53,6 +53,14 @@ impl<T> Field<T> {
         self.bounds
     }
 
+    pub fn size(&self) -> Point<i64> {
+        self.bounds.size()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.bounds.has_zero_area()
+    }
+
     /// Always > 0
     pub fn width(&self) -> i64 {
         self.bounds.width()
@@ -195,11 +203,11 @@ impl RgbaField {
     fn from_imageio_bitmap(imageio_bitmap: &RgbaImage) -> Self {
         let mut bitmap = Self::filled(
             Rect::low_size(
-                [0, 0],
-                [
+                Point::ZERO,
+                Point(
                     imageio_bitmap.width() as i64,
                     imageio_bitmap.height() as i64,
-                ],
+                ),
             ),
             Rgba8::ZERO,
         );
