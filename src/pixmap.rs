@@ -2,11 +2,12 @@ use crate::{
     field::{Field, FieldIndex, MaterialField, RgbaField},
     material::Material,
     math::{
-        pixel::{Pixel, Side},
+        pixel::Side,
         point::Point,
         rect::{Rect, RectBounds},
         rgba8::Rgba8,
     },
+    regions::{area_right_of_boundary, area_right_of_boundary_bounds},
     topology::Border,
 };
 use std::path::Path;
@@ -167,15 +168,6 @@ impl<T: Copy> Pixmap<T> {
         }
     }
 
-    /// Subset given by the set of pixels
-    pub fn sub(&self, pixels: impl IntoIterator<Item = Pixel>) -> Self {
-        let mut sub_field = Field::filled(self.field.bounds(), None);
-        for pixel in pixels {
-            sub_field.set(pixel, self.field[pixel].clone());
-        }
-        Self { field: sub_field }
-    }
-
     /// Returns a pixmap with all pixels contained in `clip_rect`.
     pub fn clip_rect(&self, clip_rect: Rect<i64>) -> Self {
         let clip_rect = clip_rect.intersect(self.bounding_rect());
@@ -184,25 +176,14 @@ impl<T: Copy> Pixmap<T> {
         }
     }
 
-    pub fn extract(&mut self, pixels: impl IntoIterator<Item = Pixel>) -> Self {
-        let mut result = Self::nones_like(self);
-        for pixel in pixels {
-            result.field.set(pixel, self.field[pixel]);
-            self.field[pixel] = None;
-        }
-        result
-    }
-
     /// Returns sub pixmap with the keys right of the given border.
     pub fn right_of_border(&self, border: &Border) -> Self {
-        self.sub(border.right_pixels())
-    }
-
-    /// Extract the pixels on the right side of the given border.
-    /// TODO: Use border.bounds(), skip BTreeSet
-    /// TODO:REMOVE should use right_of_border
-    pub fn extract_right_of_border(&mut self, border: &Border) -> Self {
-        self.extract(border.right_pixels())
+        let bounds = area_right_of_boundary_bounds(border.sides());
+        let mut field = Field::filled(bounds, None);
+        for pixel in area_right_of_boundary(border.sides()) {
+            field.set(pixel, self.field[pixel].clone());
+        }
+        Self { field }
     }
 }
 
@@ -223,15 +204,19 @@ impl<T: Copy + Eq> Pixmap<T> {
     pub fn without(&self, removed: T) -> Self {
         self.filter(|_, value| value != removed)
     }
-}
 
-// impl<Idx: FieldIndex, T: Copy> Index<Idx> for Pixmap<T> {
-//     type Output = T;
-//
-//     fn index(&self, pixel: Idx) -> &Self::Output {
-//         self.field.get(pixel).unwrap()
-//     }
-// }
+    /// Is `self[pixel] == other[pixel]` where `self[pixel]` is defined.
+    pub fn defined_subset_of(&self, other: &Self) -> bool {
+        self.iter()
+            .all(|(pixel, value)| Some(value) == other.get(pixel))
+    }
+
+    // Is `self[pixel] == other[pixel]` for all `pixel`. Implies that the domain of definition
+    // of `self` and `other` are the same, but not that their bounds are equal.
+    pub fn defined_equals(&self, other: &Self) -> bool {
+        self.defined_subset_of(other) && other.defined_subset_of(self)
+    }
+}
 
 impl Pixmap<Rgba8> {
     pub fn into_material(self) -> Pixmap<Material> {

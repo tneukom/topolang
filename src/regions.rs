@@ -1,3 +1,4 @@
+use crate::math::rect::RectBounds;
 /// Unionfind crates
 /// https://crates.io/crates/union-find
 /// https://crates.io/crates/disjoint-sets
@@ -266,9 +267,8 @@ pub fn split_boundary_into_cycles<T>(mut sides: HashMap<Side, T>) -> Vec<Vec<(Si
     cycles
 }
 
-/// Returns the pixels that are to the left of `boundary`. The border can contain holes and does not
-/// have to be ordered in any way.
-pub fn left_of_boundary(boundary: impl Iterator<Item = Side>) -> Vec<Pixel> {
+/// Area to the left of boundary, see topology_terms.md
+pub fn area_left_of_boundary(boundary: impl Iterator<Item = Side>) -> Vec<Pixel> {
     // TODO: Could this return an Iterator<Item = Pixel>? Would avoid one allocation
     // Collect rows of pixels between left and right borders.
     let mut left_right_sides: Vec<_> = boundary
@@ -291,11 +291,20 @@ pub fn left_of_boundary(boundary: impl Iterator<Item = Side>) -> Vec<Pixel> {
     area
 }
 
-/// See `left_of_boundary`
-pub fn right_of_boundary(border: impl DoubleEndedIterator<Item = Side>) -> Vec<Pixel> where
+/// Bounding rectangle of the area left of boundary, see `area_left_of_boundary`.
+pub fn area_left_of_boundary_bounds(boundary: impl Iterator<Item = Side>) -> Rect<i64> {
+    RectBounds::iter_bounds(boundary.map(|side| side.left_pixel)).inc_high()
+}
+
+/// See `area_left_of_boundary`
+pub fn area_right_of_boundary(boundary: impl Iterator<Item = Side>) -> Vec<Pixel> where
 {
-    let reversed_border = border.map(|side| side.reversed());
-    left_of_boundary(reversed_border)
+    area_left_of_boundary(boundary.map(Side::reversed))
+}
+
+/// See `area_left_of_boundary_bounds`
+pub fn area_right_of_boundary_bounds(boundary: impl Iterator<Item = Side>) -> Rect<i64> {
+    area_left_of_boundary_bounds(boundary.map(Side::reversed))
 }
 
 #[cfg(test)]
@@ -305,7 +314,7 @@ mod test {
         math::{generic::EuclidDivRem, pixel::Side, point::Point, rect::Rect, rgba8::Rgba8},
         pixmap::{iter_sides_in_rect, MaterialMap, Pixmap, RgbaMap},
         regions::{
-            left_of_boundary, pixmap_regions, region_boundaries, right_of_boundary,
+            area_left_of_boundary, area_right_of_boundary, pixmap_regions, region_boundaries,
             split_boundary_into_cycles,
         },
         utils::IntoT,
@@ -458,7 +467,7 @@ mod test {
         assert_eq!(borders.len(), 1);
 
         let border = &borders[0];
-        let left_of_border = left_of_boundary(border.iter().copied());
+        let left_of_border = area_left_of_boundary(border.iter().copied());
         assert_eq!(area, left_of_border.into_iter().collect());
     }
 
@@ -519,7 +528,7 @@ mod test {
         assert_eq!(red_borders.len(), 2); // inner and outer border
 
         let inner_border = &red_borders[1];
-        let right_of_inner_border = right_of_boundary(inner_border.iter().copied());
+        let right_of_inner_border = area_right_of_boundary(inner_border.iter().copied());
         let right_of_inner_border_set: HashSet<_> = right_of_inner_border.into_iter().collect();
         assert_eq!(right_of_inner_border_set, blue_area);
     }

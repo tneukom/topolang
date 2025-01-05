@@ -7,10 +7,7 @@ use crate::{
         rect::Rect,
     },
     pixmap::{MaterialMap, Pixmap},
-    regions::{
-        left_of_boundary, pixmap_regions, region_boundaries, right_of_boundary,
-        split_boundary_into_cycles,
-    },
+    regions::{pixmap_regions, region_boundaries, split_boundary_into_cycles},
     utils::{UndirectedEdge, UndirectedGraph},
 };
 use itertools::Itertools;
@@ -136,16 +133,6 @@ pub struct Border {
 impl Border {
     pub fn sides(&self) -> impl DoubleEndedIterator<Item = Side> + Clone + '_ {
         self.cycle.iter().map(|(side, _)| *side)
-    }
-
-    /// All pixels that are left of `self`
-    pub fn left_pixels(&self) -> Vec<Pixel> {
-        left_of_boundary(self.sides())
-    }
-
-    /// All pixels that are right of `self`
-    pub fn right_pixels(&self) -> Vec<Pixel> {
-        right_of_boundary(self.sides())
     }
 
     /// self + offset == other

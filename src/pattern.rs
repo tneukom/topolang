@@ -420,7 +420,13 @@ mod test {
             .find(|border| !border.is_outer)
             .unwrap();
 
-        material_map.extract_right_of_border(inner_border)
+        // Extract right of border
+        let right_of_border = material_map.right_of_border(inner_border);
+        for pixel in right_of_border.keys() {
+            material_map.remove(pixel);
+        }
+
+        right_of_border
     }
 
     fn pixmap_with_void_from_path(path: impl AsRef<Path>) -> MaterialMap {
@@ -439,11 +445,11 @@ mod test {
 
         // Load expected inner and outer pixmaps
         let expected_inner = pixmap_with_void_from_path(format!("{folder}/{name}_inner.png"));
-        assert_eq!(inner, expected_inner);
+        assert!(inner.defined_equals(&expected_inner));
 
         let expected_outer = pixmap_with_void_from_path(format!("{folder}/{name}_outer.png"));
         // pixmap.save(format!("{folder}/{name}_outer_actual.png")).unwrap();
-        assert_eq!(pixmap, expected_outer);
+        assert!(pixmap.defined_equals(&expected_outer));
     }
 
     #[test]
