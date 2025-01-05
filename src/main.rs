@@ -60,10 +60,14 @@ pub fn main_editor() {
             viewport: egui::ViewportBuilder::default().with_drag_and_drop(true),
             ..eframe::NativeOptions::default()
         };
+
         let result = eframe::run_native(
             "SeamLang",
             native_options,
-            Box::new(|cc| Box::new(EguiApp::new(cc))),
+            Box::new(|cc| {
+                let app = EguiApp::new(cc);
+                Ok(Box::new(app))
+            }),
         );
 
         if result.is_err() {

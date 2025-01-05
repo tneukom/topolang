@@ -81,7 +81,7 @@ impl GlTexture {
             0,
             glow::RGBA,
             glow::UNSIGNED_BYTE,
-            Some(bitmap_bytes),
+            PixelUnpackData::Slice(Some(bitmap_bytes)),
         );
     }
 
@@ -99,7 +99,7 @@ impl GlTexture {
             field.height() as i32,
             glow::RGBA,
             glow::UNSIGNED_BYTE,
-            PixelUnpackData::Slice(bitmap_bytes),
+            PixelUnpackData::Slice(Some(bitmap_bytes)),
         );
     }
 

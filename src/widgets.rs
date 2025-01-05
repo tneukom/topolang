@@ -1,6 +1,3 @@
-use itertools::Itertools;
-use std::{ffi::OsStr, fs, ops::RangeInclusive, path::PathBuf};
-
 use crate::{
     brush::Brush,
     material::Material,
@@ -8,6 +5,9 @@ use crate::{
     palettes::{Palette, SystemPalette},
     utils::ReflectEnum,
 };
+use eframe::epaint::text::TextWrapMode;
+use itertools::Itertools;
+use std::{ffi::OsStr, fs, ops::RangeInclusive, path::PathBuf};
 
 pub fn opt_drag_value<Num: egui::emath::Numeric>(
     ui: &mut egui::Ui,
@@ -184,7 +184,7 @@ impl FileChooser {
 
     pub fn show(&mut self, ui: &mut egui::Ui) -> PathBuf {
         // parent folder
-        if ui.add(egui::Button::new("../").wrap(false)).clicked() {
+        if ui.add(egui::Button::new("../").wrap()).clicked() {
             self.current_folder.pop();
         }
 
@@ -205,7 +205,7 @@ impl FileChooser {
 
         for subfolder_name in sub_folder_names {
             if ui
-                .add(egui::Button::new(format!("{}/", subfolder_name)).wrap(false))
+                .add(egui::Button::new(format!("{}/", subfolder_name)).wrap())
                 .clicked()
             {
                 self.current_folder.push(subfolder_name);
@@ -227,7 +227,7 @@ impl FileChooser {
             .collect();
 
         for file_name in file_names {
-            if ui.add(egui::Button::new(file_name).wrap(false)).clicked() {
+            if ui.add(egui::Button::new(file_name).wrap()).clicked() {
                 self.file_name = file_name.to_string();
             }
         }
