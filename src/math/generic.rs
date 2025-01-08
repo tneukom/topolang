@@ -1,47 +1,8 @@
-use num_traits::{ConstOne, ConstZero, Inv};
+use num_traits::{ConstOne, ConstZero, Inv, Signed};
 use std::{
     fmt::Debug,
     ops::{Add, Div, Mul, Neg, Sub},
 };
-
-pub trait Abs {
-    fn abs(self) -> Self;
-}
-
-macro_rules! impl_abs_forward_primitive {
-    ($t: ty) => {
-        impl Abs for $t {
-            fn abs(self) -> Self {
-                <$t>::abs(self)
-            }
-        }
-    };
-}
-
-macro_rules! impl_abs_noop {
-    ($t: ty) => {
-        impl Abs for $t {
-            fn abs(self) -> Self {
-                self
-            }
-        }
-    };
-}
-
-impl_abs_forward_primitive!(f64);
-impl_abs_forward_primitive!(f32);
-impl_abs_forward_primitive!(i8);
-impl_abs_forward_primitive!(i16);
-impl_abs_forward_primitive!(i32);
-impl_abs_forward_primitive!(i64);
-impl_abs_forward_primitive!(i128);
-impl_abs_forward_primitive!(isize);
-impl_abs_noop!(u8);
-impl_abs_noop!(u16);
-impl_abs_noop!(u32);
-impl_abs_noop!(u64);
-impl_abs_noop!(u128);
-impl_abs_noop!(usize);
 
 pub trait Dot<Rhs = Self> {
     type Output;
@@ -103,7 +64,6 @@ pub trait Num:
     + Sized
     + Debug
     + PartialOrd
-    + Abs
     + ConstZero
     + ConstOne
     + Add<Output = Self>
@@ -142,7 +102,7 @@ impl Num for f64 {}
 
 impl Num for f32 {}
 
-pub trait SignedNum: Num + Neg<Output = Self> {}
+pub trait SignedNum: Num + Neg<Output = Self> + Signed {}
 
 impl SignedNum for f64 {}
 

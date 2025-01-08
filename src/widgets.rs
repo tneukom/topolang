@@ -6,7 +6,7 @@ use crate::{
     utils::ReflectEnum,
 };
 use itertools::Itertools;
-use std::{ffi::OsStr, fs, ops::RangeInclusive, path::PathBuf};
+use std::{ffi::OsStr, fs, path::PathBuf};
 
 pub fn rgba_button(ui: &mut egui::Ui, rgba8: Rgba8, selected: bool) -> egui::Response {
     let egui_color = egui::Color32::from_rgba_unmultiplied(rgba8.r, rgba8.g, rgba8.b, rgba8.a);
