@@ -33,8 +33,7 @@ impl Brush {
 
         let stamp = Self::stamp(self.radius);
 
-        let pixel_line: Arrow<i64> =
-            Arrow(line.a.floor().cwise_cast(), line.b.floor().cwise_cast());
+        let pixel_line: Arrow<i64> = Arrow(line.a.floor().cwise_as(), line.b.floor().cwise_as());
 
         let mut result = HashMap::default();
         for point in pixel_line.draw() {
@@ -53,11 +52,11 @@ impl Brush {
         radius: f64,
     ) -> impl Iterator<Item = Point<i64>> + Clone {
         let bbox = line.bounds().padded(radius.ceil());
-        let low = bbox.low().floor().cwise_cast::<i64>();
-        let high = bbox.high().ceil().cwise_cast::<i64>();
+        let low = bbox.low().floor().cwise_as::<i64>();
+        let high = bbox.high().ceil().cwise_as::<i64>();
 
         Rect::low_high(low, high).iter_closed().filter(move |p| {
-            let f64_p = p.cwise_cast::<f64>();
+            let f64_p = p.cwise_as::<f64>();
             let distance_squared = line.distance_squared(f64_p);
             distance_squared < radius * radius
         })

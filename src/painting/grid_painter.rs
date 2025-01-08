@@ -51,7 +51,7 @@ impl GridPainter {
 
         let rect = Rect::<f64>::low_size(Point(-1.0, -1.0), Point(2.0, 2.0));
         let vertices = rect.corners().map(|corner| GridVertex {
-            position: corner.cwise_cast().to_array(),
+            position: corner.cwise_as().to_array(),
         });
 
         array_buffer.buffer_data(&vertices);
@@ -79,8 +79,7 @@ impl GridPainter {
         self.shader.uniform("offset", offset);
         self.shader.uniform("spacing", spacing);
         let mat_device_to_view: Matrix3<_> = frames.device_to_view().into();
-        self.shader
-            .uniform("device_to_view", &mat_device_to_view);
+        self.shader.uniform("device_to_view", &mat_device_to_view);
 
         self.gl
             .draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0)

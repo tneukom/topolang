@@ -27,7 +27,6 @@ use std::{
     collections::HashMap,
     fs,
     fs::File,
-    hash::Hash,
     path::{Path, PathBuf},
     rc::Rc,
     sync::{mpsc, Arc, Mutex},
@@ -250,7 +249,7 @@ impl EguiApp {
     }
 
     pub fn reset_camera(&mut self) {
-        self.view.center_camera(self.view_rect.cwise_cast());
+        self.view.center_camera(self.view_rect.cwise_as());
     }
 
     pub fn view_ui(&mut self, ui: &mut egui::Ui) {

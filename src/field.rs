@@ -8,7 +8,6 @@ use crate::{
     material::Material,
     math::{point::Point, rect::Rect, rgba8::Rgba8},
 };
-use image::{Rgba, RgbaImage};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Field<T> {
@@ -200,7 +199,7 @@ impl<T: Clone> Field<T> {
 }
 
 impl RgbaField {
-    fn from_imageio_bitmap(imageio_bitmap: &RgbaImage) -> Self {
+    fn from_imageio_bitmap(imageio_bitmap: &image::RgbaImage) -> Self {
         let mut bitmap = Self::filled(
             Rect::low_size(
                 Point::ZERO,
@@ -214,7 +213,7 @@ impl RgbaField {
 
         for y in 0..bitmap.height() {
             for x in 0..bitmap.width() {
-                let Rgba(rgba) = imageio_bitmap.get_pixel(x as u32, y as u32);
+                let image::Rgba(rgba) = imageio_bitmap.get_pixel(x as u32, y as u32);
                 bitmap[(x, y)] = Rgba8::from(*rgba);
             }
         }
@@ -237,7 +236,7 @@ impl RgbaField {
 
         for index in self.indices() {
             let imageio_rgba = image::Rgba(self[index].to_array());
-            let offset = (index - self.bounds.low()).cwise_try_into::<u32>().unwrap();
+            let offset = (index - self.bounds.low()).cwise_as::<u32>();
             imageio_bitmap.put_pixel(offset.x, offset.y, imageio_rgba);
         }
 

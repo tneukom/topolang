@@ -1,5 +1,5 @@
-use crate::math::generic::{Cast, Dot, Num, SignedNum};
-use num_traits::real::Real;
+use crate::math::generic::{Dot, Num, SignedNum};
+use num_traits::{real::Real, AsPrimitive};
 use std::{
     cmp::Ordering,
     fmt::{Display, Formatter},
@@ -34,34 +34,15 @@ impl<T> Point<T> {
         [self.x, self.y]
     }
 
-    pub fn cwise_into<S>(self) -> Point<S>
+    pub fn cwise_as<S>(self) -> Point<S>
     where
-        T: Into<S>,
+        T: AsPrimitive<S>,
+        S: Copy + 'static,
     {
         Point {
-            x: self.x.into(),
-            y: self.y.into(),
+            x: self.x.as_(),
+            y: self.y.as_(),
         }
-    }
-
-    pub fn cwise_cast<S>(self) -> Point<S>
-    where
-        T: Cast<S>,
-    {
-        Point {
-            x: self.x.cast(),
-            y: self.y.cast(),
-        }
-    }
-
-    pub fn cwise_try_into<S>(self) -> Result<Point<S>, <T as TryInto<S>>::Error>
-    where
-        T: TryInto<S>,
-    {
-        Ok(Point {
-            x: self.x.try_into()?,
-            y: self.y.try_into()?,
-        })
     }
 
     pub fn swap_xy(self) -> Self {

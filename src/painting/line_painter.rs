@@ -68,7 +68,7 @@ impl LinePainter {
         for line in lines {
             for corner in line.corners() {
                 let vertex = LineVertex {
-                    position: (to_device * corner).cwise_cast().to_array(),
+                    position: (to_device * corner).cwise_as().to_array(),
                 };
 
                 indices.push(vertices.len() as u32);

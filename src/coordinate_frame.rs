@@ -32,8 +32,7 @@
 // 0,h          w,h
 // where w, h = view_port.size()
 
-use crate::math::{affine_map::AffineMap, point::Point};
-use crate::math::rect::Rect;
+use crate::math::{affine_map::AffineMap, point::Point, rect::Rect};
 
 #[derive(Debug, Copy, Clone)]
 pub struct CoordinateFrames {
@@ -74,7 +73,7 @@ impl CoordinateFrames {
             Point(self.viewport.width(), 0.0),
             self.viewport.top_right(),
             Point(0.0, self.viewport.height()),
-            self.viewport.bottom_left()
+            self.viewport.bottom_left(),
         )
     }
 

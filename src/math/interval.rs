@@ -1,5 +1,5 @@
-use crate::math::generic::{Cast, Num};
-use num_traits::ConstZero;
+use crate::math::generic::Num;
+use num_traits::{AsPrimitive, ConstZero};
 use std::{
     hash::{Hash, Hasher},
     ops::{Add, Mul, Range, RangeInclusive, Sub},
@@ -24,34 +24,15 @@ impl<T> Interval<T> {
         }
     }
 
-    pub fn cwise_into<S>(self) -> Interval<S>
+    pub fn cwise_as<S>(self) -> Interval<S>
     where
-        T: Into<S>,
+        T: AsPrimitive<S>,
+        S: Copy + 'static,
     {
         Interval {
-            low: self.low.into(),
-            high: self.high.into(),
+            low: self.low.as_(),
+            high: self.high.as_(),
         }
-    }
-
-    pub fn cwise_cast<S>(self) -> Interval<S>
-    where
-        T: Cast<S>,
-    {
-        Interval {
-            low: self.low.cast(),
-            high: self.high.cast(),
-        }
-    }
-
-    pub fn cwise_try_into<S>(self) -> Result<Interval<S>, <T as TryInto<S>>::Error>
-    where
-        T: TryInto<S>,
-    {
-        Ok(Interval {
-            low: self.low.try_into()?,
-            high: self.high.try_into()?,
-        })
     }
 }
 

@@ -2,8 +2,8 @@ use super::{
     point::Point,
     rect::{Rect, RectBounds},
 };
-use crate::math::generic::{Cast, Dot, Num, SignedNum};
-use num_traits::clamp;
+use crate::math::generic::{Dot, Num, SignedNum};
+use num_traits::{clamp, AsPrimitive};
 use std::{clone::Clone, fmt::Debug};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -103,34 +103,15 @@ impl<T: Num> Arrow<T> {
         offset.norm_squared()
     }
 
-    pub fn cwise_into<S>(self) -> Arrow<S>
+    pub fn cwise_as<S>(self) -> Arrow<S>
     where
-        T: Into<S>,
+        T: AsPrimitive<S>,
+        S: Copy + 'static,
     {
         Arrow {
-            a: self.a.cwise_into(),
-            b: self.b.cwise_into(),
+            a: self.a.cwise_as(),
+            b: self.b.cwise_as(),
         }
-    }
-
-    pub fn cwise_cast<S>(self) -> Arrow<S>
-    where
-        T: Cast<S>,
-    {
-        Arrow {
-            a: self.a.cwise_cast(),
-            b: self.b.cwise_cast(),
-        }
-    }
-
-    pub fn cwise_try_into<S>(self) -> Result<Arrow<S>, <T as TryInto<S>>::Error>
-    where
-        T: TryInto<S>,
-    {
-        Ok(Arrow {
-            a: self.a.cwise_try_into()?,
-            b: self.b.cwise_try_into()?,
-        })
     }
 }
 

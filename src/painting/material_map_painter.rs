@@ -2,13 +2,11 @@ use std::sync::Arc;
 
 use crate::{
     field::RgbaField,
-    material::Material,
     math::{affine_map::AffineMap, point::Point, rect::Rect, rgba8::Rgba8},
     painting::{
         gl_texture::{Filter, GlTexture},
         rect_painter::{DrawRect, RectPainter},
     },
-    pixmap::MaterialMap,
 };
 
 pub struct RgbaFieldPainter {
@@ -78,7 +76,7 @@ impl RgbaFieldPainter {
         let rect = texture_rect + rgba_field.bounds().low();
         let draw_tile = DrawRect {
             texture_rect,
-            corners: rect.cwise_cast().corners(),
+            corners: rect.cwise_as().corners(),
         };
 
         self.rect_painter

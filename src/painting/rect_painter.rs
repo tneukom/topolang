@@ -90,10 +90,10 @@ impl RectPainter {
 
             for (tile_corner, atlas_corner) in tile.corners.into_iter().zip(atlas_corners) {
                 let vertex = TileVertex {
-                    texcoord: (texture.bitmap_to_gltexture() * atlas_corner.cwise_cast())
-                        .cwise_cast()
+                    texcoord: (texture.bitmap_to_gltexture() * atlas_corner.cwise_as())
+                        .cwise_as()
                         .to_array(),
-                    position: (to_device * tile_corner).cwise_cast().to_array(),
+                    position: (to_device * tile_corner).cwise_as().to_array(),
                 };
 
                 vertices.push(vertex);

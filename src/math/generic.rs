@@ -4,43 +4,6 @@ use std::{
     ops::{Add, Div, Mul, Neg, Sub},
 };
 
-pub trait Cast<To>: Sized {
-    fn cast(self) -> To;
-}
-
-macro_rules! impl_cast_primitive_as {
-    ($t_self: ty, $t_to: ty) => {
-        impl Cast<$t_to> for $t_self {
-            fn cast(self) -> $t_to {
-                self as $t_to
-            }
-        }
-    };
-}
-
-impl_cast_primitive_as!(f32, i64);
-impl_cast_primitive_as!(f64, i64);
-impl_cast_primitive_as!(f32, u64);
-impl_cast_primitive_as!(f64, u64);
-
-impl_cast_primitive_as!(f32, f32);
-impl_cast_primitive_as!(f32, f64);
-impl_cast_primitive_as!(f64, f32);
-impl_cast_primitive_as!(f64, f64);
-
-impl_cast_primitive_as!(i64, f64);
-impl_cast_primitive_as!(u64, f64);
-impl_cast_primitive_as!(usize, f64);
-
-impl_cast_primitive_as!(i64, f32);
-impl_cast_primitive_as!(u64, f32);
-impl_cast_primitive_as!(usize, f32);
-
-impl_cast_primitive_as!(f32, usize);
-impl_cast_primitive_as!(f64, usize);
-impl_cast_primitive_as!(i64, usize);
-impl_cast_primitive_as!(u64, usize);
-
 pub trait Abs {
     fn abs(self) -> Self;
 }
@@ -195,7 +158,7 @@ impl SignedNum for i64 {}
 
 impl SignedNum for isize {}
 
-pub trait FieldNum: SignedNum + Div<Output = Self> + Inv<Output = Self> + Cast<i64> {}
+pub trait FieldNum: SignedNum + Div<Output = Self> + Inv<Output = Self> {}
 
 impl FieldNum for f64 {}
 

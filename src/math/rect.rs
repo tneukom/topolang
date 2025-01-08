@@ -1,11 +1,6 @@
-use crate::math::{
-    arrow::Arrow,
-    generic::{Cast, Num},
-    interval::Interval,
-    point::Point,
-};
+use crate::math::{arrow::Arrow, generic::Num, interval::Interval, point::Point};
 use itertools::Itertools;
-use num_traits::ConstZero;
+use num_traits::{AsPrimitive, ConstZero};
 use std::{
     fmt::Debug,
     hash::{Hash, Hasher},
@@ -46,13 +41,14 @@ impl<T: Copy> Rect<T> {
         }
     }
 
-    pub fn cwise_cast<S>(self) -> Rect<S>
+    pub fn cwise_as<S>(self) -> Rect<S>
     where
-        T: Cast<S>,
+        T: AsPrimitive<S>,
+        S: Copy + 'static,
     {
         Rect {
-            x: self.x.cwise_cast(),
-            y: self.y.cwise_cast(),
+            x: self.x.cwise_as(),
+            y: self.y.cwise_as(),
         }
     }
 

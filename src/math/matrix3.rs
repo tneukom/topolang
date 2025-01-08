@@ -1,7 +1,5 @@
-use crate::math::{
-    affine_map::AffineMap,
-    generic::{Cast, Num},
-};
+use crate::math::{affine_map::AffineMap, generic::Num};
+use num_traits::AsPrimitive;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Matrix3<T> {
@@ -48,20 +46,21 @@ impl<T> Matrix3<T> {
         )
     }
 
-    pub fn cwise_cast<S>(self) -> Matrix3<S>
+    pub fn cwise_as<S>(self) -> Matrix3<S>
     where
-        T: Cast<S>,
+        T: AsPrimitive<S>,
+        S: Copy + 'static,
     {
         Matrix3::new(
-            self.a11.cast(),
-            self.a12.cast(),
-            self.a13.cast(),
-            self.a21.cast(),
-            self.a22.cast(),
-            self.a23.cast(),
-            self.a31.cast(),
-            self.a32.cast(),
-            self.a33.cast(),
+            self.a11.as_(),
+            self.a12.as_(),
+            self.a13.as_(),
+            self.a21.as_(),
+            self.a22.as_(),
+            self.a23.as_(),
+            self.a31.as_(),
+            self.a32.as_(),
+            self.a33.as_(),
         )
     }
 }

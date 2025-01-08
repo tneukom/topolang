@@ -39,7 +39,7 @@ impl ViewInput {
     pub const EMPTY: Self = Self {
         frames: CoordinateFrames {
             window_size: Point(640.0, 480.0),
-            viewport: Rect::low_high(Point::ZERO, Point(640.0, 480.0))
+            viewport: Rect::low_high(Point::ZERO, Point(640.0, 480.0)),
         },
 
         view_mouse: Point::ZERO,
@@ -116,7 +116,7 @@ pub struct MovingSelection {
 impl SelectingRect {
     pub fn rect(&self) -> Rect<i64> {
         // end can be smaller than start, so we take the bounds of both points
-        [self.start.cwise_cast(), self.stop.cwise_cast()].bounds()
+        [self.start.cwise_as(), self.stop.cwise_as()].bounds()
     }
 }
 
@@ -200,7 +200,7 @@ impl View {
             world_bounds = Rect::low_high(Point(-128, -128), Point(128, 128))
         }
 
-        self.camera = Camera::fit_world_into_view(world_bounds.cwise_cast(), view_rect).round();
+        self.camera = Camera::fit_world_into_view(world_bounds.cwise_as(), view_rect).round();
     }
 
     pub fn empty(bounds: Rect<i64>) -> View {
@@ -313,7 +313,7 @@ impl View {
         }
 
         // Move selection by mouse travelled
-        let current = input.world_mouse.floor().cwise_cast::<i64>();
+        let current = input.world_mouse.floor().cwise_as::<i64>();
         let delta = current - op.previous;
         self.selection = self
             .selection
@@ -332,11 +332,11 @@ impl View {
         if let Some(selection) = &self.selection {
             if selection
                 .bounding_rect()
-                .cwise_cast::<f64>()
+                .cwise_as::<f64>()
                 .contains(input.world_mouse)
             {
                 let op = MovingSelection {
-                    previous: input.world_mouse.floor().cwise_cast(),
+                    previous: input.world_mouse.floor().cwise_as(),
                 };
                 return UiState::MovingSelection(op);
             }
@@ -377,7 +377,7 @@ impl View {
             }
             EditMode::Fill => {
                 if input.left_mouse_down {
-                    let pixel: Pixel = input.world_mouse.floor().cwise_cast().into();
+                    let pixel: Pixel = input.world_mouse.floor().cwise_as();
                     if let Some(region_key) = self.world.topology().region_at(pixel) {
                         self.world.fill_region(region_key, settings.brush.material);
                         self.history
@@ -431,14 +431,14 @@ impl View {
     }
 
     pub fn tile_containing(&self, world_point: Point<f64>) -> Point<i64> {
-        world_point.floor().cwise_cast()
+        world_point.floor().cwise_as()
     }
 
     pub fn is_hovering_selection(&self, view_input: &ViewInput) -> bool {
         if let Some(selection) = &self.selection {
             selection
                 .bounding_rect()
-                .cwise_cast::<f64>()
+                .cwise_as::<f64>()
                 .contains(view_input.world_mouse)
         } else {
             false
@@ -464,7 +464,7 @@ impl View {
     pub fn clipboard_paste(&mut self, input: &ViewInput, material_map: MaterialMap) {
         self.cancel_selection();
         // Create selection from entry
-        let world_mouse = input.world_mouse.floor().cwise_cast();
+        let world_mouse = input.world_mouse.floor().cwise_as();
         let selection = Selection::new(material_map).with_center_at(world_mouse);
         self.selection = Some(selection);
     }
