@@ -639,6 +639,7 @@ impl EguiApp {
         };
 
         if response.is_pointer_button_down_on() {
+            // False if dragging mouse from an egui control
             response.request_focus();
         }
 
@@ -651,12 +652,12 @@ impl EguiApp {
             };
 
             let view_mouse = frames.window_to_view() * window_mouse;
-            println!("view_mouse: {view_mouse}");
 
-            let scroll_delta = if !has_focus {
-                0.0
-            } else {
+            // Scroll captured if the mouse pointer is over view, even if it doesn't have focus.
+            let scroll_delta = if response.contains_pointer() {
                 input.smooth_scroll_delta.y as f64 / 50.0
+            } else {
+                0.0
             };
 
             let input = ViewInput {
@@ -692,14 +693,15 @@ impl EguiApp {
             let mut view_painter = view_painter.lock().unwrap();
 
             unsafe {
-                let mut gl_viewport = [0; 4];
-                unsafe {
-                    gl.get_parameter_i32_slice(glow::VIEWPORT, &mut gl_viewport);
-                }
-                println!(
-                    "glViewport(x: {}, y: {}, width: {}, height: {})",
-                    gl_viewport[0], gl_viewport[1], gl_viewport[2], gl_viewport[3]
-                );
+                // Print the active opengl viewport for debugging
+                // let mut gl_viewport = [0; 4];
+                // unsafe {
+                //     gl.get_parameter_i32_slice(glow::VIEWPORT, &mut gl_viewport);
+                // }
+                // println!(
+                //     "glViewport(x: {}, y: {}, width: {}, height: {})",
+                //     gl_viewport[0], gl_viewport[1], gl_viewport[2], gl_viewport[3]
+                // );
 
                 // gl.scissor(
                 //     viewport.left() as i32,
