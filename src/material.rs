@@ -23,17 +23,17 @@ impl Material {
     pub const REGION_EQ_MASK: u8 = 0b1111_1110;
 
     /// #360c29
-    pub const VOID_COLOR: Rgba8 = Rgba8::new(0x36, 0x0C, 0x29, Self::RULE_ALPHA);
+    pub const RULE_BEFORE_COLOR: Rgba8 = Rgba8::new(0x36, 0x0C, 0x29, Self::RULE_ALPHA);
     /// #FF6E00
-    pub const RULE_ARROW_COLOR: Rgba8 = Rgba8::new(0xFF, 0x6E, 0x00, Self::RULE_ALPHA);
+    pub const RULE_AFTER_COLOR: Rgba8 = Rgba8::new(0xFF, 0x6E, 0x00, Self::RULE_ALPHA);
     /// #0C3619
     pub const WILDCARD_COLOR: Rgba8 = Rgba8::new(0x0C, 0x36, 0x19, Self::RULE_ALPHA);
 
     pub const UNDEF_COLOR: Rgba8 = Rgba8::new(0xFF, 0xFF, 0xFF, 0x00);
 
-    pub const VOID: Self = Self::from_rgba(Self::VOID_COLOR);
-    pub const RULE_FRAME: Self = Self::VOID;
-    pub const RULE_ARROW: Self = Self::from_rgba(Self::RULE_ARROW_COLOR);
+    pub const VOID: Self = Self::from_rgba(Self::RULE_BEFORE_COLOR);
+    pub const RULE_BEFORE: Self = Self::VOID;
+    pub const RULE_AFTER: Self = Self::from_rgba(Self::RULE_AFTER_COLOR);
     pub const WILDCARD: Self = Self::from_rgba(Self::WILDCARD_COLOR);
     pub const TRANSPARENT: Self = Self::from_rgba(Rgba8::TRANSPARENT);
     pub const BLACK: Self = Self::from_rgba(Rgba8::BLACK);
