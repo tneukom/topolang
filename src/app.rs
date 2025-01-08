@@ -121,8 +121,6 @@ pub struct EguiApp {
     start_time: Instant,
     pub view_settings: ViewSettings,
 
-    view_rect: Rect<i64>,
-
     gl: Arc<glow::Context>,
     view: View,
 
@@ -225,7 +223,6 @@ impl EguiApp {
             start_time,
             view,
             view_settings,
-            view_rect: Rect::low_size(Point::ZERO, Point::ONE),
             gl,
             new_size: Point(512, 512),
             file_name: "".to_string(),
@@ -243,15 +240,6 @@ impl EguiApp {
         }
     }
 
-    fn view_size(ctx: &egui::Context) -> Point<i64> {
-        let egui_view_size = ctx.input(|input| input.screen_rect.size());
-        Point::new(egui_view_size.x as i64, egui_view_size.y as i64)
-    }
-
-    pub fn reset_camera(&mut self) {
-        self.view.center_camera(self.view_rect.cwise_as());
-    }
-
     pub fn view_ui(&mut self, ui: &mut egui::Ui) {
         // Mouse world position
         ui.label(format!(
@@ -260,7 +248,7 @@ impl EguiApp {
         ));
 
         if ui.button("Reset camera").clicked() {
-            self.reset_camera();
+            self.reset_camera_requested = true;
         }
 
         // Edit mode choices
@@ -610,7 +598,7 @@ impl EguiApp {
         self.new_size = rgba_field.size();
         let world = rgba_field.intot::<MaterialMap>().into();
         self.view = View::new(world);
-        self.reset_camera();
+        self.reset_camera_requested = true;
     }
 
     fn load_from_path(&mut self, path: impl AsRef<Path>) {
@@ -682,6 +670,13 @@ impl EguiApp {
 
             input
         };
+
+        // Reset camera requested, for example from loading World in Self::new
+        if self.reset_camera_requested {
+            let view_rect = Rect::low_size(Point::ZERO, frames.viewport.size());
+            self.view.center_camera(view_rect);
+            self.reset_camera_requested = false;
+        }
 
         let time = self.time();
         let draw_view = DrawView::from_view(&self.view, frames, time);
@@ -794,18 +789,9 @@ impl eframe::App for EguiApp {
             // ui.allocate_space(ui.available_size());
         });
 
-        let view_size = Self::view_size(ctx);
-        self.view_rect = Rect::low_high(Point(side_panel_rect.right() as i64, 0), view_size);
-
         egui::CentralPanel::default().show(ctx, |ui| {
             self.central_panel(ui);
         });
-
-        // Reset camera requested, for example from loading World in Self::new
-        if self.reset_camera_requested {
-            self.reset_camera();
-            self.reset_camera_requested = false;
-        }
 
         self.view
             .handle_input(&mut self.view_input, &self.view_settings);
