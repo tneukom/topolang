@@ -8,26 +8,6 @@ use crate::{
 use itertools::Itertools;
 use std::{ffi::OsStr, fs, ops::RangeInclusive, path::PathBuf};
 
-pub fn opt_drag_value<Num: egui::emath::Numeric>(
-    ui: &mut egui::Ui,
-    opt_value: &mut Option<Num>,
-    range: RangeInclusive<Num>,
-) {
-    let mut has_value = opt_value.is_some();
-
-    ui.horizontal(|ui| {
-        ui.checkbox(&mut has_value, "");
-
-        if has_value {
-            let mut value = opt_value.unwrap_or(*range.start());
-            ui.add(egui::DragValue::new(&mut value).clamp_range(range));
-            *opt_value = Some(value);
-        } else {
-            *opt_value = None;
-        }
-    });
-}
-
 pub fn rgba_button(ui: &mut egui::Ui, rgba8: Rgba8, selected: bool) -> egui::Response {
     let egui_color = egui::Color32::from_rgba_unmultiplied(rgba8.r, rgba8.g, rgba8.b, rgba8.a);
 

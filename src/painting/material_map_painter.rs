@@ -5,12 +5,12 @@ use crate::{
     math::{affine_map::AffineMap, point::Point, rect::Rect, rgba8::Rgba8},
     painting::{
         gl_texture::{Filter, GlTexture},
-        rect_painter::{DrawRect, RectPainter},
+        rect_painter::{DrawRect, FillRectPainter},
     },
 };
 
 pub struct RgbaFieldPainter {
-    rect_painter: RectPainter,
+    rect_painter: FillRectPainter,
     texture: Option<(GlTexture, Point<i64>)>,
     gl: Arc<glow::Context>,
 }
@@ -19,7 +19,7 @@ impl RgbaFieldPainter {
     pub unsafe fn new(gl: Arc<glow::Context>) -> Self {
         Self {
             texture: None,
-            rect_painter: RectPainter::new(gl.clone()),
+            rect_painter: FillRectPainter::new(gl.clone()),
             gl: gl,
         }
     }

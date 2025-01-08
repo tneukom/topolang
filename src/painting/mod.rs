@@ -4,6 +4,5 @@ pub(crate) mod grid_painter;
 pub(crate) mod line_painter;
 pub(crate) mod material_map_painter;
 pub(crate) mod rect_painter;
-pub(crate) mod selection_outline_painter;
 pub(crate) mod shader;
 pub(crate) mod view_painter;

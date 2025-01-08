@@ -26,7 +26,8 @@ pub struct DrawRect {
     pub corners: [Point<f64>; 4],
 }
 
-pub struct RectPainter {
+/// Paint a textured rectangle
+pub struct FillRectPainter {
     shader: Shader,
     array_buffer: GlBuffer<TileVertex>,
     element_buffer: GlBuffer<u32>,
@@ -34,10 +35,10 @@ pub struct RectPainter {
     gl: Arc<glow::Context>,
 }
 
-impl RectPainter {
+impl FillRectPainter {
     pub unsafe fn new(gl: Arc<glow::Context>) -> Self {
-        let vs_source = include_str!("shaders/tile.vert");
-        let fs_source = include_str!("shaders/tile.frag");
+        let vs_source = include_str!("shaders/fill_rect.vert");
+        let fs_source = include_str!("shaders/fill_rect.frag");
         let shader = Shader::from_source(gl.clone(), &vs_source, &fs_source);
 
         // Create vertex, index buffers and assign to shader

@@ -7,10 +7,7 @@ use crate::{
     field::RgbaField,
     material::Material,
     math::{point::Point, rect::Rect},
-    painting::{
-        line_painter::LinePainter, material_map_painter::RgbaFieldPainter,
-        rect_painter::RectPainter, selection_outline_painter::SelectionOutlinePainter,
-    },
+    painting::{line_painter::LinePainter, material_map_painter::RgbaFieldPainter},
     view::{UiState, View},
 };
 
@@ -50,11 +47,9 @@ impl DrawView {
 
 pub struct ViewPainter {
     pub grid_painter: GridPainter,
-    pub tile_painter: RectPainter,
     pub line_painter: LinePainter,
     pub world_painter: RgbaFieldPainter,
     pub selection_painter: RgbaFieldPainter,
-    pub selection_outline_painter: SelectionOutlinePainter,
 
     pub i_frame: usize,
 }
@@ -63,11 +58,9 @@ impl ViewPainter {
     pub unsafe fn new(gl: Arc<glow::Context>) -> ViewPainter {
         ViewPainter {
             grid_painter: GridPainter::new(gl.clone()),
-            tile_painter: RectPainter::new(gl.clone()),
             line_painter: LinePainter::new(gl.clone()),
             world_painter: RgbaFieldPainter::new(gl.clone()),
             selection_painter: RgbaFieldPainter::new(gl.clone()),
-            selection_outline_painter: SelectionOutlinePainter::new(gl.clone()),
             i_frame: 0,
         }
     }
@@ -78,18 +71,6 @@ impl ViewPainter {
         self.grid_painter.draw(origin, spacing, frames);
     }
 
-    pub unsafe fn draw_bounds(
-        &mut self,
-        bounds: Rect<i64>,
-        camera: &Camera,
-        frames: &CoordinateFrames,
-        time: f64,
-    ) {
-        let world_to_device = frames.view_to_device() * camera.world_to_view();
-        self.line_painter
-            .draw_rect(bounds.cwise_as(), world_to_device, time);
-    }
-
     pub unsafe fn draw_selection_outline(
         &mut self,
         rect: Rect<i64>,
@@ -98,8 +79,8 @@ impl ViewPainter {
         time: f64,
     ) {
         let world_to_device = frames.view_to_device() * camera.world_to_view();
-        self.selection_outline_painter
-            .draw(&[rect.cwise_as()], world_to_device, time);
+        self.line_painter
+            .draw_rect(rect.cwise_as(), world_to_device, time);
     }
 
     pub unsafe fn draw_view(&mut self, draw: &DrawView) {
@@ -112,7 +93,7 @@ impl ViewPainter {
             .draw(&draw.world_rgba_field, world_to_device, draw.time);
 
         // Draw a rectangle around the scene
-        self.draw_bounds(
+        self.draw_selection_outline(
             draw.world_rgba_field.bounds(),
             &draw.camera,
             &draw.frames,
