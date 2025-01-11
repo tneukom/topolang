@@ -4,7 +4,8 @@ use std::{
 };
 
 use crate::math::{
-    generic::{Dot, FieldNum, Num, SignedNum},
+    arrow::Arrow,
+    generic::{Dot, FloatNum, Num, SignedNum},
     point::Point,
 };
 
@@ -63,6 +64,7 @@ where
 impl<T: Num> Matrix2<T> {
     pub const ID: Self = Self::new(T::ONE, T::ZERO, T::ZERO, T::ONE);
     pub const ZERO: Self = Self::new(T::ZERO, T::ZERO, T::ZERO, T::ZERO);
+    pub const SWAP_XY: Self = Self::new(T::ZERO, T::ONE, T::ONE, T::ZERO);
 
     pub const fn diagonal(a11: T, a22: T) -> Self {
         Self::new(a11, T::ZERO, T::ZERO, a22)
@@ -76,15 +78,8 @@ impl<T: Num> Matrix2<T> {
         self.a11 * self.a22 - self.a12 * self.a21
     }
 }
-impl<T: FieldNum> Matrix2<T> {
-    pub fn norm_linf(self) -> T {
-        self.a11
-            .abs()
-            .max(self.a12.abs())
-            .max(self.a21.abs())
-            .max(self.a22.abs())
-    }
 
+impl<T: FloatNum> Matrix2<T> {
     pub fn norm_l1(self) -> T {
         self.a11.abs() + self.a12.abs() + self.a21.abs() + self.a22.abs()
     }
@@ -107,7 +102,7 @@ impl<T: SignedNum> Matrix2<T> {
     }
 }
 
-impl<T: FieldNum> Matrix2<T> {
+impl<T: FloatNum> Matrix2<T> {
     pub fn inv(self) -> Self {
         let det = self.det();
         assert_ne!(det, T::ZERO);
@@ -152,7 +147,7 @@ where
     type Output = Self;
 
     fn mul(self, rhs: T) -> Self::Output {
-        Self::Output::new(
+        Matrix2::new(
             self.a11 * rhs,
             self.a12 * rhs,
             self.a21 * rhs,
@@ -167,11 +162,22 @@ where
 {
     type Output = Point<T>;
 
-    fn mul(self, rhs: Point<T>) -> Self::Output {
-        Self::Output::new(
+    fn mul(self, rhs: Point<T>) -> Point<T> {
+        Point::new(
             self.a11 * rhs.x + self.a12 * rhs.y,
             self.a21 * rhs.x + self.a22 * rhs.y,
         )
+    }
+}
+
+impl<T> Mul<Arrow<T>> for Matrix2<T>
+where
+    T: Copy + Mul<Output = T> + Add<Output = T>,
+{
+    type Output = Arrow<T>;
+
+    fn mul(self, rhs: Arrow<T>) -> Arrow<T> {
+        Arrow::new(self * rhs.a, self * rhs.b)
     }
 }
 
@@ -181,12 +187,12 @@ where
 {
     type Output = Self;
 
-    fn mul(self, rhs: Self) -> Self::Output {
+    fn mul(self, rhs: Self) -> Self {
         let a11 = self.row1().dot(rhs.col1());
         let a12 = self.row1().dot(rhs.col2());
         let a21 = self.row2().dot(rhs.col1());
         let a22 = self.row2().dot(rhs.col2());
-        Self::Output::new(a11, a12, a21, a22)
+        Matrix2::new(a11, a12, a21, a22)
     }
 }
 
@@ -197,7 +203,7 @@ where
     type Output = Matrix2<T>;
 
     fn add(self, rhs: Self) -> Self::Output {
-        Self::Output::new(
+        Matrix2::new(
             self.a11 + rhs.a11,
             self.a12 + rhs.a12,
             self.a21 + rhs.a21,
@@ -213,7 +219,7 @@ where
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        Self::Output::new(
+        Matrix2::new(
             self.a11 - rhs.a11,
             self.a12 - rhs.a12,
             self.a21 - rhs.a21,

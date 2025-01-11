@@ -28,6 +28,7 @@ pub(crate) mod world;
 
 pub mod app;
 pub mod benchmarks;
+pub(crate) mod line_drawing;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]

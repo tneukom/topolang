@@ -1,6 +1,7 @@
 use crate::{
+    line_drawing::draw_line_slope,
     material::Material,
-    math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect},
+    math::{arrow::Arrow, pixel::Pixel},
 };
 use ahash::HashMap;
 
@@ -14,51 +15,16 @@ impl Brush {
     pub fn default() -> Self {
         Self {
             material: Material::BLACK,
-            radius: 0,
+            radius: 1,
         }
-    }
-
-    /// Circle
-    fn stamp(radius: i64) -> Vec<Point<i64>> {
-        Rect::low_high(Point(-radius, -radius), Point(radius, radius))
-            .iter_closed()
-            .filter(|&p| p.norm_squared() <= radius * radius)
-            .collect()
     }
 
     pub fn draw_line(&self, line: Arrow<f64>) -> HashMap<Pixel, Material> {
-        // for point in Self::points_within_radius(line, self.radius) {
-        //     target.set(point.into(), self.color);
-        // }
-
-        let stamp = Self::stamp(self.radius);
-
-        let pixel_line: Arrow<i64> = Arrow(line.a.floor().cwise_as(), line.b.floor().cwise_as());
-
         let mut result = HashMap::default();
-        for point in pixel_line.draw() {
-            for &offset in &stamp {
-                result.insert(point + offset, self.material);
-            }
+        for line_pixel in draw_line_slope(line, self.radius as f64) {
+            result.insert(line_pixel, self.material);
         }
 
         result
-    }
-
-    /// Slow but flexible line drawing, only use for small lines!
-    /// FIXME: Find something faster than iterating over bounding box
-    pub fn points_within_radius(
-        line: Arrow<f64>,
-        radius: f64,
-    ) -> impl Iterator<Item = Point<i64>> + Clone {
-        let bbox = line.bounds().padded(radius.ceil());
-        let low = bbox.low().floor().cwise_as::<i64>();
-        let high = bbox.high().ceil().cwise_as::<i64>();
-
-        Rect::low_high(low, high).iter_closed().filter(move |p| {
-            let f64_p = p.cwise_as::<f64>();
-            let distance_squared = line.distance_squared(f64_p);
-            distance_squared < radius * radius
-        })
     }
 }

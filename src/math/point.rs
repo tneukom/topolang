@@ -65,6 +65,18 @@ impl<T: Num> Point<T> {
     pub const ONE: Self = Point::new(T::ONE, T::ONE);
 }
 
+impl<T: AsPrimitive<f64>> Point<T> {
+    pub fn as_f64(self) -> Point<f64> {
+        self.cwise_as()
+    }
+}
+
+impl<T: AsPrimitive<i64>> Point<T> {
+    pub fn as_i64(self) -> Point<i64> {
+        self.cwise_as()
+    }
+}
+
 impl<T: SignedNum> Point<T> {
     // Return counterclockwise orthogonal vector (with x pointing right and y pointing up)
     // (1,0) -> (0,1)
@@ -85,6 +97,10 @@ impl<T: SignedNum> Point<T> {
 impl<T: Real + Num> Point<T> {
     pub fn norm(self) -> T {
         self.norm_squared().sqrt()
+    }
+
+    pub fn distance(self, rhs: Self) -> T {
+        self.distance_squared(rhs).sqrt()
     }
 
     pub fn normalized(self) -> Self {

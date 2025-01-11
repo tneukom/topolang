@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::math::{
-    generic::{FieldNum, Num},
+    generic::{FloatNum, Num},
     matrix2::Matrix2,
     point::Point,
     rect::{Rect, RectBounds},
@@ -39,7 +39,7 @@ impl<T: Num> AffineMap<T> {
     pub const ID: Self = Self::new(Matrix2::ID, Point::ZERO);
 }
 
-impl<T: FieldNum> AffineMap<T> {
+impl<T: FloatNum> AffineMap<T> {
     // lInv = l^-1, tInv = -lInv * t
     // (AInv * A) * p = lInv * l * p + lInv * t + (-lInv * t) = p
     pub fn inv(self) -> Self {

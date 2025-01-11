@@ -112,7 +112,7 @@ impl BrushChooser {
         });
 
         // Brush shape
-        ui.add(egui::Slider::new(&mut self.radius, 0..=5).text("Radius"));
+        ui.add(egui::Slider::new(&mut self.radius, 1..=6).text("Radius"));
         ui.separator();
     }
 

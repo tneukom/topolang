@@ -1,4 +1,4 @@
-use num_traits::{ConstOne, ConstZero, Inv, Signed};
+use num_traits::{ConstOne, ConstZero, Float, Inv, Signed};
 use std::{
     fmt::Debug,
     ops::{Add, Div, Mul, Neg, Sub},
@@ -118,8 +118,8 @@ impl SignedNum for i64 {}
 
 impl SignedNum for isize {}
 
-pub trait FieldNum: SignedNum + Div<Output = Self> + Inv<Output = Self> {}
+pub trait FloatNum: SignedNum + Div<Output = Self> + Inv<Output = Self> + Float {}
 
-impl FieldNum for f64 {}
+impl FloatNum for f64 {}
 
-impl FieldNum for f32 {}
+impl FloatNum for f32 {}

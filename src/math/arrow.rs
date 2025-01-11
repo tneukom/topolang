@@ -2,7 +2,7 @@ use super::{
     point::Point,
     rect::{Rect, RectBounds},
 };
-use crate::math::generic::{Dot, Num, SignedNum};
+use crate::math::generic::{Dot, FloatNum, Num, SignedNum};
 use num_traits::{clamp, AsPrimitive};
 use std::{clone::Clone, fmt::Debug};
 
@@ -21,9 +21,7 @@ impl<T> Arrow<T> {
     pub fn corners(self) -> [Point<T>; 2] {
         [self.a, self.b]
     }
-}
 
-impl<T: Num> Arrow<T> {
     pub const fn new(a: Point<T>, b: Point<T>) -> Self {
         Self { a, b }
     }
@@ -45,7 +43,9 @@ impl<T: Num> Arrow<T> {
             b: self.b.swap_xy(),
         }
     }
+}
 
+impl<T: Num> Arrow<T> {
     /// Returns an endpoint q with p != q,
     pub fn other_endpoint(self, p: Point<T>) -> Point<T> {
         if self.a == p {
@@ -115,6 +115,12 @@ impl<T: Num> Arrow<T> {
     }
 }
 
+impl<T: FloatNum> Arrow<T> {
+    pub fn distance(self, p: Point<T>) -> T {
+        self.distance_squared(p).sqrt()
+    }
+}
+
 impl<T: SignedNum> Arrow<T> {
     pub fn mirror_x(self) -> Self {
         Self::new(self.a.mirror_x(), self.b.mirror_x())
@@ -122,85 +128,5 @@ impl<T: SignedNum> Arrow<T> {
 
     pub fn mirror_y(self) -> Self {
         Self::new(self.a.mirror_y(), self.b.mirror_y())
-    }
-}
-
-impl Arrow<i64> {
-    /// Only works if 0 < dir.x and 0 <= dir.y <= dir.x
-    fn draw_impl0(self) -> Vec<Point<i64>> {
-        let dir = self.dir();
-        assert!(0 <= dir.y);
-        assert!(0 < dir.x);
-        assert!(dir.y <= dir.x);
-
-        let slope = dir.y as f64 / dir.x as f64;
-
-        let mut points: Vec<Point<i64>> = Vec::new();
-        for x_offset in 0..=dir.x {
-            let y_offset = (slope * (x_offset as f64)).round() as i64;
-            let point = self.a + Point(x_offset, y_offset);
-            // Make sure line is contiguous
-            if let Some(previous) = points.last().copied() {
-                if previous.y < point.y {
-                    points.push(Point(previous.x, previous.y + 1))
-                }
-            }
-            points.push(point);
-        }
-
-        points
-    }
-
-    /// Only works if 0 < dir.x and |dir.y| <= dir.x
-    fn draw_impl1(self) -> Vec<Point<i64>> {
-        assert!(0 < self.dir().x);
-        assert!(self.dir().y.abs() <= self.dir().x);
-
-        if self.dir().y < 0 {
-            let mut points = self.mirror_y().draw_impl0();
-            for point in &mut points {
-                *point = point.mirror_y();
-            }
-            points
-        } else {
-            self.draw_impl0()
-        }
-    }
-
-    /// Only works if dir.x != 0 and |dir.y| <= |dir.x|
-    fn draw_impl2(self) -> Vec<Point<i64>> {
-        assert_ne!(self.dir().x, 0);
-        assert!(self.dir().y.abs() <= self.dir().x.abs());
-
-        if self.dir().x > 0 {
-            self.draw_impl1()
-        } else {
-            self.reversed().draw_impl1()
-        }
-    }
-
-    /// Returns pixels on the line. Pixels are contiguous, in other words the following situation
-    /// should not happen:
-    /// ┌─┬─┐
-    /// └─┴─┼─┬─┐
-    ///     └─┴─┘
-    /// Instead it should look like this
-    /// ┌─┬─┐
-    /// └─┼─┼─┬─┐
-    ///   └─┴─┴─┘
-    /// https://en.wikipedia.org/wiki/Line_drawing_algorithm
-    pub fn draw(self) -> Vec<Point<i64>> {
-        let dir = self.dir();
-        if dir.x == 0 && dir.y == 0 {
-            vec![self.a]
-        } else if dir.y.abs() <= dir.x.abs() {
-            self.draw_impl2()
-        } else {
-            let mut points = self.swap_xy().draw_impl2();
-            for point in &mut points {
-                *point = point.swap_xy();
-            }
-            points
-        }
     }
 }
