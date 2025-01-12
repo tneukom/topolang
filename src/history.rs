@@ -1,9 +1,9 @@
-use std::rc::Rc;
-
 use crate::{
-    pixmap::Pixmap,
+    pixmap::MaterialMap,
     utils::{unix_timestamp, ReflectEnum},
+    view::Selection,
 };
+use std::rc::Rc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SnapshotCause {
@@ -12,17 +12,23 @@ pub enum SnapshotCause {
     Erase,
     Fill,
     Step,
-    Resize,
+    Resized,
+    Selected,
+    SelectionCancelled,
+    SelectionMoved,
 }
 
 impl SnapshotCause {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 9] = [
         Self::Root,
         Self::Brush,
         Self::Erase,
         Self::Fill,
         Self::Step,
-        Self::Resize,
+        Self::Resized,
+        Self::Selected,
+        Self::SelectionCancelled,
+        Self::SelectionMoved,
     ];
 }
 
@@ -38,25 +44,35 @@ impl ReflectEnum for SnapshotCause {
             Self::Erase => "Erase",
             Self::Fill => "Fill",
             Self::Step => "Step",
-            Self::Resize => "Resize",
+            Self::Resized => "Resized",
+            Self::Selected => "Selected",
+            Self::SelectionCancelled => "Selection cancelled",
+            Self::SelectionMoved => "Selection moved",
         }
     }
 }
 
-pub struct Snapshot<M> {
-    material_map: Pixmap<M>,
+pub struct Snapshot {
+    material_map: MaterialMap,
+    selection: Option<Selection>,
     cause: SnapshotCause,
 
     /// Unix time
     timestamp: f64,
 
-    parent: Option<Rc<Snapshot<M>>>,
+    parent: Option<Rc<Snapshot>>,
 }
 
-impl<M: Copy + Eq> Snapshot<M> {
-    pub fn new(material_map: Pixmap<M>, cause: SnapshotCause, parent: Option<Rc<Self>>) -> Self {
+impl Snapshot {
+    pub fn new(
+        material_map: MaterialMap,
+        selection: Option<Selection>,
+        cause: SnapshotCause,
+        parent: Option<Rc<Self>>,
+    ) -> Self {
         Self {
             material_map,
+            selection,
             timestamp: unix_timestamp(),
             cause,
             parent,
@@ -74,8 +90,12 @@ impl<M: Copy + Eq> Snapshot<M> {
         Some(path)
     }
 
-    pub fn material_map(&self) -> &Pixmap<M> {
+    pub fn material_map(&self) -> &MaterialMap {
         &self.material_map
+    }
+
+    pub fn selection(&self) -> &Option<Selection> {
+        &self.selection
     }
 
     pub fn cause(&self) -> SnapshotCause {
@@ -83,18 +103,23 @@ impl<M: Copy + Eq> Snapshot<M> {
     }
 }
 
-pub struct History<M> {
+pub struct History {
     /// Currently active node
-    pub head: Rc<Snapshot<M>>,
+    pub head: Rc<Snapshot>,
     /// Leaf node
-    pub active: Rc<Snapshot<M>>,
-    pub root: Rc<Snapshot<M>>,
+    pub active: Rc<Snapshot>,
+    pub root: Rc<Snapshot>,
 }
 
-impl<M: Copy + Eq> History<M> {
+impl History {
     /// History should contain at least one item
-    pub fn new(colormap: Pixmap<M>) -> Self {
-        let root = Rc::new(Snapshot::new(colormap, SnapshotCause::Root, None));
+    pub fn new(colormap: MaterialMap, selection: Option<Selection>) -> Self {
+        let root = Rc::new(Snapshot::new(
+            colormap,
+            selection,
+            SnapshotCause::Root,
+            None,
+        ));
 
         Self {
             head: root.clone(),
@@ -104,12 +129,22 @@ impl<M: Copy + Eq> History<M> {
     }
 
     /// If colormap is same as current no new snapshot is added
-    pub fn add_snapshot(&mut self, material_map: Pixmap<M>, cause: SnapshotCause) {
-        if self.head.material_map() == &material_map {
+    pub fn add_snapshot(
+        &mut self,
+        material_map: MaterialMap,
+        selection: Option<Selection>,
+        cause: SnapshotCause,
+    ) {
+        if self.head.material_map() == &material_map && self.head.selection == selection {
             println!("New snapshot with no changes!");
             return;
         }
-        self.head = Rc::new(Snapshot::new(material_map, cause, Some(self.head.clone())));
+        self.head = Rc::new(Snapshot::new(
+            material_map,
+            selection,
+            cause,
+            Some(self.head.clone()),
+        ));
         self.active = self.head.clone();
     }
 

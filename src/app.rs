@@ -33,8 +33,8 @@ use std::{
 };
 
 pub struct GifRecorder {
-    start: Option<Rc<Snapshot<Material>>>,
-    stop: Option<Rc<Snapshot<Material>>>,
+    start: Option<Rc<Snapshot>>,
+    stop: Option<Rc<Snapshot>>,
 }
 
 impl GifRecorder {
@@ -46,7 +46,7 @@ impl GifRecorder {
     }
 
     /// Try to find a path from start to stop or from stop to start
-    fn history_path(&self) -> Option<Vec<&Rc<Snapshot<Material>>>> {
+    fn history_path(&self) -> Option<Vec<&Rc<Snapshot>>> {
         let start = self.start.as_ref()?;
         let stop = self.stop.as_ref()?;
         if let Some(path) = stop.path_to(start) {
@@ -487,9 +487,11 @@ impl EguiApp {
 
         if do_step {
             self.interpreter.step(&mut self.view.world);
-            self.view
-                .history
-                .add_snapshot(self.view.world.material_map().clone(), SnapshotCause::Step);
+            self.view.history.add_snapshot(
+                self.view.world.material_map().clone(),
+                self.view.selection.clone(),
+                SnapshotCause::Step,
+            );
         }
     }
 
@@ -548,6 +550,7 @@ impl EguiApp {
         if !Rc::ptr_eq(&self.view.history.head, &current_head) {
             self.view.world =
                 World::from_material_map(self.view.history.head.material_map().clone());
+            self.view.selection = self.view.history.head.selection().clone();
         }
     }
 

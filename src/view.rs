@@ -110,8 +110,11 @@ impl Brushing {
 
 #[derive(Debug, Clone)]
 pub struct SelectingRect {
-    pub start: Point<f64>,
-    pub stop: Point<f64>,
+    pub world_start: Point<f64>,
+    pub world_stop: Point<f64>,
+
+    pub view_start: Point<f64>,
+    pub view_stop: Point<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -122,7 +125,9 @@ pub struct MovingSelection {
 impl SelectingRect {
     pub fn rect(&self) -> Rect<i64> {
         // end can be smaller than start, so we take the bounds of both points
-        [self.start.cwise_as(), self.stop.cwise_as()].bounds()
+        [self.world_start.as_i64(), self.world_stop.as_i64()]
+            .bounds()
+            .inc_high()
     }
 }
 
@@ -141,7 +146,7 @@ impl UiState {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Selection {
     material_map: MaterialMap,
 }
@@ -181,7 +186,7 @@ impl Selection {
 
 pub struct View {
     pub world: World,
-    pub history: History<Material>,
+    pub history: History,
     pub camera: Camera,
 
     pub selection: Option<Selection>,
@@ -191,7 +196,7 @@ pub struct View {
 
 impl View {
     pub fn new(world: World) -> View {
-        let history = History::new(world.material_map().clone());
+        let history = History::new(world.material_map().clone(), None);
         View {
             world,
             history,
@@ -199,6 +204,14 @@ impl View {
             ui_state: UiState::Idle,
             selection: None,
         }
+    }
+
+    pub fn add_snapshot(&mut self, cause: SnapshotCause) {
+        self.history.add_snapshot(
+            self.world.material_map().clone(),
+            self.selection.clone(),
+            cause,
+        );
     }
 
     pub fn center_camera(&mut self, view_rect: Rect<f64>) {
@@ -259,8 +272,8 @@ impl View {
             } else {
                 SnapshotCause::Brush
             };
-            self.history
-                .add_snapshot(self.world.material_map().clone(), cause);
+            self.add_snapshot(cause);
+
             return UiState::Idle;
         }
 
@@ -291,19 +304,26 @@ impl View {
         if !input.left_mouse_down {
             self.cancel_selection();
 
-            // set selection by cutting the selected rectangle out of the world
-            let selection_rect = op.rect();
-            if !selection_rect.is_empty() {
-                // Transparent pixels are not included in selection
-                let selection = self.world.material_map().clip_rect(selection_rect);
-
-                self.world.fill_rect(selection_rect, Material::TRANSPARENT);
-                self.selection = Some(Selection::new(selection));
+            if op.view_start.distance(op.view_stop) < 5.0 {
+                self.add_snapshot(SnapshotCause::SelectionCancelled);
                 return UiState::Idle;
             }
+
+            // set selection by cutting the selected rectangle out of the world
+            let selection_rect = op.rect();
+            // Transparent pixels are not included in selection
+            let selection = self.world.material_map().clip_rect(selection_rect);
+
+            self.world.fill_rect(selection_rect, Material::TRANSPARENT);
+            self.selection = Some(Selection::new(selection));
+
+            self.add_snapshot(SnapshotCause::Selected);
+
+            return UiState::Idle;
         }
 
-        op.stop = input.world_mouse;
+        op.world_stop = input.world_mouse;
+        op.view_stop = input.view_mouse;
         UiState::SelectingRect(op)
     }
 
@@ -314,6 +334,7 @@ impl View {
         _settings: &ViewSettings,
     ) -> UiState {
         if !input.left_mouse_down {
+            self.add_snapshot(SnapshotCause::SelectionMoved);
             return UiState::Idle;
         }
 
@@ -349,10 +370,12 @@ impl View {
 
         // Otherwise we start drawing a new selection rectangle.
         let op = SelectingRect {
-            start: input.world_mouse,
-            stop: input.world_mouse,
+            world_start: input.world_mouse,
+            world_stop: input.world_mouse,
+            view_start: input.view_mouse,
+            view_stop: input.view_mouse,
         };
-        return self.handle_selecting_rect(op, input, settings);
+        self.handle_selecting_rect(op, input, settings)
     }
 
     /// Transition from None state
@@ -385,8 +408,7 @@ impl View {
                     let pixel: Pixel = input.world_mouse.floor().cwise_as();
                     if let Some(region_key) = self.world.topology().region_at(pixel) {
                         self.world.fill_region(region_key, settings.brush.material);
-                        self.history
-                            .add_snapshot(self.world.material_map().clone(), SnapshotCause::Fill);
+                        self.add_snapshot(SnapshotCause::Fill);
                     }
                 }
             }
@@ -419,6 +441,7 @@ impl View {
 
         if input.escape_down {
             self.cancel_selection();
+            self.add_snapshot(SnapshotCause::SelectionCancelled);
         }
 
         if input.delete_down {
@@ -479,7 +502,6 @@ impl View {
         resized.blit(self.world.material_map());
         self.world = World::from_material_map(resized);
 
-        self.history
-            .add_snapshot(self.world.material_map().clone(), SnapshotCause::Resize);
+        self.add_snapshot(SnapshotCause::Resized);
     }
 }
