@@ -174,7 +174,8 @@ impl Selection {
     }
 
     pub fn blit(&self, target: &mut MaterialMap) {
-        target.blit(&self.material_map);
+        // Ignore transparent
+        target.blit(&self.material_map.without(Material::TRANSPARENT));
     }
 }
 
@@ -292,16 +293,14 @@ impl View {
 
             // set selection by cutting the selected rectangle out of the world
             let selection_rect = op.rect();
-            // Transparent pixels are not included in selection
-            let selection = self
-                .world
-                .material_map()
-                .clip_rect(selection_rect)
-                .without(Material::TRANSPARENT);
+            if !selection_rect.is_empty() {
+                // Transparent pixels are not included in selection
+                let selection = self.world.material_map().clip_rect(selection_rect);
 
-            self.world.fill_rect(selection_rect, Material::TRANSPARENT);
-            self.selection = Some(Selection::new(selection));
-            return UiState::Idle;
+                self.world.fill_rect(selection_rect, Material::TRANSPARENT);
+                self.selection = Some(Selection::new(selection));
+                return UiState::Idle;
+            }
         }
 
         op.stop = input.world_mouse;

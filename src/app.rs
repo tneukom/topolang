@@ -619,6 +619,21 @@ impl EguiApp {
 
         let size = ui.available_size_before_wrap();
         let (egui_rect, response) = ui.allocate_exact_size(size, egui::Sense::click_and_drag());
+
+        // Normally pressing escape causes the control to lose focus, but we use escape to cancel
+        // selection.
+        // See https://docs.rs/egui/latest/egui/struct.Memory.html#method.set_focus_lock_filter
+        if response.has_focus() {
+            let event_filter = egui::EventFilter {
+                tab: true,
+                horizontal_arrows: true,
+                vertical_arrows: true,
+                escape: true,
+            };
+
+            ui.memory_mut(|memory| memory.set_focus_lock_filter(response.id, event_filter));
+        }
+
         let viewport: Rect<f64> = egui_rect.into();
 
         let frames = CoordinateFrames {
