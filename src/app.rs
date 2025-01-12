@@ -242,10 +242,10 @@ impl EguiApp {
 
     pub fn view_ui(&mut self, ui: &mut egui::Ui) {
         // Mouse world position
-        ui.label(format!(
-            "snapped mouse: {:?}",
-            self.view_input.world_snapped
-        ));
+        // ui.label(format!(
+        //     "snapped mouse: {:?}",
+        //     self.view_input.world_snapped
+        // ));
 
         if ui.button("Reset camera").clicked() {
             self.reset_camera_requested = true;

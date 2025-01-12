@@ -16,16 +16,13 @@ pub fn rgba_button(ui: &mut egui::Ui, rgba8: Rgba8, selected: bool) -> egui::Res
 }
 
 pub fn palette_widget(ui: &mut egui::Ui, palette: &Palette, rgba: &mut Rgba8) {
-    // 8 colors per row
-    for chunk in palette.colors.chunks(4) {
-        ui.horizontal(|ui| {
-            for choice in chunk {
-                if rgba_button(ui, *choice, choice == rgba).clicked() {
-                    *rgba = *choice;
-                }
+    ui.horizontal_wrapped(|ui| {
+        for &choice in &palette.colors {
+            if rgba_button(ui, choice, &choice == rgba).clicked() {
+                *rgba = choice;
             }
-        });
-    }
+        }
+    });
 
     // Link to palette
     ui.hyperlink_to("Link", &palette.link);
@@ -65,6 +62,8 @@ impl ColorChooser {
             Palette::palette_windows16(),
             Palette::palette_na16(),
             Palette::palette_desatur8(),
+            Palette::palette_hept32(),
+            Palette::palette_superfuture25(),
         ];
         Self::new(palettes)
     }

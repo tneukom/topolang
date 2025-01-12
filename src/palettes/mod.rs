@@ -52,6 +52,20 @@ impl Palette {
         let bitmap = RgbaField::load_from_memory(include_bytes!("na16.png")).unwrap();
         Self::from_bitmap(&bitmap, "NA16", "https://lospec.com/palette-list/na16")
     }
+
+    pub fn palette_hept32() -> Palette {
+        let bitmap = RgbaField::load_from_memory(include_bytes!("hept32.png")).unwrap();
+        Self::from_bitmap(&bitmap, "HEPT32", "https://lospec.com/palette-list/hept32")
+    }
+
+    pub fn palette_superfuture25() -> Palette {
+        let bitmap = RgbaField::load_from_memory(include_bytes!("superfuture25.png")).unwrap();
+        Self::from_bitmap(
+            &bitmap,
+            "SUPERFUTURE25",
+            "https://lospec.com/palette-list/superfuture25",
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

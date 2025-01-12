@@ -22,6 +22,20 @@ natural, not very saturated colors
 https://lospec.com/palette-list/desatur8
 desaturated, pastel
 
+# Palettes with 20 - 32 colors
+
+https://lospec.com/palette-list/hept32
+high contrast
+
+https://lospec.com/palette-list/superfuture25
+high contrast
+
+https://lospec.com/palette-list/dawnbringer-32
+
+https://lospec.com/palette-list/arne-32
+
+https://lospec.com/palette-list/mail-24#
+also pretty high contrast
 
 # Other interesting palettes
 
