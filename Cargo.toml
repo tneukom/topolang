@@ -7,6 +7,10 @@ edition = "2021"
 name = "seamlang"
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# Force the app to update at 120Hz and disable vsync, for reduced latency. Hack, for experiments only
+force_120hz = []
+
 [dependencies]
 wasm-bindgen = "0.2"
 eframe = { version = "0.30.0", default-features = false, features = [

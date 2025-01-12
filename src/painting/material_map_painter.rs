@@ -41,6 +41,8 @@ impl RgbaFieldPainter {
         }
 
         // If rgba_field size is different from texture size, reset texture
+        // REVISIT: Could we just reset the texture if the new size is larger than the old? Could
+        //   cause problems with mipmaps, wasted memory
         if let Some((_, bitmap_size)) = &self.texture {
             if *bitmap_size != rgba_field.size() {
                 self.texture = None;

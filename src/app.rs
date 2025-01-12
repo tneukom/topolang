@@ -679,9 +679,15 @@ impl EguiApp {
         }
 
         let time = self.time();
-        let draw_view = DrawView::from_view(&self.view, frames, time);
+        let draw_view = DrawView::from_view(
+            &self.view,
+            &self.view_settings,
+            &self.view_input,
+            frames,
+            time,
+        );
 
-        let mut view_painter = self.view_painter.clone();
+        let view_painter = self.view_painter.clone();
 
         let cb = egui_glow::CallbackFn::new(move |_info, painter| {
             let gl = painter.gl().clone();
@@ -776,7 +782,7 @@ impl eframe::App for EguiApp {
         // visual.window_shadow = epaint::Shadow::NONE;
         ctx.set_visuals(visual);
 
-        let side_panel_rect = egui::SidePanel::left("left_panel")
+        egui::SidePanel::left("left_panel")
             .show(ctx, |ui| {
                 self.side_panel_ui(ui);
                 ui.allocate_space(ui.available_size());
@@ -796,14 +802,20 @@ impl eframe::App for EguiApp {
         self.view
             .handle_input(&mut self.view_input, &self.view_settings);
 
-        let cursor_icon =
-            if self.view.ui_state.is_idle() && self.view.is_hovering_selection(&self.view_input) {
-                egui::CursorIcon::Move
-            } else {
-                egui::CursorIcon::Default
-            };
+        let cursor_icon = if self.view_settings.edit_mode == EditMode::Brush {
+            egui::CursorIcon::Default
+        } else if self.view.ui_state.is_idle() && self.view.is_hovering_selection(&self.view_input)
+        {
+            egui::CursorIcon::Move
+        } else {
+            egui::CursorIcon::Default
+        };
         ctx.set_cursor_icon(cursor_icon);
 
+        #[cfg(feature = "force_120hz")]
+        ctx.request_repaint_after_secs(1.0f32 / 120.0f32);
+
+        #[cfg(not(feature = "force_120hz"))]
         ctx.request_repaint();
     }
 }

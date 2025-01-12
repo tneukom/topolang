@@ -127,7 +127,7 @@ impl BrushChooser {
     pub fn brush(&self) -> Brush {
         Brush {
             material: self.material(),
-            radius: self.radius,
+            width: self.radius,
         }
     }
 }

@@ -73,18 +73,26 @@ pub fn slope_draw_thin_line(arrow: Arrow<i64>, contiguous: bool) -> Vec<Point<i6
 }
 
 /// Low point of Rect<i64> with center closest to `center` and the given size
-fn rectangle_with_center(center: Point<f64>, size: Point<i64>) -> Point<i64> {
+pub fn rectangle_with_center(center: Point<f64>, size: Point<i64>) -> Rect<i64> {
     // For a rectangle `rect` with `size` and `center`, `rect.low = center - size/2`
     let half_size: Point<f64> = 0.5 * size.as_f64();
-    (center - half_size).round().cwise_as()
+    let low = (center - half_size).round().as_i64();
+    Rect::low_size(low, size)
+}
+
+pub fn circular_brush(center: Point<f64>, radius: f64, pixel: Point<i64>) -> bool {
+    // REVISIT: Use multisampling
+    let pixel_center = pixel.as_f64() + Point(0.5, 0.5);
+    let r = center.distance(pixel_center);
+    r < radius
 }
 
 pub fn draw_line_slope(arrow: Arrow<f64>, width: f64) -> impl Iterator<Item = Point<i64>> {
     let size = width.ceil() as i64;
     assert!(size > 0);
     let stamp_size = Point(size, size);
-    let a = rectangle_with_center(arrow.a, stamp_size);
-    let b = rectangle_with_center(arrow.b, stamp_size);
+    let a = rectangle_with_center(arrow.a, stamp_size).low();
+    let b = rectangle_with_center(arrow.b, stamp_size).low();
 
     let offset_center = 0.5 * stamp_size.as_f64();
     let offset_rect = Rect::low_high(Point::ZERO, stamp_size);
@@ -94,9 +102,7 @@ pub fn draw_line_slope(arrow: Arrow<f64>, width: f64) -> impl Iterator<Item = Po
         .flat_map(move |top_left| {
             offset_rect.iter_half_open().filter_map(move |offset| {
                 // Pixel centers are at half ints
-                let offset_pixel_center: Point<f64> = offset.as_f64() + Point(0.5, 0.5);
-                let r = offset_center.distance(offset_pixel_center);
-                (r < 0.5 * width).then_some(top_left + offset)
+                circular_brush(offset_center, 0.5 * width, offset).then_some(top_left + offset)
             })
         })
 }
@@ -119,7 +125,7 @@ pub fn draw_line_distance_method(arrow: Arrow<f64>, radius: f64) -> Vec<Point<i6
 #[cfg(test)]
 mod test {
     use crate::{
-        field::{Field, RgbaField},
+        field::RgbaField,
         line_drawing::draw_line_slope,
         math::{arrow::Arrow, point::Point, rect::Rect, rgba8::Rgba8},
     };

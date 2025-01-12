@@ -2,7 +2,7 @@ use crate::{
     brush::Brush,
     camera::Camera,
     coordinate_frame::CoordinateFrames,
-    field::Field,
+    field::{Field, MaterialField},
     history::{History, SnapshotCause},
     material::Material,
     math::{
@@ -100,6 +100,12 @@ pub struct MoveCamera {
 pub struct Brushing {
     pub brush: Brush,
     pub world_mouse: Point<f64>,
+}
+
+impl Brushing {
+    pub fn brush_preview(&self) -> MaterialField {
+        self.brush.dot(self.world_mouse)
+    }
 }
 
 #[derive(Debug, Clone)]

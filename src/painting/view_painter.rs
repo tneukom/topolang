@@ -8,7 +8,7 @@ use crate::{
     material::Material,
     math::{point::Point, rect::Rect},
     painting::{line_painter::LinePainter, material_map_painter::RgbaFieldPainter},
-    view::{UiState, View},
+    view::{EditMode, UiState, View, ViewInput, ViewSettings},
 };
 
 /// What is necessary to paint the view
@@ -19,26 +19,42 @@ pub struct DrawView {
     world_rgba_field: RgbaField,
     // TODO: Can we use world_rgba_field for this?
     selection_rgba_field: Option<RgbaField>,
+    brush_preview: Option<RgbaField>,
     ui_state: UiState,
 }
 
 impl DrawView {
-    pub fn from_view(view: &View, frames: CoordinateFrames, time: f64) -> Self {
+    pub fn from_view(
+        view: &View,
+        view_settings: &ViewSettings,
+        view_input: &ViewInput,
+        frames: CoordinateFrames,
+        time: f64,
+    ) -> Self {
         let world_rgba_field = view
             .world
             .material_map()
             .to_rgba8_field(Material::TRANSPARENT);
+
         let selection_rgba_field = view.selection.as_ref().map(|selection| {
             selection
                 .material_map()
                 .to_rgba8_field(Material::TRANSPARENT)
         });
 
+        let brush_preview = if view_settings.edit_mode == EditMode::Brush {
+            let world_mouse = view.camera.view_to_world() * view_input.view_mouse;
+            Some(view_settings.brush.dot(world_mouse).into_rgba())
+        } else {
+            None
+        };
+
         Self {
             ui_state: view.ui_state.clone(),
             camera: view.camera,
             world_rgba_field,
             selection_rgba_field,
+            brush_preview,
             frames,
             time,
         }
@@ -49,6 +65,7 @@ pub struct ViewPainter {
     pub grid_painter: GridPainter,
     pub line_painter: LinePainter,
     pub world_painter: RgbaFieldPainter,
+    pub brush_preview_painter: RgbaFieldPainter,
     pub selection_painter: RgbaFieldPainter,
 
     pub i_frame: usize,
@@ -60,6 +77,7 @@ impl ViewPainter {
             grid_painter: GridPainter::new(gl.clone()),
             line_painter: LinePainter::new(gl.clone()),
             world_painter: RgbaFieldPainter::new(gl.clone()),
+            brush_preview_painter: RgbaFieldPainter::new(gl.clone()),
             selection_painter: RgbaFieldPainter::new(gl.clone()),
             i_frame: 0,
         }
@@ -118,6 +136,12 @@ impl ViewPainter {
         // Draw selection rectangle currently being drawn
         if let UiState::SelectingRect(selecting) = &draw.ui_state {
             self.draw_selection_outline(selecting.rect(), &draw.camera, &draw.frames, draw.time);
+        }
+
+        // Draw brush preview
+        if let Some(brush_preview) = &draw.brush_preview {
+            self.brush_preview_painter
+                .draw(brush_preview, world_to_device, draw.time);
         }
 
         self.i_frame += 1;

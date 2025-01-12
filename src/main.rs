@@ -58,6 +58,8 @@ pub fn main_editor() {
     unsafe {
         let native_options = eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default().with_drag_and_drop(true),
+            #[cfg(feature = "force_120hz")]
+            vsync: false,
             ..eframe::NativeOptions::default()
         };
 
