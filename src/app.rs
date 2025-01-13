@@ -623,20 +623,6 @@ impl EguiApp {
         let size = ui.available_size_before_wrap();
         let (egui_rect, response) = ui.allocate_exact_size(size, egui::Sense::click_and_drag());
 
-        // Normally pressing escape causes the control to lose focus, but we use escape to cancel
-        // selection.
-        // See https://docs.rs/egui/latest/egui/struct.Memory.html#method.set_focus_lock_filter
-        if response.has_focus() {
-            let event_filter = egui::EventFilter {
-                tab: true,
-                horizontal_arrows: true,
-                vertical_arrows: true,
-                escape: true,
-            };
-
-            ui.memory_mut(|memory| memory.set_focus_lock_filter(response.id, event_filter));
-        }
-
         let viewport: Rect<f64> = egui_rect.into();
 
         let frames = CoordinateFrames {
@@ -644,14 +630,7 @@ impl EguiApp {
             viewport,
         };
 
-        if response.is_pointer_button_down_on() {
-            // False if dragging mouse from an egui control
-            response.request_focus();
-        }
-
         self.view_input = {
-            let has_focus = response.has_focus();
-
             let window_mouse = match ui.ctx().pointer_latest_pos() {
                 Some(egui_mouse) => Point::new(egui_mouse.x as f64, egui_mouse.y as f64),
                 None => Point::ZERO,
@@ -666,6 +645,11 @@ impl EguiApp {
                 0.0
             };
 
+            let wants_keyboard = ui.ctx().wants_keyboard_input();
+            let hovered = response.hovered();
+
+            // TODO: wants_keyboard is false when cursor is in textbox and escape is pressed, so a
+            //   selection is cancelled. It should not be cancelled!
             let input = ViewInput {
                 frames,
                 view_mouse,
@@ -673,15 +657,13 @@ impl EguiApp {
                 world_mouse: Point::ZERO,
                 world_snapped: Point::ZERO,
 
-                left_mouse_down: has_focus
-                    && input.pointer.button_down(egui::PointerButton::Primary),
-                middle_mouse_down: has_focus
+                left_mouse_down: hovered && input.pointer.button_down(egui::PointerButton::Primary),
+                middle_mouse_down: hovered
                     && input.pointer.button_down(egui::PointerButton::Middle),
 
-                escape_down: has_focus && input.key_down(egui::Key::Escape),
-                enter_down: has_focus && input.key_down(egui::Key::Enter),
-                ctrl_down: has_focus && input.modifiers.ctrl,
-                delete_down: has_focus && input.key_down(egui::Key::Delete),
+                escape_pressed: !wants_keyboard && input.key_pressed(egui::Key::Escape),
+                ctrl_down: !wants_keyboard && input.modifiers.ctrl,
+                delete_pressed: !wants_keyboard && input.key_pressed(egui::Key::Delete),
 
                 mouse_wheel: scroll_delta,
             };

@@ -27,10 +27,9 @@ pub struct ViewInput {
     pub left_mouse_down: bool,
     pub middle_mouse_down: bool,
 
-    pub escape_down: bool,
-    pub enter_down: bool,
+    pub escape_pressed: bool,
     pub ctrl_down: bool,
-    pub delete_down: bool,
+    pub delete_pressed: bool,
 
     pub mouse_wheel: f64,
 }
@@ -50,10 +49,9 @@ impl ViewInput {
         left_mouse_down: false,
         middle_mouse_down: false,
 
-        escape_down: false,
-        enter_down: false,
+        escape_pressed: false,
         ctrl_down: false,
-        delete_down: false,
+        delete_pressed: false,
 
         mouse_wheel: 0.0,
     };
@@ -439,12 +437,12 @@ impl View {
     pub fn handle_input(&mut self, input: &mut ViewInput, settings: &ViewSettings) {
         self.handle_camera_input(input);
 
-        if input.escape_down {
+        if input.escape_pressed {
             self.cancel_selection();
             self.add_snapshot(SnapshotCause::SelectionCancelled);
         }
 
-        if input.delete_down {
+        if input.delete_pressed {
             self.selection = None;
         }
 
