@@ -24,7 +24,6 @@ use image::{
 use instant::Instant;
 use log::{info, warn};
 use std::{
-    collections::HashMap,
     fs,
     fs::File,
     path::{Path, PathBuf},
@@ -134,8 +133,6 @@ pub struct EguiApp {
 
     // stabilize: bool,
     // stabilize_count: i64,
-    edit_mode_icons: HashMap<EditMode, egui::TextureHandle>,
-
     file_chooser: FileChooser,
     brush_chooser: BrushChooser,
 
@@ -174,39 +171,6 @@ impl EguiApp {
 
         let gl = cc.gl.clone().unwrap();
 
-        let load_egui_icon = |name: &str, bytes: &[u8]| {
-            let bitmap = RgbaField::load_from_memory(bytes).unwrap();
-            let raw: &[u8] = &bitmap.as_raw();
-            let size = [bitmap.width(), bitmap.height()];
-            let egui_image =
-                egui::ColorImage::from_rgba_unmultiplied([size[0] as usize, size[1] as usize], raw);
-
-            cc.egui_ctx
-                .load_texture(name, egui_image, egui::TextureOptions::LINEAR)
-        };
-
-        let edit_mode_icons = HashMap::from([
-            (
-                EditMode::Brush,
-                load_egui_icon("icons/brush.png", include_bytes!("icons/brush.png")),
-            ),
-            (
-                EditMode::Eraser,
-                load_egui_icon("icons/eraser.png", include_bytes!("icons/eraser.png")),
-            ),
-            (
-                EditMode::Fill,
-                load_egui_icon("icons/fill.png", include_bytes!("icons/fill.png")),
-            ),
-            (
-                EditMode::SelectRect,
-                load_egui_icon(
-                    "icons/select_rect.png",
-                    include_bytes!("icons/select_rect.png"),
-                ),
-            ),
-        ]);
-
         let view_settings = ViewSettings {
             edit_mode: EditMode::Brush,
             brush: Brush::default(),
@@ -228,7 +192,6 @@ impl EguiApp {
             file_name: "".to_string(),
             run: false,
             view_input: ViewInput::EMPTY,
-            edit_mode_icons,
             file_chooser: FileChooser::new(saves_path),
             brush_chooser: BrushChooser::new(ColorChooser::default()),
             interpreter: Interpreter::new(),
@@ -237,6 +200,17 @@ impl EguiApp {
             channel_sender,
             channel_receiver,
             reset_camera_requested: true,
+        }
+    }
+
+    pub fn edit_mode_icon(edit_mode: EditMode) -> egui::ImageSource<'static> {
+        match edit_mode {
+            EditMode::Brush => egui::include_image!("icons/brush.png"),
+            EditMode::Eraser => egui::include_image!("icons/eraser.png"),
+            EditMode::Fill => egui::include_image!("icons/fill.png"),
+            EditMode::SelectRect => egui::include_image!("icons/select_rect.png"),
+            EditMode::PickColor => egui::include_image!("icons/pick.png"),
+            EditMode::SelectWand => egui::include_image!("icons/wand.png"),
         }
     }
 
@@ -254,22 +228,17 @@ impl EguiApp {
         // Edit mode choices
         ui.horizontal(|ui| {
             for mode in EditMode::ALL {
-                let texture = self.edit_mode_icons.get(&mode).unwrap();
-                //let texture_id = egui::TextureId::User(texture.id.0.get() as u64);
-                let texture_id = texture.id();
+                let icon = Self::edit_mode_icon(mode);
 
                 // The behavior of Egui when clicking a button and moving the mouse is a bit weird.
                 // If a native Windows button is pressed down, the mouse moved while still inside
                 // the button and then released, it counts as a click.
                 // Egui aborts the clicked state if the mouse is moved too much. So we also consider
                 // dragging and check if the pointer is still over the button.
-                let button = egui::widgets::ImageButton::new(egui::load::SizedTexture::new(
-                    texture_id,
-                    (20.0, 20.0),
-                ))
-                .selected(mode == self.view_settings.edit_mode)
-                .sense(egui::Sense::click_and_drag());
-                let response = ui.add(button);
+                let button = egui::widgets::ImageButton::new(icon)
+                    .selected(mode == self.view_settings.edit_mode)
+                    .sense(egui::Sense::click_and_drag());
+                let response = ui.add_sized([32.0, 32.0], button);
 
                 if response.clicked() || response.drag_stopped() && response.hover_pos().is_some() {
                     self.view_settings.edit_mode = mode;
@@ -800,7 +769,7 @@ impl eframe::App for EguiApp {
         });
 
         self.view
-            .handle_input(&mut self.view_input, &self.view_settings);
+            .handle_input(&mut self.view_input, &mut self.view_settings);
 
         let cursor_icon = if self.view_settings.edit_mode == EditMode::Brush {
             egui::CursorIcon::Default

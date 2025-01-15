@@ -8,7 +8,7 @@ use crate::{
     material::Material,
     math::{point::Point, rect::Rect},
     painting::{line_painter::LinePainter, material_map_painter::RgbaFieldPainter},
-    view::{EditMode, UiState, View, ViewInput, ViewSettings},
+    view::{EditMode, SelectingKind, UiState, View, ViewInput, ViewSettings},
 };
 
 /// What is necessary to paint the view
@@ -135,7 +135,14 @@ impl ViewPainter {
 
         // Draw selection rectangle currently being drawn
         if let UiState::SelectingRect(selecting) = &draw.ui_state {
-            self.draw_selection_outline(selecting.rect(), &draw.camera, &draw.frames, draw.time);
+            if selecting.kind == SelectingKind::Rect {
+                self.draw_selection_outline(
+                    selecting.rect(),
+                    &draw.camera,
+                    &draw.frames,
+                    draw.time,
+                );
+            }
         }
 
         // Draw brush preview

@@ -93,6 +93,10 @@ impl<T: Copy> Pixmap<T> {
         self.field.set(index, None)
     }
 
+    pub fn put(&mut self, index: impl FieldIndex, value: Option<T>) -> Option<T> {
+        self.field.set(index, value)
+    }
+
     pub fn map<S>(&self, mut f: impl FnMut(T) -> S) -> Pixmap<S> {
         let field = self.field.map(|&value| value.map(&mut f));
         Pixmap { field }
@@ -145,14 +149,6 @@ impl<T: Copy> Pixmap<T> {
     pub fn translated(self, offset: Point<i64>) -> Self {
         Self {
             field: self.field.translated(offset),
-        }
-    }
-
-    /// Returns a pixmap with all pixels contained in `clip_rect`.
-    pub fn clip_rect(&self, clip_rect: Rect<i64>) -> Self {
-        let clip_rect = clip_rect.intersect(self.bounding_rect());
-        Self {
-            field: self.field.sub(clip_rect),
         }
     }
 

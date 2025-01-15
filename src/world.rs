@@ -5,6 +5,7 @@ use crate::{
     math::rect::Rect,
     pixmap::MaterialMap,
     topology::{FillRegion, RegionKey, Topology},
+    view::Selection,
 };
 
 #[derive(Debug, Clone)]
@@ -120,9 +121,27 @@ impl World {
         self.topology = CachedTopology::empty();
     }
 
-    pub fn fill_rect(&mut self, rect: Rect<i64>, material: Material) {
-        self.material_map.fill_rect(rect, material);
+    pub fn rect_selection(&mut self, rect: Rect<i64>) -> Selection {
+        let mut selection = MaterialMap::nones(rect);
+        for pixel in rect.iter_half_open() {
+            selection.put(pixel, self.material_map.set(pixel, Material::TRANSPARENT));
+        }
+
         self.topology = CachedTopology::empty();
+        Selection::new(selection)
+    }
+
+    pub fn region_selection(&mut self, region_key: RegionKey) -> Selection {
+        let topology = self.topology.get_or_init(&self.material_map);
+
+        let bounds = topology.regions[&region_key].bounds;
+        let mut selection = MaterialMap::nones(bounds);
+        for pixel in topology.iter_region_interior(region_key) {
+            selection.put(pixel, self.material_map.set(pixel, Material::TRANSPARENT));
+        }
+
+        self.topology = CachedTopology::empty();
+        Selection::new(selection)
     }
 }
 

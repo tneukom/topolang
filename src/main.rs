@@ -67,6 +67,7 @@ pub fn main_editor() {
             "SeamLang",
             native_options,
             Box::new(|cc| {
+                egui_extras::install_image_loaders(&cc.egui_ctx);
                 let app = EguiApp::new(cc);
                 Ok(Box::new(app))
             }),

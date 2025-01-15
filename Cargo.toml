@@ -19,6 +19,7 @@ eframe = { version = "0.30.0", default-features = false, features = [
     "persistence", # Enable restoring app state when restarting the app.
 ] }
 egui = { version = "0.30.0" }
+egui_extras = { version= "0.30.0", features = ["image"] }
 egui_glow = "0.30.0"
 glow = "0.16.0"
 wasm-bindgen-futures = "0.4"

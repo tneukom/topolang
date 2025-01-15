@@ -68,6 +68,8 @@ pub enum EditMode {
     Eraser,
     Fill,
     SelectRect,
+    SelectWand,
+    PickColor,
 }
 
 impl EditMode {
@@ -77,10 +79,19 @@ impl EditMode {
             Self::Eraser => "Eraser",
             Self::Fill => "Fill",
             Self::SelectRect => "Select Rect",
+            Self::SelectWand => "Select Wand",
+            Self::PickColor => "Pick Color",
         }
     }
 
-    pub const ALL: [EditMode; 4] = [Self::Brush, Self::Eraser, Self::Fill, Self::SelectRect];
+    pub const ALL: [EditMode; 6] = [
+        Self::Brush,
+        Self::Eraser,
+        Self::Fill,
+        Self::SelectRect,
+        Self::SelectWand,
+        Self::PickColor,
+    ];
 }
 
 #[derive(Debug, Clone)]
@@ -106,8 +117,16 @@ impl Brushing {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectingKind {
+    Rect,
+    Wand,
+}
+
 #[derive(Debug, Clone)]
-pub struct SelectingRect {
+pub struct Selecting {
+    pub kind: SelectingKind,
+
     pub world_start: Point<f64>,
     pub world_stop: Point<f64>,
 
@@ -120,7 +139,7 @@ pub struct MovingSelection {
     pub previous: Point<i64>,
 }
 
-impl SelectingRect {
+impl Selecting {
     pub fn rect(&self) -> Rect<i64> {
         // end can be smaller than start, so we take the bounds of both points
         [self.world_start.as_i64(), self.world_stop.as_i64()]
@@ -133,7 +152,7 @@ impl SelectingRect {
 pub enum UiState {
     MoveCamera(MoveCamera),
     Brushing(Brushing),
-    SelectingRect(SelectingRect),
+    SelectingRect(Selecting),
     MovingSelection(MovingSelection),
     Idle,
 }
@@ -293,28 +312,41 @@ impl View {
         UiState::Brushing(op)
     }
 
-    pub fn handle_selecting_rect(
+    pub fn handle_selecting(
         &mut self,
-        mut op: SelectingRect,
+        mut op: Selecting,
         input: &ViewInput,
         _settings: &ViewSettings,
     ) -> UiState {
         if !input.left_mouse_down {
             self.cancel_selection();
 
-            if op.view_start.distance(op.view_stop) < 5.0 {
-                self.add_snapshot(SnapshotCause::SelectionCancelled);
-                return UiState::Idle;
-            }
+            let selection = match op.kind {
+                SelectingKind::Rect => {
+                    if op.view_start.distance(op.view_stop) < 5.0 {
+                        self.add_snapshot(SnapshotCause::SelectionCancelled);
+                        return UiState::Idle;
+                    }
 
-            // set selection by cutting the selected rectangle out of the world
-            let selection_rect = op.rect();
-            // Transparent pixels are not included in selection
-            let selection = self.world.material_map().clip_rect(selection_rect);
+                    self.world.rect_selection(op.rect())
+                }
+                SelectingKind::Wand => {
+                    let pixel: Pixel = input.world_mouse.floor().as_i64();
+                    let Some(region_key) = self.world.topology().region_at(pixel) else {
+                        return UiState::Idle;
+                    };
 
-            self.world.fill_rect(selection_rect, Material::TRANSPARENT);
-            self.selection = Some(Selection::new(selection));
+                    if self.world.topology().regions[&region_key].material == Material::TRANSPARENT
+                    {
+                        // Don't let the user select transparent regions
+                        return UiState::Idle;
+                    }
 
+                    self.world.region_selection(region_key)
+                }
+            };
+
+            self.selection = Some(selection);
             self.add_snapshot(SnapshotCause::Selected);
 
             return UiState::Idle;
@@ -351,6 +383,7 @@ impl View {
         &mut self,
         input: &ViewInput,
         settings: &ViewSettings,
+        kind: SelectingKind,
     ) -> UiState {
         // If mouse is inside the current selecting we enter the MoveSelection move.
         if let Some(selection) = &self.selection {
@@ -367,17 +400,18 @@ impl View {
         }
 
         // Otherwise we start drawing a new selection rectangle.
-        let op = SelectingRect {
+        let op = Selecting {
+            kind,
             world_start: input.world_mouse,
             world_stop: input.world_mouse,
             view_start: input.view_mouse,
             view_stop: input.view_mouse,
         };
-        self.handle_selecting_rect(op, input, settings)
+        self.handle_selecting(op, input, settings)
     }
 
     /// Transition from None state
-    pub fn begin_action(&mut self, input: &ViewInput, settings: &ViewSettings) -> UiState {
+    pub fn begin_action(&mut self, input: &ViewInput, settings: &mut ViewSettings) -> UiState {
         if input.move_camera_down() {
             let move_camera = MoveCamera {
                 world_mouse: input.world_mouse,
@@ -403,7 +437,7 @@ impl View {
             }
             EditMode::Fill => {
                 if input.left_mouse_down {
-                    let pixel: Pixel = input.world_mouse.floor().cwise_as();
+                    let pixel: Pixel = input.world_mouse.floor().as_i64();
                     if let Some(region_key) = self.world.topology().region_at(pixel) {
                         self.world.fill_region(region_key, settings.brush.material);
                         self.add_snapshot(SnapshotCause::Fill);
@@ -412,8 +446,16 @@ impl View {
             }
             EditMode::SelectRect => {
                 if input.left_mouse_down {
-                    return self.begin_selection_action(input, settings);
+                    return self.begin_selection_action(input, settings, SelectingKind::Rect);
                 }
+            }
+            EditMode::SelectWand => {
+                if input.left_mouse_down {
+                    return self.begin_selection_action(input, settings, SelectingKind::Wand);
+                }
+            }
+            EditMode::PickColor => {
+                unimplemented!();
             }
         }
 
@@ -434,7 +476,7 @@ impl View {
         input.world_snapped = self.nearest_grid_vertex(input.world_mouse);
     }
 
-    pub fn handle_input(&mut self, input: &mut ViewInput, settings: &ViewSettings) {
+    pub fn handle_input(&mut self, input: &mut ViewInput, settings: &mut ViewSettings) {
         self.handle_camera_input(input);
 
         if input.escape_pressed {
@@ -450,7 +492,7 @@ impl View {
         self.ui_state = match ui_state {
             UiState::MoveCamera(op) => self.handle_moving_camera(op, input, settings),
             UiState::Brushing(op) => self.handle_brushing(op, input, settings),
-            UiState::SelectingRect(op) => self.handle_selecting_rect(op, input, settings),
+            UiState::SelectingRect(op) => self.handle_selecting(op, input, settings),
             UiState::MovingSelection(op) => self.handle_moving_selection(op, input, settings),
             UiState::Idle => self.begin_action(input, settings),
         };
