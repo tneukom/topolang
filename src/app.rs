@@ -10,7 +10,7 @@ use crate::{
     pixmap::MaterialMap,
     utils::{IntoT, ReflectEnum},
     view::{EditMode, View, ViewInput, ViewSettings},
-    widgets::{BrushChooser, ColorChooser, FileChooser},
+    widgets::{brush_chooser, color_chooser, FileChooser},
     world::World,
 };
 use anyhow::Context;
@@ -134,7 +134,6 @@ pub struct EguiApp {
     // stabilize: bool,
     // stabilize_count: i64,
     file_chooser: FileChooser,
-    brush_chooser: BrushChooser,
 
     gif_recorder: GifRecorder,
 
@@ -193,7 +192,6 @@ impl EguiApp {
             run: false,
             view_input: ViewInput::EMPTY,
             file_chooser: FileChooser::new(saves_path),
-            brush_chooser: BrushChooser::new(ColorChooser::default()),
             interpreter: Interpreter::new(),
             gif_recorder: GifRecorder::new(),
             clipboard: None,
@@ -531,8 +529,8 @@ impl EguiApp {
         ui.separator();
 
         ui.label("Brush");
-        self.brush_chooser.show(ui);
-        self.view_settings.brush = self.brush_chooser.brush();
+
+        brush_chooser(ui, &mut self.view_settings.brush);
 
         ui.label("History");
         self.history_ui(ui);

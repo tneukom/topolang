@@ -1,5 +1,6 @@
 use crate::{field::RgbaField, material::Material, math::rgba8::Rgba8, utils::ReflectEnum};
 use itertools::Itertools;
+use std::sync::OnceLock;
 
 pub struct Palette {
     /// Non-empty set of colors
@@ -65,6 +66,21 @@ impl Palette {
             "SUPERFUTURE25",
             "https://lospec.com/palette-list/superfuture25",
         )
+    }
+
+    pub fn palettes() -> &'static [Palette] {
+        static PALETTES: OnceLock<Vec<Palette>> = OnceLock::new();
+        let palettes = PALETTES.get_or_init(|| {
+            vec![
+                Palette::palette_pico8(),
+                Palette::palette_windows16(),
+                Palette::palette_na16(),
+                Palette::palette_desatur8(),
+                Palette::palette_hept32(),
+                Palette::palette_superfuture25(),
+            ]
+        });
+        palettes.as_slice()
     }
 }
 

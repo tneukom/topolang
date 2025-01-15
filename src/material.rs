@@ -91,7 +91,7 @@ impl Material {
     }
 
     pub fn as_solid(mut self) -> Material {
-        assert!(self.is_normal());
+        assert!(self.is_normal() || self.is_solid());
         self.flags = Self::SOLID_FLAG;
         self
     }
