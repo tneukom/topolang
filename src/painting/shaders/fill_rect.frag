@@ -33,8 +33,9 @@ void main() {
         // Rule frame and arrow
         highp float s = u + 4.0 * sin(1.0/25.0 * PI * v) + 4.0 * time;
         //highp float s = 1.0/10.0 * PI * (window_frag_coord.x + window_frag_coord.y);
-        highp float c = mod(s, 16.0) > 8.0 ? 1.0 : 0.6;
-        out_color = vec4(c * texcolor.a * texcolor.rgb, 1.0);
+        highp float c = mod(s, 16.0) > 8.0 ? 1.0 : 0.8;
+        highp float alpha = 0.5 * c;
+        out_color = vec4(alpha * texcolor.rgb, alpha);
     } else if(abs(texcolor.a - 170.0/255.0) < EPS) {
         // Rigid match
         highp vec2 i = floor(uv / 16.0);

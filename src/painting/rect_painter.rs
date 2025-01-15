@@ -103,7 +103,7 @@ impl FillRectPainter {
             indices.extend(tile_indices);
         }
 
-        // Draw call
+        // Alpha blending with premultiplied alpha
         self.gl.enable(glow::BLEND);
         self.gl.blend_func(glow::ONE, glow::ONE_MINUS_SRC_ALPHA);
         self.gl.blend_equation(glow::FUNC_ADD);
