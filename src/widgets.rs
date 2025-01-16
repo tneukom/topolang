@@ -1,9 +1,5 @@
 use crate::{
-    brush::Brush,
-    material::Material,
-    math::rgba8::Rgba8,
-    palettes::{Palette, SystemPalette},
-    utils::ReflectEnum,
+    brush::Brush, material::Material, math::rgba8::Rgba8, palettes::Palette, utils::ReflectEnum,
 };
 use itertools::Itertools;
 use std::{ffi::OsStr, fs, path::PathBuf};
@@ -19,16 +15,14 @@ pub fn palette_widget(ui: &mut egui::Ui, palette: &Palette, rgba: &mut Rgba8) ->
     let mut color_set = false;
 
     // 8 colors per row
-    for chunk in palette.colors.chunks(4) {
-        ui.horizontal(|ui| {
-            for choice in chunk {
-                if rgba_button(ui, *choice, choice == rgba).clicked() {
-                    *rgba = *choice;
-                    color_set = true;
-                }
+    ui.horizontal_wrapped(|ui| {
+        for &choice in &palette.colors {
+            if rgba_button(ui, choice, choice == *rgba).clicked() {
+                *rgba = choice;
+                color_set = true;
             }
-        });
-    }
+        }
+    });
 
     // Link to palette
     ui.hyperlink_to("Link", &palette.link);
@@ -47,17 +41,6 @@ fn palette_chooser(ui: &mut egui::Ui) -> &'static Palette {
         .unwrap_or(0);
     let palettes = Palette::palettes();
 
-    // Combobox is a popup and in egui only opens one popup at a time.
-    // (https://docs.rs/egui/0.29.1/egui/struct.Memory.html#method.toggle_popup)
-    // Which doesn't work when the color chooser itself is a popup.
-    // egui::ComboBox::from_label("Palettes")
-    //     .selected_text(&palette.name)
-    //     .show_ui(ui, |ui| {
-    //         for (i, palette) in palettes.iter().enumerate() {
-    //             ui.selectable_value(&mut active_palette, i, &palette.name);
-    //         }
-    //     });
-
     // Show a list of palette buttons instead
     ui.horizontal_wrapped(|ui| {
         for (i_palette, palette) in palettes.iter().enumerate() {
@@ -69,6 +52,7 @@ fn palette_chooser(ui: &mut egui::Ui) -> &'static Palette {
     &palettes[active_palette]
 }
 
+/// Return true if the color was changed
 pub fn color_chooser(ui: &mut egui::Ui, color: &mut Rgba8) -> bool {
     let palette = palette_chooser(ui);
 
@@ -76,15 +60,22 @@ pub fn color_chooser(ui: &mut egui::Ui, color: &mut Rgba8) -> bool {
     palette_widget(ui, &palette, color)
 }
 
-pub fn system_colors_widget(ui: &mut egui::Ui, rgba: &mut Rgba8) -> bool {
+/// Returns true if the color was changed
+pub fn system_material_widget(ui: &mut egui::Ui, material: &mut Material) -> bool {
+    let system_materials = [
+        ("Rule Before", Material::RULE_BEFORE),
+        ("Rule After", Material::RULE_AFTER),
+        ("Wildcard", Material::WILDCARD),
+    ];
+
     let mut color_set = false;
-    for system_color in SystemPalette::ALL {
+    for (name, system_material) in system_materials {
         ui.horizontal(|ui| {
-            if rgba_button(ui, system_color.rgba(), system_color.rgba() == *rgba).clicked() {
-                *rgba = system_color.rgba();
+            if rgba_button(ui, system_material.to_rgba(), system_material == *material).clicked() {
+                *material = system_material;
                 color_set = true;
             }
-            ui.label(system_color.as_str());
+            ui.label(name);
         });
     }
 
@@ -96,15 +87,16 @@ pub fn brush_chooser(ui: &mut egui::Ui, brush: &mut Brush) {
     let mut is_solid = brush.material.is_solid();
 
     // Brush color
-    let mut color = brush.material.to_rgba();
-    if color_chooser(ui, &mut color) {
-        brush.material = Material::from(color);
+    let mut rgba = brush.material.as_normal().to_rgba();
+    if color_chooser(ui, &mut rgba) {
+        brush.material = Material::from(rgba);
+        if is_solid {
+            brush.material = brush.material.as_solid();
+        }
     }
 
     ui.label("System colors");
-    if system_colors_widget(ui, &mut color) {
-        brush.material = Material::from(color);
-    }
+    system_material_widget(ui, &mut brush.material);
 
     // Solid checkbox
     ui.add_enabled_ui(

@@ -1,4 +1,4 @@
-use crate::{field::RgbaField, material::Material, math::rgba8::Rgba8, utils::ReflectEnum};
+use crate::{field::RgbaField, math::rgba8::Rgba8};
 use itertools::Itertools;
 use std::sync::OnceLock;
 
@@ -81,38 +81,5 @@ impl Palette {
             ]
         });
         palettes.as_slice()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum SystemPalette {
-    RuleBefore,
-    RuleAfter,
-    Wildcard,
-}
-
-impl SystemPalette {
-    pub const ALL: [Self; 3] = [Self::RuleBefore, Self::RuleAfter, Self::Wildcard];
-
-    pub const fn rgba(self) -> Rgba8 {
-        match self {
-            Self::RuleBefore => Material::RULE_BEFORE.to_rgba(),
-            Self::RuleAfter => Material::RULE_AFTER.to_rgba(),
-            Self::Wildcard => Material::WILDCARD.to_rgba(),
-        }
-    }
-}
-
-impl ReflectEnum for SystemPalette {
-    fn all() -> &'static [Self] {
-        &Self::ALL
-    }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::RuleBefore => "Rule Before",
-            Self::RuleAfter => "Rule After",
-            Self::Wildcard => "Wildcard",
-        }
     }
 }

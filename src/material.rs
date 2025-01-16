@@ -4,8 +4,7 @@ use crate::math::rgba8::Rgba8;
 // TODO: TRANSPARENT | SOLID should be possible, unclear how to represent as Rgba8 or on screen
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Material {
-    rgb: [u8; 3],
-    flags: u8,
+    rgba: Rgba8,
 }
 
 impl Material {
@@ -13,14 +12,6 @@ impl Material {
     pub const OPAQUE_ALPHA: u8 = 255;
     pub const RULE_ALPHA: u8 = 180;
     pub const TRANSPARENT_ALPHA: u8 = 0;
-
-    pub const NO_FLAGS: u8 = 0b0000_0000;
-    pub const SOLID_FLAG: u8 = 0b0000_0001;
-    pub const TRANSPARENT_FLAG: u8 = 0b0000_0010;
-    pub const RULE_FLAG: u8 = 0b0000_0100;
-
-    /// Strips properties that are irrelevant to region equivalence relation
-    pub const REGION_EQ_MASK: u8 = 0b1111_1110;
 
     /// #360c29
     pub const RULE_BEFORE_COLOR: Rgba8 = Rgba8::new(0x36, 0x0C, 0x29, Self::RULE_ALPHA);
@@ -38,40 +29,18 @@ impl Material {
     pub const TRANSPARENT: Self = Self::from_rgba(Rgba8::TRANSPARENT);
     pub const BLACK: Self = Self::from_rgba(Rgba8::BLACK);
 
-    pub const fn new(rgb: [u8; 3], class: u8) -> Self {
-        Self { rgb, flags: class }
-    }
-
-    pub const fn flags_to_alpha(flags: u8) -> u8 {
-        match flags {
-            Self::TRANSPARENT_FLAG => Self::TRANSPARENT_ALPHA,
-            Self::SOLID_FLAG => Self::SOLID_ALPHA,
-            Self::RULE_FLAG => Self::RULE_ALPHA,
-            Self::NO_FLAGS => Self::OPAQUE_ALPHA,
-            _ => unimplemented!(),
-        }
-    }
-
-    pub const fn alpha_to_flags(alpha: u8) -> u8 {
-        match alpha {
-            Self::OPAQUE_ALPHA => Self::NO_FLAGS,
-            Self::SOLID_ALPHA => Self::SOLID_FLAG,
-            Self::RULE_ALPHA => Self::RULE_FLAG,
-            Self::TRANSPARENT_ALPHA => Self::TRANSPARENT_FLAG,
-            _ => unimplemented!(),
-        }
-    }
-
-    pub const fn rgb(self) -> [u8; 3] {
-        self.rgb
-    }
-
     pub const fn from_rgba(rgba: Rgba8) -> Self {
-        Self::new(rgba.rgb(), Self::alpha_to_flags(rgba.a))
+        Self { rgba }
+    }
+
+    pub const fn from_rgb_a(rgb: [u8; 3], a: u8) -> Self {
+        Self {
+            rgba: Rgba8::from_rgb_a(rgb, a),
+        }
     }
 
     pub const fn to_rgba(self) -> Rgba8 {
-        Rgba8::from_rgb_a(self.rgb, Self::flags_to_alpha(self.flags))
+        self.rgba
     }
 
     pub fn is_void(self) -> bool {
@@ -83,22 +52,22 @@ impl Material {
     }
 
     pub fn is_solid(self) -> bool {
-        self.flags & Self::SOLID_FLAG != 0
+        self.rgba.a == Self::SOLID_ALPHA
     }
 
     pub fn is_normal(self) -> bool {
-        self.flags == Self::NO_FLAGS
+        self.rgba.a == Self::OPAQUE_ALPHA
     }
 
     pub fn as_solid(mut self) -> Material {
         assert!(self.is_normal() || self.is_solid());
-        self.flags = Self::SOLID_FLAG;
+        self.rgba.a = Self::SOLID_ALPHA;
         self
     }
 
     /// Discard flags like `Self::SOLID_FLAG`
     pub fn as_normal(mut self) -> Material {
-        self.flags = Self::NO_FLAGS;
+        self.rgba.a = Self::OPAQUE_ALPHA;
         self
     }
 

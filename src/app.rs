@@ -10,7 +10,7 @@ use crate::{
     pixmap::MaterialMap,
     utils::{IntoT, ReflectEnum},
     view::{EditMode, View, ViewInput, ViewSettings},
-    widgets::{brush_chooser, color_chooser, FileChooser},
+    widgets::{brush_chooser, FileChooser},
     world::World,
 };
 use anyhow::Context;

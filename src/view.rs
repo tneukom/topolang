@@ -458,7 +458,6 @@ impl View {
                 if input.left_mouse_down {
                     let pixel: Pixel = input.world_mouse.floor().as_i64();
                     if let Some(material) = self.world.material_map().get(pixel) {
-                        println!("Setting brush material to {material:?}");
                         settings.brush.material = material;
                     }
                 }
