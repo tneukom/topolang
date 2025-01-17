@@ -597,12 +597,9 @@ impl EguiApp {
             viewport,
         };
 
-        self.view_input = {
-            let window_mouse = match ui.ctx().pointer_latest_pos() {
-                Some(egui_mouse) => Point::new(egui_mouse.x as f64, egui_mouse.y as f64),
-                None => Point::ZERO,
-            };
-
+        // `ctx.pointer_interact_pos()` is None if mouse is outside the window
+        if let Some(egui_mouse) = ui.ctx().pointer_interact_pos() {
+            let window_mouse = Point::new(egui_mouse.x as f64, egui_mouse.y as f64);
             let view_mouse = frames.window_to_view() * window_mouse;
 
             // Scroll captured if the mouse pointer is over view, even if it doesn't have focus.
@@ -617,7 +614,7 @@ impl EguiApp {
 
             // TODO: wants_keyboard is false when cursor is in textbox and escape is pressed, so a
             //   selection is cancelled. It should not be cancelled!
-            let input = ViewInput {
+            self.view_input = ViewInput {
                 frames,
                 view_mouse,
 
@@ -634,9 +631,7 @@ impl EguiApp {
 
                 mouse_wheel: scroll_delta,
             };
-
-            input
-        };
+        }
 
         // Reset camera requested, for example from loading World in Self::new
         if self.reset_camera_requested {
