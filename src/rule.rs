@@ -209,4 +209,9 @@ mod test {
     fn wildcard_1() {
         assert_rule_application("wildcard_1", 1)
     }
+
+    #[test]
+    fn wildcard_2() {
+        assert_rule_application("wildcard_2", 1)
+    }
 }

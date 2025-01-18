@@ -20,7 +20,7 @@ pub fn generalized_seams(topo: &Topology, left_material: Material) -> Vec<Seam> 
     let mut seams = Vec::new();
 
     for region in topo.regions.values() {
-        if !region.material.matches(left_material) {
+        if !left_material.matches(region.material) {
             continue;
         }
 
@@ -186,7 +186,9 @@ impl UnassignedSeam {
 
     #[inline(never)]
     fn fallback_assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
-        generalized_seams(world, self.materials.left)
+        let candidates = generalized_seams(world, self.materials.left);
+
+        candidates
             .into_iter()
             .filter(|&phi_seam| self.possible_assignment(world, pattern, phi_seam))
             .collect()
@@ -608,9 +610,20 @@ mod test {
 
     #[test]
     fn wildcard_b() {
-        // Can be mirrored so there's 2 solutions
         assert_pattern_match("wildcard_b/pattern.png", "wildcard_b/match_1.png", 1);
         assert_pattern_match("wildcard_b/pattern.png", "wildcard_b/miss_1.png", 0);
         assert_pattern_match("wildcard_b/pattern.png", "wildcard_b/miss_2.png", 0);
+    }
+
+    #[test]
+    fn wildcard_c() {
+        assert_pattern_match("wildcard_c/pattern.png", "wildcard_c/match_1.png", 1);
+        assert_pattern_match("wildcard_c/pattern.png", "wildcard_c/match_2.png", 1);
+        assert_pattern_match("wildcard_c/pattern.png", "wildcard_c/match_3.png", 2);
+        // Not 100% sure this is the right answer
+        assert_pattern_match("wildcard_c/pattern.png", "wildcard_c/match_4.png", 2);
+
+        assert_pattern_match("wildcard_c/pattern.png", "wildcard_c/miss_1.png", 0);
+        assert_pattern_match("wildcard_c/pattern.png", "wildcard_c/miss_2.png", 0);
     }
 }

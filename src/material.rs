@@ -25,7 +25,10 @@ impl Material {
     pub const VOID: Self = Self::from_rgba(Self::RULE_BEFORE_COLOR);
     pub const RULE_BEFORE: Self = Self::VOID;
     pub const RULE_AFTER: Self = Self::from_rgba(Self::RULE_AFTER_COLOR);
+
+    /// Wildcard matches any material except transparent
     pub const WILDCARD: Self = Self::from_rgba(Self::WILDCARD_COLOR);
+
     pub const TRANSPARENT: Self = Self::from_rgba(Rgba8::TRANSPARENT);
     pub const BLACK: Self = Self::from_rgba(Rgba8::BLACK);
 
@@ -72,9 +75,10 @@ impl Material {
     }
 
     /// Can a matching map a region with material `self` to a region with material `other`?
+    /// Not symmetric!
     pub fn matches(self, other: Self) -> bool {
         if self == Self::WILDCARD {
-            true
+            other != Self::TRANSPARENT
         } else {
             self == other
         }
