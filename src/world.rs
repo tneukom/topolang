@@ -81,12 +81,13 @@ impl World {
     /// yes recreates the whole topology.
     #[inline(never)]
     pub fn fill_regions(&mut self, fill_regions: &Vec<FillRegion>) -> bool {
-        let mut modified = false;
         let topology = self
             .topology
-            .get()
+            .get_mut()
             .expect("Requires topology, otherwise region ids will be invalid.");
 
+        let mut topology_invalidated = false;
+        let mut modified = false;
         for &fill_region in fill_regions {
             if topology[fill_region.region_key].material == fill_region.material {
                 // already has desired color, skip
@@ -99,9 +100,18 @@ impl World {
                 fill_region.material,
                 &mut self.material_map,
             );
+
+            if topology_invalidated {
+                continue;
+            }
+
+            if !topology.try_set_region_material(fill_region.region_key, fill_region.material) {
+                println!("Topology invalidated!");
+                topology_invalidated = true;
+            }
         }
 
-        if modified {
+        if topology_invalidated {
             self.topology = CachedTopology::empty();
         }
         modified

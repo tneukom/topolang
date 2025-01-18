@@ -569,6 +569,21 @@ impl Topology {
         }
     }
 
+    /// Try to set the material of `region_key` to `material`, returns true if successful.
+    pub fn try_set_region_material(&mut self, region_key: RegionKey, material: Material) -> bool {
+        // Try to update the topology to the changed material map
+        let cat_set = self[region_key]
+            .iter_seams()
+            .all(|seam| self.material_right_of(seam) != Some(material));
+
+        if !cat_set {
+            return false;
+        }
+
+        self[region_key].material = material;
+        true
+    }
+
     pub fn material_seam_graph(&self) -> UndirectedGraph<Option<Material>> {
         let mut edges = BTreeSet::new();
         for seam in self.iter_seams() {
