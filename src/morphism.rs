@@ -217,7 +217,7 @@ impl Morphism {
     pub fn non_overlapping(&self, dom: &Topology, codom: &Topology) -> bool {
         self.border_map.iter().all(|(&border, &phi_border)| {
             let len_phi_seams: usize = dom[border]
-                .iter_seams()
+                .atomic_seams()
                 .filter_map(|seam| {
                     let phi_seam = self.seam_map.get(&seam)?;
                     Some(phi_seam.atoms)

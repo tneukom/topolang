@@ -1,13 +1,13 @@
-use std::{
-    cmp::Ordering,
-    collections::{BTreeMap, BTreeSet},
-};
-
 use crate::{
     material::Material,
     math::pixel::Corner,
     morphism::Morphism,
-    topology::{RegionKey, Seam, SeamMaterials, StrongRegionKey, Topology},
+    topology::{BorderKey, RegionKey, Seam, SeamIndex, SeamMaterials, StrongRegionKey, Topology},
+};
+use itertools::Either;
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, BTreeSet},
 };
 
 /// Returns all seams (including non-atomic ones) in topo
@@ -36,8 +36,8 @@ pub fn generalized_seams(topo: &Topology, left_material: Material) -> Vec<Seam> 
                 };
 
                 for j in 0..len {
-                    let start = border.seam(i).start;
-                    let stop = border.seam((i + j) % border.seams_len()).stop;
+                    let start = border.atomic_seam(i).start;
+                    let stop = border.atomic_seam((i + j) % border.seams_len()).stop;
                     let seam = Seam::new_with_len(start, stop, j + 1);
                     seams.push(seam)
                 }
@@ -59,34 +59,77 @@ pub struct UnassignedSeam {
     /// Seam in the domain
     seam: Seam,
 
-    phi_left: Option<RegionKey>,
-    phi_start_corner: Option<Corner>,
-    phi_stop_corner: Option<Corner>,
+    /// Region on the left of seam
+    region_key: RegionKey,
 
-    /// Is the reverse of the unassigned seam also in the pattern? The reversed seam is not in the
-    /// pattern if one side of the seam is void.
-    reverse_in_pattern: bool,
+    /// Region on the right of seam
+    right_region_key: Option<RegionKey>,
+
+    /// Index of Border that contains seam
+    border_index: usize,
 
     /// Left and right material of seam
     materials: SeamMaterials,
+
+    /// `phi(self.seam)`
+    phi_seam: Option<Seam>,
+
+    /// `phi(self.region_key)`
+    phi_region_key: Option<RegionKey>,
+
+    /// phi(self.right_region_key)
+    phi_right_region_key: Option<RegionKey>,
+
+    /// `phi(self.border_index)`
+    phi_border_index: Option<usize>,
+
+    /// `phi(self.seam.start_corner)`
+    phi_start_corner: Option<Corner>,
+
+    /// `phi(self.seam.stop_corner)`
+    phi_stop_corner: Option<Corner>,
 }
 
 impl UnassignedSeam {
+    /// Local morphism at the given seam
+    #[inline(never)]
+    pub fn local_at(pattern: &Topology, phi: &Morphism, seam: Seam) -> Self {
+        let SeamIndex {
+            region_key,
+            i_border,
+            ..
+        } = pattern.seam_index(seam).unwrap();
+        let border_key = BorderKey::new(region_key, i_border);
+        let right_region_key = pattern.right_of(seam);
+
+        Self {
+            seam,
+            region_key,
+            right_region_key,
+            border_index: i_border,
+            materials: pattern.seam_materials(seam),
+            phi_seam: phi.seam_map.get(&seam).copied(),
+            phi_region_key: phi.region_map.get(&region_key).copied(),
+            phi_right_region_key: right_region_key
+                .and_then(|right_region_key| phi.region_map.get(&right_region_key).copied()),
+            phi_border_index: phi
+                .border_map
+                .get(&border_key)
+                .map(|phi_border_key| phi_border_key.i_border),
+            phi_start_corner: phi.corner_map.get(&seam.start_corner()).copied(),
+            phi_stop_corner: phi.corner_map.get(&seam.stop_corner()).copied(),
+        }
+    }
+
     /// List of unassigned seams given a pattern and a partial Morphism `phi`
     /// If returned list is empty phi is fully defined
+    /// TODO: Rename to something like unassigned_locals
     #[inline(never)]
     pub fn candidates(pattern: &Topology, phi: &Morphism) -> Vec<Self> {
         pattern
             .iter_seams()
             .filter(|seam| !phi.seam_map.contains_key(seam))
-            .map(|seam| Self {
-                seam,
-                phi_left: phi.region_map.get(&pattern.left_of(seam)).copied(),
-                phi_start_corner: phi.corner_map.get(&seam.start_corner()).copied(),
-                phi_stop_corner: phi.corner_map.get(&seam.stop_corner()).copied(),
-                reverse_in_pattern: pattern.contains_seam(seam.atom_reversed()),
-                materials: pattern.seam_materials(seam),
-            })
+            .map(|seam| Self::local_at(pattern, phi, seam))
             .collect()
     }
 
@@ -96,10 +139,10 @@ impl UnassignedSeam {
     fn compare_heuristic(&self, other: &Self) -> Ordering {
         let cmp_tuple = |unassigned: &UnassignedSeam| {
             (
-                unassigned.phi_left.is_some(),
+                unassigned.phi_region_key.is_some(),
                 unassigned.phi_start_corner.is_some(),
                 unassigned.phi_stop_corner.is_some(),
-                unassigned.reverse_in_pattern,
+                unassigned.right_region_key.is_some(),
             )
         };
 
@@ -114,96 +157,193 @@ impl UnassignedSeam {
             .max_by(Self::compare_heuristic)
     }
 
+    // #[inline(never)]
+    // pub fn is_consistent(&self, world: &Topology, pattern: &Topology) -> bool {
+    //     let phi_seam = self.phi_seam.unwrap();
+    //
+    //     // Check if left side materials match
+    //     let left_material = pattern[pattern.left_of(self.seam)].material;
+    //     let phi_left_material = world[world.left_of(phi_seam)].material;
+    //     if !left_material.matches(phi_left_material) {
+    //         // Inconsistent left side color
+    //         return false;
+    //     }
+    //
+    //     if self.right_region_key.is_some() {
+    //         // TODO: Is this necessary if phi_right_region_key is not None
+    //         if !phi_seam.is_atom() {
+    //             return false;
+    //         }
+    //
+    //         if self.phi_right_region_key.is_none() {
+    //             return false;
+    //         }
+    //
+    //         let Some(right_of_phi_seam) = world.right_of(phi_seam) else {
+    //             // phi_seam is not reversible in world
+    //             return false;
+    //         };
+    //
+    //         let right_material = pattern[pattern.right_of(self.seam).unwrap()].material;
+    //         let phi_right_material = world[right_of_phi_seam].material;
+    //         if !right_material.matches(phi_right_material) {
+    //             // Inconsistent right color
+    //             return false;
+    //         }
+    //     }
+    //
+    //     if let Some(phi_left) = self.phi_region_key {
+    //         if phi_left != world.left_of(phi_seam) {
+    //             // inconsistent left side region
+    //             return false;
+    //         }
+    //     }
+    //
+    //     if let Some(phi_start_corner) = self.phi_start_corner {
+    //         if phi_start_corner != phi_seam.start_corner() {
+    //             // inconsistent start corner
+    //             return false;
+    //         }
+    //     }
+    //
+    //     if let Some(phi_stop_corner) = self.phi_stop_corner {
+    //         if phi_stop_corner != phi_seam.stop_corner() {
+    //             // inconsistent stop corner
+    //             return false;
+    //         }
+    //     }
+    //
+    //     true
+    // }
+
+    /// Given a partial `self` find fully defined candidates.
     #[inline(never)]
-    pub fn possible_assignment(
-        &self,
-        world: &Topology,
+    pub fn assignment_candidates_impl(
+        self,
         pattern: &Topology,
-        phi_seam: Seam,
-    ) -> bool {
-        // Check if left side materials match
-        let left_material = pattern[pattern.left_of(self.seam)].material;
-        let phi_left_material = world[world.left_of(phi_seam)].material;
-        if !left_material.matches(phi_left_material) {
-            // Inconsistent left side color
-            return false;
-        }
+        world: &Topology,
+        candidates: &mut Vec<Self>,
+    ) {
+        // Region left of seam
+        let Some(phi_region_key) = self.phi_region_key else {
+            // Assign phi_region_key to possible candidates and recurse
+            let region = &pattern.regions[&self.region_key];
 
-        if self.reverse_in_pattern {
-            if !phi_seam.is_atom() {
-                return false;
+            for (&phi_region_key, phi_region) in &world.regions {
+                // region and phi_region must have the same number of borders
+                if region.boundary.borders.len() != phi_region.boundary.borders.len() {
+                    continue;
+                }
+
+                // `region` material must match `phi_region.material`
+                if !region.material.matches(phi_region.material) {
+                    continue;
+                }
+
+                let candidate = Self {
+                    phi_region_key: Some(phi_region_key),
+                    ..self
+                };
+                candidate.assignment_candidates_impl(pattern, world, candidates);
             }
+            return;
+        };
+        let phi_region = &world.regions[&phi_region_key];
 
-            let Some(right_of_phi_seam) = world.right_of(phi_seam) else {
-                // phi_seam is not reversible in world
-                return false;
+        let Some(phi_border_key) = self.phi_border_index else {
+            // Assign phi_border to possible candidates and recurse, the first border in a boundary
+            // is the outer border and can only be mapped to the outer border of phi(region_key).
+            if self.border_index == 0 {
+                let candidate = Self {
+                    phi_border_index: Some(0),
+                    ..self
+                };
+                candidate.assignment_candidates_impl(pattern, world, candidates);
+            } else {
+                let region = &pattern.regions[&self.region_key];
+                assert_eq!(
+                    region.boundary.borders.len(),
+                    phi_region.boundary.borders.len()
+                );
+                for phi_border_key in 1..phi_region.boundary.borders.len() {
+                    let candidate = Self {
+                        phi_border_index: Some(phi_border_key),
+                        ..self
+                    };
+                    candidate.assignment_candidates_impl(pattern, world, candidates);
+                }
+            }
+            return;
+        };
+        let phi_border = &phi_region.boundary.borders[phi_border_key];
+
+        // Separate case for loop seams in the pattern
+        if self.seam.is_loop() {
+            let phi_start_corner = self.phi_start_corner.unwrap_or(phi_border.corner(0));
+
+            // No guarantee that phi_border is compatible with phi_start_corner
+            let Some(phi_seam) = phi_border.loop_seam_with_corner(phi_start_corner) else {
+                return;
             };
 
-            let right_material = pattern[pattern.right_of(self.seam).unwrap()].material;
-            let phi_right_material = world[right_of_phi_seam].material;
-            if !right_material.matches(phi_right_material) {
-                // Inconsistent right color
-                return false;
-            }
+            let candidate = Self {
+                phi_seam: Some(phi_seam),
+                phi_start_corner: Some(phi_start_corner),
+                phi_stop_corner: Some(phi_start_corner),
+                ..self
+            };
+            candidates.push(candidate);
+            return;
         }
 
-        if let Some(phi_left) = self.phi_left {
-            if phi_left != world.left_of(phi_seam) {
-                // inconsistent left side region
-                return false;
+        let phi_seam_candidates = if self.right_region_key.is_some() {
+            Either::Left(phi_border.atomic_seams())
+        } else {
+            Either::Right(phi_border.non_loop_seams())
+        };
+
+        for phi_seam in phi_seam_candidates {
+            // Discard if start or stop corner does match
+            if let Some(phi_start_corner) = self.phi_start_corner {
+                if phi_start_corner != phi_seam.start_corner() {
+                    continue;
+                }
             }
-        }
-
-        if let Some(phi_start_corner) = self.phi_start_corner {
-            if phi_start_corner != phi_seam.start_corner() {
-                // inconsistent start corner
-                return false;
+            if let Some(phi_stop_corner) = self.phi_stop_corner {
+                if phi_stop_corner != phi_seam.stop_corner() {
+                    continue;
+                }
             }
+
+            // Discard if right side material doesn't match
+            // TODO: If right side is mapped also check if that matches
+            // let right_phi_seam = world.right_of(phi_seam).unwrap();
+            // if let Some(phi_right_of_seam) = self.phi_right_of_seam
+
+            let candidate = Self {
+                phi_seam: Some(phi_seam),
+                phi_start_corner: Some(phi_seam.start_corner()),
+                phi_stop_corner: Some(phi_seam.stop_corner()),
+                ..self
+            };
+            candidates.push(candidate);
         }
-
-        if let Some(phi_stop_corner) = self.phi_stop_corner {
-            if phi_stop_corner != phi_seam.stop_corner() {
-                // inconsistent stop corner
-                return false;
-            }
-        }
-
-        true
-    }
-
-    /// Iterate over assignment candidates for a pattern seam which has a region on both sides
-    /// (left and right).
-    #[inline(never)]
-    fn both_sided_assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
-        world
-            .regions
-            .values()
-            .filter(|world_region| self.materials.left.matches(world_region.material))
-            .flat_map(|world_region| world_region.iter_seams())
-            .filter(|&phi_seam| self.possible_assignment(world, pattern, phi_seam))
-            .collect()
-    }
-
-    /// Assignment candidates for a pattern seam which has a region only on the left side.
-    #[inline(never)]
-    fn left_sided_assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
-        let candidates = generalized_seams(world, self.materials.left);
-
-        candidates
-            .into_iter()
-            .filter(|&phi_seam| self.possible_assignment(world, pattern, phi_seam))
-            .collect()
     }
 
     /// Returns possible candidate seams in `world` that `self.seam` could be mapped to.
     /// Returned seam don't have to be atomic.
     #[inline(never)]
     pub fn assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
-        if self.reverse_in_pattern {
-            self.both_sided_assignment_candidates(world, pattern)
-        } else {
-            self.left_sided_assignment_candidates(world, pattern)
-        }
+        let mut candidates = Vec::new();
+        self.assignment_candidates_impl(pattern, world, &mut candidates);
+
+        candidates
+            .iter()
+            .map(|candidate| {
+                // assert!(candidate.is_consistent(world, pattern));
+                candidate.phi_seam.unwrap()
+            })
+            .collect()
     }
 }
 
@@ -477,6 +617,13 @@ mod test {
         // let trace = CoutTrace::new();
 
         let matches = SearchMorphism::new(&world, &pattern).find_matches(trace);
+        for phi in &matches {
+            println!("Morphism:");
+            for (seam, phi_seam) in &phi.seam_map {
+                println!("  {seam} -> {phi_seam}");
+            }
+        }
+
         assert_eq!(matches.len(), n_solutions);
 
         // for a_match in &matches {
@@ -495,6 +642,11 @@ mod test {
         //         );
         //     }
         // }
+    }
+
+    #[test]
+    fn fail() {
+        assert_pattern_match("c/pattern.png", "c/match_1.png", 1);
     }
 
     #[test]

@@ -102,6 +102,7 @@ impl CycleSegments {
         self.steps.len()
     }
 
+    /// Iterate segments
     pub fn iter(&self) -> impl ExactSizeIterator<Item = CycleSegment> + Clone + '_ {
         (0..self.len()).map(|i| self.segment(i))
     }

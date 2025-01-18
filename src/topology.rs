@@ -37,12 +37,8 @@ impl Seam {
         }
     }
 
-    pub fn new_with_len(start: Side, stop: Side, len: usize) -> Self {
-        Seam {
-            start,
-            stop,
-            atoms: len,
-        }
+    pub fn new_with_len(start: Side, stop: Side, atoms: usize) -> Self {
+        Seam { start, stop, atoms }
     }
 
     pub fn is_atom(&self) -> bool {
@@ -158,14 +154,44 @@ impl Border {
         }
     }
 
-    pub fn seam(&self, i: usize) -> Seam {
+    pub fn atomic_seam(&self, i: usize) -> Seam {
         self.seam_from_segment(self.cycle_segments.segment(i))
     }
 
-    pub fn iter_seams(&self) -> impl Iterator<Item = Seam> + Clone + '_ {
+    pub fn seam(&self, start: usize, atoms: usize) -> Seam {
+        let start_seam = self.atomic_seam(start);
+        let stop_seam = self.atomic_seam((start + atoms - 1) % self.cycle_segments.len());
+        Seam::new_with_len(start_seam.start, stop_seam.stop, atoms)
+    }
+
+    /// Seam that starts and stop at `corner`
+    pub fn loop_seam_with_corner(&self, corner: Corner) -> Option<Seam> {
+        self.loop_seams().find(|seam| seam.start_corner() == corner)
+    }
+
+    /// All possible loop seams, they are all equivalent but start at different corners.
+    pub fn loop_seams(&self) -> impl Iterator<Item = Seam> + '_ {
+        let len = self.cycle_segments.len();
+        (0..len).map(move |start| self.seam(start, len))
+    }
+
+    pub fn corner(&self, i: usize) -> Corner {
+        self.atomic_seam(i).start_corner()
+    }
+
+    /// All atomic seams, a loop if the border only has one Seam
+    pub fn atomic_seams(&self) -> impl Iterator<Item = Seam> + Clone + '_ {
         self.cycle_segments
             .iter()
             .map(|segment| self.seam_from_segment(segment))
+    }
+
+    /// All seams (atomic and non-atomic) of this border that are not the full loop
+    pub fn non_loop_seams(&self) -> impl Iterator<Item = Seam> + '_ {
+        let len = self.cycle_segments.len();
+        (0..len)
+            .cartesian_product(1..len)
+            .map(move |(start, atoms)| self.seam(start, atoms))
     }
 }
 
@@ -220,7 +246,7 @@ impl Region {
         self.boundary
             .borders
             .iter()
-            .flat_map(|border| border.iter_seams())
+            .flat_map(|border| border.atomic_seams())
     }
 
     pub fn arbitrary_interior_pixel(&self) -> Pixel {
@@ -383,7 +409,7 @@ impl Topology {
 
         for (&region_id, region) in &regions {
             for (i_border, border) in region.boundary.borders.iter().enumerate() {
-                for (i_seam, seam) in border.iter_seams().enumerate() {
+                for (i_seam, seam) in border.atomic_seams().enumerate() {
                     let seam_index = SeamIndex::new(region_id, i_border, i_seam);
                     seam_indices.insert(seam.start, seam_index);
                 }
@@ -421,7 +447,7 @@ impl Topology {
     }
 
     pub fn iter_seams(&self) -> impl Iterator<Item = Seam> + Clone + '_ {
-        self.iter_borders().flat_map(|border| border.iter_seams())
+        self.iter_borders().flat_map(|border| border.atomic_seams())
     }
 
     pub fn iter_seam_indices(&self) -> impl Iterator<Item = &SeamIndex> + Clone {
@@ -440,7 +466,7 @@ impl Topology {
     pub fn seam_index(&self, seam: Seam) -> Option<SeamIndex> {
         let &index = self.seam_indices.get(&seam.start)?;
         let region = &self.regions[&index.region_key];
-        let contained_seam = region.boundary.borders[index.i_border].seam(index.i_seam);
+        let contained_seam = region.boundary.borders[index.i_border].atomic_seam(index.i_seam);
         (contained_seam == seam).then_some(index)
     }
 
@@ -635,7 +661,7 @@ impl Display for Topology {
             writeln!(f, "Component {region_key:?}")?;
             for (i_border, border) in region.boundary.borders.iter().enumerate() {
                 writeln!(f, "{indent}Border {i_border}")?;
-                for seam in border.iter_seams() {
+                for seam in border.atomic_seams() {
                     writeln!(f, "{indent}{indent}{seam}")?;
                 }
             }
