@@ -434,31 +434,26 @@ impl EguiApp {
 
     pub fn run_ui(&mut self, ui: &mut egui::Ui) {
         // Step and run
-        let mut do_step: bool = false;
         ui.horizontal(|ui| {
             if ui
                 .add_enabled(!self.run, egui::Button::new("Step"))
                 .clicked()
             {
-                do_step = true;
+                self.interpreter.step(&mut self.view.world);
+                self.view.add_snapshot(SnapshotCause::Step);
             }
 
             if egui::Button::new("Run").selected(self.run).ui(ui).clicked() {
                 self.run = !self.run;
+                if !self.run {
+                    // Add a snapshot after run
+                    self.view.add_snapshot(SnapshotCause::Run);
+                }
             }
         });
 
         if self.run {
-            do_step = true;
-        }
-
-        if do_step {
             self.interpreter.step(&mut self.view.world);
-            self.view.history.add_snapshot(
-                self.view.world.material_map().clone(),
-                self.view.selection.clone(),
-                SnapshotCause::Step,
-            );
         }
     }
 

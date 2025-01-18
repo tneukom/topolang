@@ -12,6 +12,7 @@ pub enum SnapshotCause {
     Erase,
     Fill,
     Step,
+    Run,
     Resized,
     Selected,
     SelectionCancelled,
@@ -19,12 +20,13 @@ pub enum SnapshotCause {
 }
 
 impl SnapshotCause {
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Root,
         Self::Brush,
         Self::Erase,
         Self::Fill,
         Self::Step,
+        Self::Run,
         Self::Resized,
         Self::Selected,
         Self::SelectionCancelled,
@@ -44,6 +46,7 @@ impl ReflectEnum for SnapshotCause {
             Self::Erase => "Erase",
             Self::Fill => "Fill",
             Self::Step => "Step",
+            Self::Run => "Run",
             Self::Resized => "Resized",
             Self::Selected => "Selected",
             Self::SelectionCancelled => "Selection cancelled",
