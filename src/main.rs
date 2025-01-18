@@ -3,7 +3,6 @@
 
 use log::warn;
 
-use seamlang::app::EguiApp;
 // pub fn color_replace() {
 //     for entry in WalkDir::new("./").into_iter().filter_map(Result::ok) {
 //         let extension = entry
@@ -68,6 +67,7 @@ pub fn main_editor() {
             native_options,
             Box::new(|cc| {
                 egui_extras::install_image_loaders(&cc.egui_ctx);
+                use seamlang::app::EguiApp;
                 let app = EguiApp::new(cc);
                 Ok(Box::new(app))
             }),
@@ -84,9 +84,13 @@ pub fn main() {
     {
         env_logger::init();
         warn!("Logging!");
+
+        // use seamlang::benchmarks::main_benchmark;
         // main_benchmark();
-        // benchmark_topology_new();
+
         main_editor();
+
+        // benchmark_topology_new();
         // color_replace();
 
         // main_benchmark_pixmap_regions();

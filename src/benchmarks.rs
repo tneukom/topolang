@@ -1,6 +1,6 @@
 use crate::{
     field::{Field, RgbaField},
-    interpreter::Interpreter,
+    interpreter::Compiler,
     math::rgba8::Rgba8,
     pixmap::{MaterialMap, RgbaMap},
     regions::{field_regions_fast, pixmap_regions, CompactLabels},
@@ -64,28 +64,30 @@ pub fn main_benchmark_pixmap_regions() {
 }
 
 pub fn main_benchmark() {
-    let folder = "resources/saves";
-    let original_world = RgbaField::load(format!("{folder}/turing.png"))
+    let folder = "test_resources/benchmark";
+    let original_world = RgbaField::load(format!("{folder}/gates.png"))
         .unwrap()
         .intot::<MaterialMap>()
         .intot::<World>();
 
-    let interpreter = Interpreter::new();
+    let compiler = Compiler::new();
 
     for _ in 0..100 {
         use std::time::Instant;
 
         let mut world = original_world.clone();
+        let compiled_rules = compiler.compile(&world).unwrap();
 
         let now = Instant::now();
         let mut steps = 0usize;
-        loop {
+        while steps < 100 {
             steps += 1;
-            let changed = interpreter.step(&mut world);
+            let changed = compiled_rules.step(&mut world);
             if !changed {
                 break;
             }
         }
+
         println!("steps = {}, elapsed = {:.3?}", steps, now.elapsed());
     }
 }

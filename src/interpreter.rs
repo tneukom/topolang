@@ -20,13 +20,55 @@ pub struct CompiledRule {
     rule: Rule,
 }
 
-pub struct Interpreter {
+pub struct CompiledRules {
+    rules: Vec<CompiledRule>,
+}
+
+impl CompiledRules {
+    /// Returns if a Rule was applied
+    #[inline(never)]
+    pub fn step(&self, world: &mut World) -> bool {
+        let hidden: BTreeSet<_> = self
+            .rules
+            .iter()
+            .flat_map(|compiled_rule| compiled_rule.source.iter())
+            .copied()
+            .collect();
+
+        for CompiledRule { rule, .. } in &self.rules {
+            let mut search = SearchMorphism::new(world.topology(), &rule.before);
+            search.hidden = Some(&hidden);
+
+            let solutions = search.find_matches(NullTrace::new());
+
+            for phi in solutions {
+                let modified = rule.substitute(&phi, world);
+                if modified {
+                    return true;
+                }
+            }
+        }
+
+        false
+
+        // Save hidden regions to bitmap
+        // world
+        //     .clone()
+        //     .sub_topology(hidden)
+        //     .to_pixmap()
+        //     .to_bitmap_with_size(world_bitmap.size())
+        //     .save(format!("{folder}/hidden.png"))
+        //     .unwrap();
+    }
+}
+
+pub struct Compiler {
     rule_frame: Topology,
     before_border: BorderKey,
     after_border: BorderKey,
 }
 
-impl Interpreter {
+impl Compiler {
     // Not the same as the actual RULE_FRAME color
     const RULE_FRAME_MATERIAL: Material = Material::from_rgba(Rgba8::CYAN);
 
@@ -59,7 +101,7 @@ impl Interpreter {
     }
 
     #[inline(never)]
-    pub fn compile(&self, world: &mut World) -> anyhow::Result<Vec<CompiledRule>> {
+    pub fn compile(&self, world: &World) -> anyhow::Result<CompiledRules> {
         // Find all matches for rule_frame in world
         let search = SearchMorphism::new(world.topology(), &self.rule_frame);
         let matches = search.find_matches(NullTrace::new());
@@ -107,56 +149,21 @@ impl Interpreter {
             compiled_rules.push(compiled_rule);
         }
 
-        Ok(compiled_rules)
-    }
-
-    /// Returns if a Rule was applied
-    #[inline(never)]
-    pub fn step(&self, world: &mut World) -> bool {
-        let compiled_rules = self.compile(world).unwrap();
-
-        let hidden: BTreeSet<_> = compiled_rules
-            .iter()
-            .flat_map(|compiled_rule| compiled_rule.source.iter())
-            .copied()
-            .collect();
-
-        for CompiledRule { rule, .. } in &compiled_rules {
-            let mut search = SearchMorphism::new(world.topology(), &rule.before);
-            search.hidden = Some(&hidden);
-
-            let solutions = search.find_matches(NullTrace::new());
-
-            for phi in solutions {
-                let modified = rule.substitute(&phi, world);
-                if modified {
-                    return true;
-                }
-            }
-        }
-
-        false
-
-        // Save hidden regions to bitmap
-        // world
-        //     .clone()
-        //     .sub_topology(hidden)
-        //     .to_pixmap()
-        //     .to_bitmap_with_size(world_bitmap.size())
-        //     .save(format!("{folder}/hidden.png"))
-        //     .unwrap();
+        Ok(CompiledRules {
+            rules: compiled_rules,
+        })
     }
 }
 
 #[cfg(test)]
 mod test {
     use crate::{
-        field::RgbaField, interpreter::Interpreter, pixmap::MaterialMap, utils::IntoT, world::World,
+        field::RgbaField, interpreter::Compiler, pixmap::MaterialMap, utils::IntoT, world::World,
     };
 
     #[test]
     fn init() {
-        let _compiler = Interpreter::new();
+        let _compiler = Compiler::new();
     }
 
     fn assert_execute_world(name: &str, expected_steps: usize) {
@@ -166,11 +173,12 @@ mod test {
             .intot::<MaterialMap>()
             .intot::<World>();
 
-        let compiler = Interpreter::new();
+        let compiler = Compiler::new();
+        let rules = compiler.compile(&mut world).unwrap();
 
         let mut steps = 0;
         loop {
-            let applied = compiler.step(&mut world);
+            let applied = rules.step(&mut world);
             if !applied {
                 break;
             }

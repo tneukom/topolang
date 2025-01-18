@@ -184,8 +184,9 @@ impl UnassignedSeam {
             .collect()
     }
 
+    /// Assignment candidates for a pattern seam which has a region only on the left side.
     #[inline(never)]
-    fn fallback_assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
+    fn left_sided_assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
         let candidates = generalized_seams(world, self.materials.left);
 
         candidates
@@ -201,7 +202,7 @@ impl UnassignedSeam {
         if self.reverse_in_pattern {
             self.both_sided_assignment_candidates(world, pattern)
         } else {
-            self.fallback_assignment_candidates(world, pattern)
+            self.left_sided_assignment_candidates(world, pattern)
         }
     }
 }

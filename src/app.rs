@@ -3,7 +3,7 @@ use crate::{
     coordinate_frame::CoordinateFrames,
     field::RgbaField,
     history::{Snapshot, SnapshotCause},
-    interpreter::Interpreter,
+    interpreter::{CompiledRules, Compiler},
     material::Material,
     math::{point::Point, rect::Rect, rgba8::Pico8Palette},
     painting::view_painter::{DrawView, ViewPainter},
@@ -129,7 +129,8 @@ pub struct EguiApp {
     file_name: String,
     // current_folder: PathBuf,
     run: bool,
-    interpreter: Interpreter,
+    compiler: Compiler,
+    compiled_rules: Option<CompiledRules>,
 
     // stabilize: bool,
     // stabilize_count: i64,
@@ -192,7 +193,8 @@ impl EguiApp {
             run: false,
             view_input: ViewInput::EMPTY,
             file_chooser: FileChooser::new(saves_path),
-            interpreter: Interpreter::new(),
+            compiler: Compiler::new(),
+            compiled_rules: None,
             gif_recorder: GifRecorder::new(),
             clipboard: None,
             channel_sender,
@@ -432,6 +434,15 @@ impl EguiApp {
         });
     }
 
+    pub fn compile(&mut self) {
+        let compiled_rules = self.compiler.compile(&self.view.world);
+        if let Err(err) = &compiled_rules {
+            println!("Failed to compile with error {err}");
+        }
+
+        self.compiled_rules = compiled_rules.ok();
+    }
+
     pub fn run_ui(&mut self, ui: &mut egui::Ui) {
         // Step and run
         ui.horizontal(|ui| {
@@ -439,13 +450,18 @@ impl EguiApp {
                 .add_enabled(!self.run, egui::Button::new("Step"))
                 .clicked()
             {
-                self.interpreter.step(&mut self.view.world);
-                self.view.add_snapshot(SnapshotCause::Step);
+                self.compile();
+                if let Some(compiled_rules) = &self.compiled_rules {
+                    compiled_rules.step(&mut self.view.world);
+                    self.view.add_snapshot(SnapshotCause::Step);
+                }
             }
 
             if egui::Button::new("Run").selected(self.run).ui(ui).clicked() {
                 self.run = !self.run;
-                if !self.run {
+                if self.run {
+                    self.compile();
+                } else {
                     // Add a snapshot after run
                     self.view.add_snapshot(SnapshotCause::Run);
                 }
@@ -453,7 +469,9 @@ impl EguiApp {
         });
 
         if self.run {
-            self.interpreter.step(&mut self.view.world);
+            if let Some(compiled_rules) = &self.compiled_rules {
+                compiled_rules.step(&mut self.view.world);
+            }
         }
     }
 
