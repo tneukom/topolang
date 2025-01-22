@@ -330,6 +330,30 @@ impl UnassignedSeam {
         }
     }
 
+    // /// Iterate over assignment candidates for a pattern seam which has a region on both sides
+    // /// (left and right).
+    // #[inline(never)]
+    // fn both_sided_assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
+    //     world
+    //         .regions
+    //         .values()
+    //         .filter(|world_region| self.materials.left.matches(world_region.material))
+    //         .flat_map(|world_region| world_region.iter_seams())
+    //         .filter(|&phi_seam| self.is_possible_assignment(world, pattern, phi_seam))
+    //         .collect()
+    // }
+    //
+    // /// Assignment candidates for a pattern seam which has a region only on the left side.
+    // #[inline(never)]
+    // fn left_sided_assignment_candidates(&self, world: &Topology, pattern: &Topology) -> Vec<Seam> {
+    //     let candidates = generalized_seams(world, self.materials.left);
+    //
+    //     candidates
+    //         .into_iter()
+    //         .filter(|&phi_seam| self.is_possible_assignment(world, pattern, phi_seam))
+    //         .collect()
+    // }
+
     /// Returns possible candidate seams in `world` that `self.seam` could be mapped to.
     /// Returned seam don't have to be atomic.
     #[inline(never)]
