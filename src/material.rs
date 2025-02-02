@@ -2,7 +2,7 @@ use crate::math::rgba8::Rgba8;
 
 // TODO: Material should be optimized for RegionEq, not converting from and to Rgba8!
 // TODO: TRANSPARENT | SOLID should be possible, unclear how to represent as Rgba8 or on screen
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Material {
     rgba: Rgba8,
 }

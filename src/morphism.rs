@@ -1,5 +1,6 @@
 use crate::{
     math::pixel::Corner,
+    solver::element::Element,
     topology::{BorderKey, Region, RegionKey, Seam, Topology},
 };
 use itertools::Itertools;
@@ -17,6 +18,7 @@ use std::{
 // 2) ∀ s, s': left(s) = left(s') => (left ∘ φ)(s) = (left ∘ φ)(s')
 //
 // 3) ∀ s, s': start(s) = start(s')
+#[derive(Debug, Clone)]
 pub struct Morphism {
     // dom: Topology,
     // codom: Topology
@@ -70,6 +72,33 @@ pub fn is_injective<T: Ord>(phi: &BTreeMap<T, T>) -> bool {
 }
 
 impl Morphism {
+    pub fn new() -> Self {
+        Self {
+            region_map: BTreeMap::new(),
+            seam_map: BTreeMap::new(),
+            corner_map: BTreeMap::new(),
+            border_map: BTreeMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, element: Element, phi_element: Element) {
+        match (element, phi_element) {
+            (Element::Region(region_key), Element::Region(phi_region_key)) => {
+                self.region_map.insert(region_key, phi_region_key);
+            }
+            (Element::Border(border_key), Element::Border(phi_border_key)) => {
+                self.border_map.insert(border_key, phi_border_key);
+            }
+            (Element::Seam(seam), Element::Seam(phi_seam)) => {
+                self.seam_map.insert(seam, phi_seam);
+            }
+            (Element::Corner(corner), Element::Corner(phi_corner)) => {
+                self.corner_map.insert(corner, phi_corner);
+            }
+            _ => panic!("Must be same type"),
+        }
+    }
+
     #[inline(never)]
     pub fn induced_from_seam_map(
         dom: &Topology,
@@ -101,8 +130,6 @@ impl Morphism {
         })
     }
 
-    /// The morphism is rigid (https://en.wikipedia.org/wiki/Rigid_transformation) on solid areas.
-    /// See `is_rigid_on_region`.
     #[inline(never)]
     pub fn preserves_solids(&self, dom: &Topology, codom: &Topology) -> bool {
         for (region_key, phi_region_key) in &self.region_map {
@@ -372,7 +399,7 @@ pub fn induced_corner_map(seam_phi: &BTreeMap<Seam, Seam>) -> Option<BTreeMap<Co
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use crate::{
         field::RgbaField,
         morphism::Morphism,
@@ -385,7 +412,7 @@ mod test {
     use std::collections::BTreeMap;
 
     /// Seam map determined by left and right region materials.
-    fn seam_map_from_colors(
+    pub fn seam_map_from_colors(
         dom: &Topology,
         codom: &Topology,
     ) -> anyhow::Result<BTreeMap<Seam, Seam>> {
@@ -431,16 +458,8 @@ mod test {
 
     fn assert_proper_morphism(dom_filename: &str, codom_filename: &str) {
         let folder = "test_resources/morphism/";
-        let dom_path = format!("{folder}/{dom_filename}");
-        let codom_path = format!("{folder}/{codom_filename}");
-        let dom = RgbaField::load(&dom_path)
-            .unwrap()
-            .intot::<MaterialMap>()
-            .into();
-        let codom = RgbaField::load(&codom_path)
-            .unwrap()
-            .intot::<MaterialMap>()
-            .into();
+        let dom = Topology::load(format!("{folder}/{dom_filename}")).unwrap();
+        let codom = Topology::load(format!("{folder}/{codom_filename}")).unwrap();
 
         let seam_phi = seam_map_from_colors(&dom, &codom).unwrap();
         let phi = Morphism::induced_from_seam_map(&dom, &codom, seam_phi).unwrap();

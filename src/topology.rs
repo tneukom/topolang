@@ -18,6 +18,18 @@ use std::{
     hash::{Hash, Hasher},
     ops::{Index, IndexMut},
 };
+use std::path::Path;
+use crate::field::RgbaField;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SeamCorner {
+    Start,
+    Stop,
+}
+
+impl SeamCorner {
+    pub const ALL: [SeamCorner; 2] = [Self::Start, Self::Stop];
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Seam {
@@ -57,6 +69,13 @@ impl Seam {
 
     pub fn stop_corner(&self) -> Corner {
         self.stop.stop_corner()
+    }
+
+    pub fn corner(&self, name: SeamCorner) -> Corner {
+        match name {
+            SeamCorner::Start => self.start_corner(),
+            SeamCorner::Stop => self.stop_corner(),
+        }
     }
 
     pub fn is_loop(&self) -> bool {
@@ -169,6 +188,10 @@ impl Border {
         self.loop_seams().find(|seam| seam.start_corner() == corner)
     }
 
+    pub fn loop_seam(&self) -> Seam {
+        self.seam(0, self.cycle_segments.len())
+    }
+
     /// All possible loop seams, they are all equivalent but start at different corners.
     pub fn loop_seams(&self) -> impl Iterator<Item = Seam> + '_ {
         let len = self.cycle_segments.len();
@@ -179,8 +202,12 @@ impl Border {
         self.atomic_seam(i).start_corner()
     }
 
+    pub fn corners(&self) -> impl ExactSizeIterator<Item = Corner> + Clone + '_ {
+        self.atomic_seams().map(|seam| seam.start_corner())
+    }
+
     /// All atomic seams, a loop if the border only has one Seam
-    pub fn atomic_seams(&self) -> impl Iterator<Item = Seam> + Clone + '_ {
+    pub fn atomic_seams(&self) -> impl ExactSizeIterator<Item = Seam> + Clone + '_ {
         self.cycle_segments
             .iter()
             .map(|segment| self.seam_from_segment(segment))
@@ -192,6 +219,24 @@ impl Border {
         (0..len)
             .cartesian_product(1..len)
             .map(move |(start, atoms)| self.seam(start, atoms))
+    }
+
+    pub fn seam_between_corners(&self, start_corner: Corner, stop_corner: Corner) -> Option<Seam> {
+        let (i_start, start_seam) = self
+            .atomic_seams()
+            .enumerate()
+            .find(|(_, seam)| seam.start_corner() == start_corner)?;
+
+        let (i_stop, stop_seam) = self
+            .atomic_seams()
+            .enumerate()
+            .find(|(_, seam)| seam.stop_corner() == stop_corner)?;
+
+        Some(Seam::new_with_len(
+            start_seam.start,
+            stop_seam.stop,
+            (i_stop + self.seams_len() - i_start) % self.seams_len(),
+        ))
     }
 }
 
@@ -620,6 +665,27 @@ impl Topology {
 
         edges
     }
+
+    pub fn are_seams_overlapping(&self, lhs: Seam, rhs: Seam) -> bool {
+        let lhs_index = self.seam_indices[&lhs.start];
+        let rhs_index = self.seam_indices[&rhs.start];
+        if lhs_index.border_index() != rhs_index.border_index() {
+            return false;
+        }
+
+        // Is there an i such that lhs_index.i_seam <= i <= lhs_index.i_seam + lhs.atoms
+        // and rhs_index.i_seam <= i < rhs_index.i_seam + rhs.atoms
+        // max(lhs_index.i_seam, rhs_index.i_seam) <= i
+        // and i < min(lhs_index.i_seam + lhs.atoms, rhs_index.i_seam + rhs.atoms)
+        lhs_index.i_seam.max(rhs_index.i_seam)
+            < (lhs_index.i_seam + lhs.atoms).min(rhs_index.i_seam + rhs.atoms)
+    }
+
+    pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Topology> {
+        let rgba_field = RgbaField::load(path)?;
+        let material_map = MaterialMap::from(rgba_field);
+        Ok(Topology::new(material_map))
+    }
 }
 
 /// Warning: Slow
@@ -680,7 +746,6 @@ impl From<MaterialMap> for Topology {
 #[cfg(test)]
 pub mod test {
     use crate::{
-        field::RgbaField,
         material::Material,
         math::rgba8::Rgba8,
         topology::Topology,
@@ -689,8 +754,7 @@ pub mod test {
 
     fn load_topology(filename: &str) -> Topology {
         let path = format!("test_resources/topology/{filename}");
-        let material_map = RgbaField::load(path).unwrap().into();
-        Topology::new(material_map)
+        Topology::load(path).unwrap()
     }
 
     fn load_rgb_seam_graph(filename: &str) -> UndirectedGraph<Option<Material>> {

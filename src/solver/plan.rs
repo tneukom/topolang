@@ -1,0 +1,387 @@
+use crate::{
+    morphism::Morphism,
+    solver::{
+        constraints::{morphism_constraints, AnyConstraint, Constraint},
+        element::Element,
+        propagations::{morphism_propagations, AnyPropagation, Propagation},
+    },
+    topology::{BorderKey, RegionKey, Seam, Topology},
+};
+use ahash::HashSet;
+
+#[derive(Debug, Clone, Copy)]
+pub enum Guess {
+    Region(RegionKey),
+
+    /// Only interior borders, the outer border is determined by the region
+    InteriorBorder(BorderKey),
+
+    /// Only seam with regions on both sides
+    Seam(BorderKey, Seam),
+}
+
+impl Guess {
+    pub fn variable(&self) -> Element {
+        match self {
+            &Guess::Region(region_key) => region_key.into(),
+            &Guess::InteriorBorder(border_key) => border_key.into(),
+            &Guess::Seam(_, seam) => seam.into(),
+        }
+    }
+
+    pub fn guess(&self, phi: &mut Morphism, codom: &Topology, mut f: impl FnMut(&mut Morphism)) {
+        match self {
+            &Self::Region(region_key) => {
+                for &phi_region_key in codom.regions.keys() {
+                    phi.region_map.insert(region_key, phi_region_key);
+                    println!("Guess Region {region_key} -> Region {phi_region_key}");
+                    f(phi);
+                }
+            }
+            &Self::InteriorBorder(border_key) => {
+                let phi_region_key = phi.region_map[&border_key.region_key];
+                let phi_region = &codom[phi_region_key];
+                for i_border in 1..phi_region.boundary.borders.len() {
+                    let phi_border_key = BorderKey::new(phi_region_key, i_border);
+                    phi.border_map.insert(border_key, phi_border_key);
+                    f(phi);
+                }
+            }
+            &Self::Seam(border_key, seam) => {
+                let phi_border_key = phi.border_map[&border_key];
+                let phi_border = &codom[phi_border_key];
+                for phi_seam in phi_border.atomic_seams() {
+                    phi.seam_map.insert(seam, phi_seam);
+                    println!("Guess {seam:?} -> {phi_seam:?}");
+                    f(phi);
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Step {
+    guess: Guess,
+    propagations: Vec<AnyPropagation>,
+    constraints: Vec<AnyConstraint>,
+}
+
+pub struct Plan {
+    steps: Vec<Step>,
+}
+
+impl Plan {
+    /// Choose a free variable to guess we guess seams if possible, then borders, then regions.
+    pub fn choose_guess(
+        free_variables: &HashSet<Element>,
+        assigned_variables: &HashSet<Element>,
+        dom: &Topology,
+    ) -> Option<Guess> {
+        // Return a free seam on a border that is assigned, if possible
+        for free_variable in free_variables {
+            if let &Element::Seam(seam) = free_variable {
+                if !dom.contains_seam(seam.atom_reversed()) {
+                    // We only guess `seam` if `seam.reverse()` is also in `dom`.
+                    continue;
+                }
+
+                let border_key = dom.seam_border(seam);
+                if assigned_variables.contains(&border_key.into()) {
+                    return Some(Guess::Seam(border_key, seam));
+                }
+            }
+        }
+
+        // Return a free broder of a region that is assigned, if possible
+        for free_variable in free_variables {
+            if let &Element::Border(border_key) = free_variable {
+                if assigned_variables.contains(&border_key.region_key.into()) {
+                    return Some(Guess::InteriorBorder(border_key));
+                }
+            }
+        }
+
+        // TODO: Return a free solid region, if possible
+
+        // Return a free region, if possible
+        for free_variable in free_variables {
+            if let &Element::Region(region_key) = free_variable {
+                return Some(Guess::Region(region_key));
+            }
+        }
+
+        None
+    }
+
+    pub fn variables(dom: &Topology) -> HashSet<Element> {
+        let mut variables = HashSet::default();
+
+        for (&region_key, region) in &dom.regions {
+            variables.insert(region_key.into());
+
+            for (i_border, border) in region.boundary.borders.iter().enumerate() {
+                let border_key = BorderKey::new(region_key, i_border);
+                variables.insert(border_key.into());
+
+                for seam in border.atomic_seams() {
+                    variables.insert(seam.into());
+                }
+
+                for corner in border.corners() {
+                    variables.insert(corner.into());
+                }
+            }
+        }
+
+        variables
+    }
+
+    /// Make a plan to find solutions
+    pub fn for_morphism(dom: &Topology) -> Self {
+        let mut available_constraints = morphism_constraints(dom);
+        let available_propagations = morphism_propagations(dom);
+        // for propagation in &propagations {
+        //     println!("Available propagation: {propagation:?}");
+        // }
+
+        // All elements (regions, borders, seams, corners) that appear in dom
+        let mut free_variables: HashSet<Element> = Self::variables(dom);
+        let mut assigned_variables: HashSet<Element> = HashSet::default();
+
+        let mut steps = Vec::new();
+
+        while !free_variables.is_empty() {
+            // Pick one of the free variables and guess its image
+            let guess = Self::choose_guess(&free_variables, &assigned_variables, dom).unwrap();
+            // println!("guess: {guess:?}");
+            free_variables.remove(&guess.variable());
+            assigned_variables.insert(guess.variable());
+
+            // Propagate any variable we can
+            let mut propagations = Vec::new();
+            loop {
+                // Find a propagated to apply or break if there is none.
+                let Some(applicable) = available_propagations.iter().find(|propagation| {
+                    if assigned_variables.contains(&propagation.derives()) {
+                        return false;
+                    }
+
+                    propagation
+                        .require()
+                        .iter()
+                        .all(|required| assigned_variables.contains(required))
+                }) else {
+                    break;
+                };
+
+                let derived = applicable.derives();
+                free_variables.remove(&derived);
+                assigned_variables.insert(derived);
+                propagations.push(applicable.clone())
+            }
+
+            // Check any constraint we can
+            // TODO: Use extract_if when stable (https://github.com/rust-lang/rust/issues/43244)
+            let mut constraints = Vec::new();
+            let mut i = 0;
+            while i < available_constraints.len() {
+                let constraint = &available_constraints[i];
+                let applicable = constraint
+                    .variables()
+                    .iter()
+                    .all(|variable| assigned_variables.contains(variable));
+                if applicable {
+                    let constraint = available_constraints.remove(i);
+                    constraints.push(constraint);
+                } else {
+                    i += 1;
+                }
+            }
+
+            let step = Step {
+                guess,
+                propagations,
+                constraints,
+            };
+            steps.push(step);
+        }
+
+        assert!(available_constraints.is_empty());
+        assert!(free_variables.is_empty());
+
+        Self { steps }
+    }
+
+    pub fn search_step(&self, i_step: usize, phi: &mut Morphism, codom: &Topology, found: &mut impl FnMut(&Morphism)) {
+        println!("Step {i_step}");
+
+        if i_step >= self.steps.len() {
+            found(phi);
+            return;
+        }
+
+        let step = &self.steps[i_step];
+
+        step.guess.guess(phi, codom, |phi| {
+            for propagation in &step.propagations {
+                let derived = propagation.derives();
+                match propagation.derive(phi, codom) {
+                    Ok(phi_derived) => {
+                        println!("Propagated by {} {:?} -> {:?}", propagation.name(), derived, phi_derived);
+                        phi.insert(derived, phi_derived);
+                    }
+                    Err(_err) => {
+                        println!("Propagation {propagation:?} failed");
+                        return;
+                    }
+                }
+            }
+
+            for constraint in &step.constraints {
+                if !constraint.is_satisfied(phi, codom) {
+                    println!("Constraint {constraint:?} failed");
+                    return;
+                }
+            }
+
+            self.search_step(i_step + 1, phi, codom, found);
+        })
+    }
+
+    pub fn search(&self, codom: &Topology, mut found: impl FnMut(&Morphism)) {
+        let mut phi = Morphism::new();
+        self.search_step(0, &mut phi, codom, &mut found);
+    }
+
+    pub fn solutions(&self, codom: &Topology) -> Vec<Morphism> {
+        let mut solutions = Vec::new();
+        self.search(codom, |phi| {
+            solutions.push(phi.clone());
+        });
+        solutions
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        field::RgbaField, material::Material, pixmap::MaterialMap, solver::plan::Plan,
+        topology::Topology,
+    };
+    use std::path::Path;
+    use crate::solver::propagations::Propagation;
+
+    fn load(path: impl AsRef<Path>) -> Topology {
+        let rgba_field = RgbaField::load(path).unwrap();
+        let material_map = MaterialMap::from(rgba_field).without(Material::VOID);
+        Topology::new(material_map)
+    }
+
+    fn assert_proper_plan(dom_filename: &str, codom_filename: &str) {
+        let folder = "test_resources/morphism/";
+
+        let dom = load(format!("{folder}/{dom_filename}"));
+        // let codom = load(format!("{folder}/{codom_filename}"));
+
+        let plan = Plan::for_morphism(&dom);
+        // for (i_step, step) in plan.steps.iter().enumerate() {
+        //     println!("Step {i_step}");
+        //     println!("  Guess {:?}", &step.guess);
+        //     println!("  Propagations");
+        //     for propagation in &step.propagations {
+        //         println!("    {:?}", propagation.as_propagation());
+        //     }
+        //     println!("  Constraints");
+        //     for constraint in &step.constraints {
+        //         println!("    {:?}", constraint.as_constraint());
+        //     }
+        // }
+    }
+
+    fn assert_solve(dom_filename: &str, codom_filename: &str, solutions_len: usize) {
+        let folder = "test_resources/patterns/";
+
+        let dom = load(format!("{folder}/{dom_filename}"));
+        let codom = load(format!("{folder}/{codom_filename}"));
+
+        let plan = Plan::for_morphism(&dom);
+        for (i_step, step) in plan.steps.iter().enumerate() {
+            println!("Step {i_step}");
+            println!("  Guess {:?}", &step.guess);
+            println!("  Propagations");
+            for propagation in &step.propagations {
+                println!("    {:?} -> {:?}", propagation.as_propagation(), propagation.derives());
+            }
+            println!("  Constraints");
+            for constraint in &step.constraints {
+                println!("    {:?}", constraint.as_constraint());
+            }
+        }
+
+        let solutions = plan.solutions(&codom);
+        assert_eq!(solutions.len(), solutions_len);
+
+        println!("Number of solutions found: {}", solutions.len());
+        for phi in solutions {
+            assert!(phi.is_homomorphism(&dom, &codom));
+        }
+    }
+
+    #[test]
+    fn plan_a() {
+        assert_solve("a.png", "phi_a.png", 1);
+    }
+
+    #[test]
+    fn plan_b() {
+        assert_solve("b.png", "phi_b.png", 1);
+    }
+
+    #[test]
+    fn plan_c() {
+        assert_solve("c.png", "phi_c.png", 1);
+    }
+
+    #[test]
+    fn plan_d() {
+        assert_solve("d.png", "phi_d.png", 1);
+    }
+
+    #[test]
+    fn plan_e() {
+        assert_solve("e.png", "phi_e.png", 1);
+    }
+
+    #[test]
+    fn pattern_matches_a() {
+        assert_solve("a/pattern.png", "a/match_1.png", 1);
+        assert_solve("a/pattern.png", "a/match_2.png", 1);
+        assert_solve("a/pattern.png", "a/match_3.png", 1);
+        assert_solve("a/pattern.png", "a/match_4.png", 3);
+        assert_solve("a/pattern.png", "a/miss_1.png", 0);
+    }
+
+    #[test]
+    fn pattern_matches_b() {
+        assert_solve("b/pattern.png", "b/match_1.png", 1);
+        assert_solve("b/pattern.png", "b/match_2.png", 1);
+        assert_solve("b/pattern.png", "b/match_3.png", 2);
+        assert_solve("b/pattern.png", "b/match_4.png", 4);
+        assert_solve("b/pattern.png", "b/miss_1.png", 0);
+    }
+
+    #[test]
+    fn pattern_matches_c() {
+        assert_solve("c/pattern.png", "c/match_1.png", 1);
+        // assert_solve("c/pattern.png", "c/miss_1.png", 0);
+        // assert_solve("c/pattern.png", "c/miss_2.png", 0);
+    }
+
+    #[test]
+    fn pattern_matches_single_hole() {
+        assert_solve("single_hole/pattern.png", "single_hole/miss_1.png", 0);
+        assert_solve("single_hole/pattern.png", "single_hole/match_2.png", 1);
+        assert_solve("single_hole/pattern.png", "single_hole/match_3.png", 1);
+    }
+}

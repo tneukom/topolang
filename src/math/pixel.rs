@@ -262,8 +262,9 @@ impl Display for Side {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Side({}, {})",
-            self.left_pixel,
+            "Side([{}, {}], {})",
+            self.left_pixel.x,
+            self.left_pixel.y,
             self.name.unicode_symbol()
         )
     }

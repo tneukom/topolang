@@ -32,6 +32,8 @@ pub(crate) mod view;
 pub(crate) mod widgets;
 pub(crate) mod world;
 
+pub(crate) mod solver;
+
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 pub fn main() {
