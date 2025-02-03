@@ -53,10 +53,13 @@ impl Propagation for BothSidedSeamFromCorner {
         let corner = self.seam.corner(self.corner);
         let phi_corner = phi.corner_map[&corner];
 
-        let phi_seam = phi_border
+        let Some(phi_seam) = phi_border
             .atomic_seams()
             .find(|seam| seam.corner(self.corner) == phi_corner)
-            .unwrap();
+        else {
+            // It can happen that phi(seam) is incompatible with phi(border(seam))
+            anyhow::bail!("No seam found on border with corner");
+        };
 
         Ok(phi_seam.into())
     }
@@ -154,6 +157,9 @@ impl Propagation for SeamReverse {
 
     fn derive(&self, phi: &Morphism, codom: &Topology) -> anyhow::Result<Element> {
         let phi_seam = phi.seam_map[&self.seam];
+        if !phi_seam.is_atom() {
+            anyhow::bail!("phi_seam should be atomic.");
+        }
         let phi_reversed_seam = phi_seam.atom_reversed();
         if !codom.contains_seam(phi_reversed_seam) {
             // println!("phi_seam: {phi_seam:?}, phi_reversed_seam: {phi_reversed_seam:?}");
@@ -302,7 +308,9 @@ impl Propagation for LastInnerBorder {
         let phi_region_key = phi.region_map[&self.region_key];
 
         let phi_region = &codom[phi_region_key];
-        assert_eq!(phi_region.boundary.borders.len(), self.borders_len);
+        if phi_region.boundary.borders.len() != self.borders_len {
+            anyhow::bail!("region border count does not match phi(region) border count.");
+        }
 
         let mut available_phi_inner_border_keys: HashSet<_> = (1..self.borders_len)
             .into_iter()

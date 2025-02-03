@@ -225,7 +225,10 @@ impl Constraint for NonOverlappingSeams {
     fn is_satisfied(&self, phi: &Morphism, codom: &Topology) -> bool {
         let phi_seam_a = phi.seam_map[&self.seam_a];
         let phi_seam_b = phi.seam_map[&self.seam_b];
-        !codom.are_seams_overlapping(phi_seam_a, phi_seam_b)
+        println!("Checking NonOverlappingSeams for seam_a = {} and seam_b = {}", self.seam_a, self.seam_b);
+        let overlapping = codom.are_seams_overlapping(phi_seam_a, phi_seam_b);
+        println!("{phi_seam_a} and {phi_seam_a} are overlapping: {overlapping}");
+        !overlapping
     }
 }
 

@@ -50,6 +50,7 @@ impl Seam {
     }
 
     pub fn new_with_len(start: Side, stop: Side, atoms: usize) -> Self {
+        assert!(atoms > 0);
         Seam { start, stop, atoms }
     }
 
@@ -98,7 +99,7 @@ impl Seam {
 
 impl Display for Seam {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Seam({} -> {})", self.start, self.stop)
+        write!(f, "Seam({} -> {}, atoms: {})", self.start, self.stop, self.atoms)
     }
 }
 
@@ -232,10 +233,13 @@ impl Border {
             .enumerate()
             .find(|(_, seam)| seam.stop_corner() == stop_corner)?;
 
+        // start and stop seam are part of the resulting seam so it's + 1
+        let atoms = (i_stop + self.seams_len() - i_start) % self.seams_len() + 1;
+
         Some(Seam::new_with_len(
             start_seam.start,
             stop_seam.stop,
-            (i_stop + self.seams_len() - i_start) % self.seams_len(),
+            atoms,
         ))
     }
 }
@@ -670,6 +674,7 @@ impl Topology {
         let lhs_index = self.seam_indices[&lhs.start];
         let rhs_index = self.seam_indices[&rhs.start];
         if lhs_index.border_index() != rhs_index.border_index() {
+            println!("lhs_index.border_index() != rhs_index.border_index()");
             return false;
         }
 

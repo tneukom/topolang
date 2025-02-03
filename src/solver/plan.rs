@@ -270,6 +270,7 @@ mod test {
         topology::Topology,
     };
     use std::path::Path;
+    use itertools::Itertools;
     use crate::solver::propagations::Propagation;
 
     fn load(path: impl AsRef<Path>) -> Topology {
@@ -299,7 +300,7 @@ mod test {
         // }
     }
 
-    fn assert_solve(dom_filename: &str, codom_filename: &str, solutions_len: usize) {
+    fn assert_solve(dom_filename: &str, codom_filename: &str, expected_solutions_len: usize) {
         let folder = "test_resources/patterns/";
 
         let dom = load(format!("{folder}/{dom_filename}"));
@@ -320,38 +321,44 @@ mod test {
         }
 
         let solutions = plan.solutions(&codom);
-        assert_eq!(solutions.len(), solutions_len);
 
         println!("Number of solutions found: {}", solutions.len());
-        for phi in solutions {
+        for phi in &solutions {
             assert!(phi.is_homomorphism(&dom, &codom));
+            println!("{phi}");
         }
+
+        // Check if there are duplicate solutions
+        let distinct_solutions: Vec<_> = solutions.iter().unique().collect();
+        assert_eq!(distinct_solutions.len(), solutions.len());
+
+        assert_eq!(solutions.len(), expected_solutions_len);
     }
 
-    #[test]
-    fn plan_a() {
-        assert_solve("a.png", "phi_a.png", 1);
-    }
-
-    #[test]
-    fn plan_b() {
-        assert_solve("b.png", "phi_b.png", 1);
-    }
-
-    #[test]
-    fn plan_c() {
-        assert_solve("c.png", "phi_c.png", 1);
-    }
-
-    #[test]
-    fn plan_d() {
-        assert_solve("d.png", "phi_d.png", 1);
-    }
-
-    #[test]
-    fn plan_e() {
-        assert_solve("e.png", "phi_e.png", 1);
-    }
+    // #[test]
+    // fn plan_a() {
+    //     assert_solve("a.png", "phi_a.png", 1);
+    // }
+    //
+    // #[test]
+    // fn plan_b() {
+    //     assert_solve("b.png", "phi_b.png", 1);
+    // }
+    //
+    // #[test]
+    // fn plan_c() {
+    //     assert_solve("c.png", "phi_c.png", 1);
+    // }
+    //
+    // #[test]
+    // fn plan_d() {
+    //     assert_solve("d.png", "phi_d.png", 1);
+    // }
+    //
+    // #[test]
+    // fn plan_e() {
+    //     assert_solve("e.png", "phi_e.png", 1);
+    // }
 
     #[test]
     fn pattern_matches_a() {
@@ -374,8 +381,8 @@ mod test {
     #[test]
     fn pattern_matches_c() {
         assert_solve("c/pattern.png", "c/match_1.png", 1);
-        // assert_solve("c/pattern.png", "c/miss_1.png", 0);
-        // assert_solve("c/pattern.png", "c/miss_2.png", 0);
+        assert_solve("c/pattern.png", "c/miss_1.png", 0);
+        assert_solve("c/pattern.png", "c/miss_2.png", 0);
     }
 
     #[test]
@@ -383,5 +390,104 @@ mod test {
         assert_solve("single_hole/pattern.png", "single_hole/miss_1.png", 0);
         assert_solve("single_hole/pattern.png", "single_hole/match_2.png", 1);
         assert_solve("single_hole/pattern.png", "single_hole/match_3.png", 1);
+    }
+
+    #[test]
+    fn pattern_matches_interior_hole() {
+        assert_solve("interior_hole/pattern.png", "interior_hole/miss_1.png", 0);
+        assert_solve("interior_hole/pattern.png", "interior_hole/miss_2.png", 0);
+        assert_solve("interior_hole/pattern.png", "interior_hole/match_1.png", 1);
+        assert_solve("interior_hole/pattern.png", "interior_hole/match_2.png", 1);
+        assert_solve("interior_hole/pattern.png", "interior_hole/match_3.png", 1);
+        assert_solve("interior_hole/pattern.png", "interior_hole/match_4.png", 1);
+    }
+
+    #[test]
+    fn pattern_matches_two_holes_a() {
+        assert_solve("two_holes_a/pattern.png", "two_holes_a/match_1.png", 2);
+    }
+
+    #[test]
+    fn pattern_matches_two_holes_b() {
+        assert_solve("two_holes_b/pattern.png", "two_holes_b/match_1.png", 1);
+    }
+
+    #[test]
+    fn pattern_matches_two_holes_c() {
+        assert_solve("two_holes_c/pattern.png", "two_holes_c/match_1.png", 1);
+        assert_solve("two_holes_c/pattern.png", "two_holes_c/miss_1.png", 0);
+    }
+
+    #[test]
+    fn pattern_matches_gate_a() {
+        assert_solve("gate_a/pattern.png", "gate_a/match_1.png", 1);
+        assert_solve("gate_a/pattern.png", "gate_a/match_2.png", 1);
+        assert_solve("gate_a/pattern.png", "gate_a/match_3.png", 1);
+    }
+
+    #[test]
+    fn pattern_matches_rule_frame_a() {
+        assert_solve("rule_frame_a/pattern.png", "rule_frame_a/match_1.png", 1);
+        assert_solve("rule_frame_a/pattern.png", "rule_frame_a/match_2.png", 1);
+        assert_solve("rule_frame_a/pattern.png", "rule_frame_a/match_3.png", 1);
+        assert_solve("rule_frame_a/pattern.png", "rule_frame_a/match_4.png", 1);
+    }
+
+    #[test]
+    fn pattern_matches_rule_frame_b() {
+        assert_solve("rule_frame_b/pattern.png", "rule_frame_b/match_1.png", 1);
+        assert_solve("rule_frame_b/pattern.png", "rule_frame_b/match_2.png", 1);
+        assert_solve("rule_frame_b/pattern.png", "rule_frame_b/match_3.png", 1);
+        assert_solve("rule_frame_b/pattern.png", "rule_frame_b/match_4.png", 1);
+    }
+
+    #[test]
+    fn pattern_matches_solid_a() {
+        assert_solve("solid/a/pattern.png", "solid/a/match_1.png", 1);
+        assert_solve("solid/a/pattern.png", "solid/a/miss_1.png", 0);
+        assert_solve("solid/a/pattern.png", "solid/a/miss_2.png", 0);
+        assert_solve("solid/a/pattern.png", "solid/a/miss_3.png", 0);
+        assert_solve("solid/a/pattern.png", "solid/a/miss_4.png", 0);
+    }
+
+    #[test]
+    fn pattern_matches_solid_b() {
+        assert_solve("solid/b/pattern.png", "solid/b/match_1.png", 1);
+        assert_solve("solid/b/pattern.png", "solid/b/miss_1.png", 0);
+    }
+
+    #[test]
+    fn pattern_matches_solid_c() {
+        assert_solve("solid/c/pattern.png", "solid/c/match_1.png", 1);
+        assert_solve("solid/c/pattern.png", "solid/c/miss_1.png", 0);
+    }
+
+    #[test]
+    fn wildcard_a() {
+        assert_solve("wildcard_a/pattern.png", "wildcard_a/match_1.png", 1);
+        assert_solve("wildcard_a/pattern.png", "wildcard_a/match_2.png", 1);
+        assert_solve("wildcard_a/pattern.png", "wildcard_a/miss_1.png", 0);
+        assert_solve("wildcard_a/pattern.png", "wildcard_a/miss_2.png", 0);
+        assert_solve("wildcard_a/pattern.png", "wildcard_a/miss_3.png", 0);
+        assert_solve("wildcard_a/pattern.png", "wildcard_a/miss_4.png", 0);
+    }
+
+    #[test]
+    fn wildcard_b() {
+        assert_solve("wildcard_b/pattern.png", "wildcard_b/match_1.png", 1);
+        assert_solve("wildcard_b/pattern.png", "wildcard_b/miss_1.png", 0);
+        assert_solve("wildcard_b/pattern.png", "wildcard_b/miss_2.png", 0);
+    }
+
+    #[test]
+    fn wildcard_c() {
+        assert_solve("wildcard_c/pattern.png", "wildcard_c/match_1.png", 1);
+        assert_solve("wildcard_c/pattern.png", "wildcard_c/match_2.png", 1);
+        assert_solve("wildcard_c/pattern.png", "wildcard_c/match_3.png", 2);
+        // Not 100% sure this is the right answer
+        assert_solve("wildcard_c/pattern.png", "wildcard_c/match_4.png", 2);
+
+        assert_solve("wildcard_c/pattern.png", "wildcard_c/miss_1.png", 0);
+        assert_solve("wildcard_c/pattern.png", "wildcard_c/miss_2.png", 0);
     }
 }

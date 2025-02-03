@@ -8,6 +8,7 @@ use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet},
     ops::Index,
 };
+use std::fmt::{Display, Formatter};
 
 // Orientation preserving!
 //
@@ -18,7 +19,7 @@ use std::{
 // 2) ∀ s, s': left(s) = left(s') => (left ∘ φ)(s) = (left ∘ φ)(s')
 //
 // 3) ∀ s, s': start(s) = start(s')
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Morphism {
     // dom: Topology,
     // codom: Topology
@@ -284,6 +285,31 @@ impl Morphism {
             self.region_map.contains_key(&region)
         });
         regions_total
+    }
+}
+
+impl Display for Morphism {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        // Print phi
+        writeln!(f, "Morphism:")?;
+
+        writeln!(f, "  Region mapping:")?;
+        for (region_key, phi_region_key) in &self.region_map {
+            writeln!(f, "    {region_key} -> {phi_region_key}")?;
+        }
+
+        writeln!(f, "  Seam mapping:")?;
+        for (seam, phi_seam) in &self.seam_map {
+            writeln!(f, "    {seam} -> {phi_seam}")?;
+        }
+
+        writeln!(f, "  Border mapping:")?;
+        for (border, phi_border) in &self.border_map {
+            writeln!(f, "    {border:?} -> {phi_border:?}")?;
+        }
+
+        Ok(())
+
     }
 }
 
