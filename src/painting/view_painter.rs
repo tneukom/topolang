@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use super::grid_painter::GridPainter;
 use crate::{
     camera::Camera,
@@ -72,25 +70,26 @@ pub struct ViewPainter {
 }
 
 impl ViewPainter {
-    pub unsafe fn new(gl: Arc<glow::Context>) -> ViewPainter {
+    pub unsafe fn new(gl: &glow::Context) -> ViewPainter {
         ViewPainter {
-            grid_painter: GridPainter::new(gl.clone()),
-            line_painter: LinePainter::new(gl.clone()),
-            world_painter: RgbaFieldPainter::new(gl.clone()),
-            brush_preview_painter: RgbaFieldPainter::new(gl.clone()),
-            selection_painter: RgbaFieldPainter::new(gl.clone()),
+            grid_painter: GridPainter::new(gl),
+            line_painter: LinePainter::new(gl),
+            world_painter: RgbaFieldPainter::new(gl),
+            brush_preview_painter: RgbaFieldPainter::new(gl),
+            selection_painter: RgbaFieldPainter::new(gl),
             i_frame: 0,
         }
     }
 
-    pub unsafe fn draw_grid(&self, camera: &Camera, frames: &CoordinateFrames) {
+    pub unsafe fn draw_grid(&self, gl: &glow::Context, camera: &Camera, frames: &CoordinateFrames) {
         let origin = camera.world_to_view() * Point::ZERO;
         let spacing = camera.world_to_view().linear * Point::ONE;
-        self.grid_painter.draw(origin, spacing, frames);
+        self.grid_painter.draw(gl, origin, spacing, frames);
     }
 
     pub unsafe fn draw_selection_outline(
         &mut self,
+        gl: &glow::Context,
         rect: Rect<i64>,
         camera: &Camera,
         frames: &CoordinateFrames,
@@ -98,20 +97,21 @@ impl ViewPainter {
     ) {
         let world_to_device = frames.view_to_device() * camera.world_to_view();
         self.line_painter
-            .draw_rect(rect.cwise_as(), world_to_device, time);
+            .draw_rect(gl, rect.cwise_as(), world_to_device, time);
     }
 
-    pub unsafe fn draw_view(&mut self, draw: &DrawView) {
+    pub unsafe fn draw_view(&mut self, gl: &glow::Context, draw: &DrawView) {
         let world_to_device = draw.frames.view_to_device() * draw.camera.world_to_view();
 
         // Grid in the background
-        self.draw_grid(&draw.camera, &draw.frames);
+        self.draw_grid(gl, &draw.camera, &draw.frames);
 
         self.world_painter
-            .draw(&draw.world_rgba_field, world_to_device, draw.time);
+            .draw(gl, &draw.world_rgba_field, world_to_device, draw.time);
 
         // Draw a rectangle around the scene
         self.draw_selection_outline(
+            gl,
             draw.world_rgba_field.bounds(),
             &draw.camera,
             &draw.frames,
@@ -122,9 +122,10 @@ impl ViewPainter {
         if let Some(selection_rgba_field) = &draw.selection_rgba_field {
             if !selection_rgba_field.is_empty() {
                 self.selection_painter
-                    .draw(&selection_rgba_field, world_to_device, draw.time);
+                    .draw(gl, &selection_rgba_field, world_to_device, draw.time);
 
                 self.draw_selection_outline(
+                    gl,
                     selection_rgba_field.bounds(),
                     &draw.camera,
                     &draw.frames,
@@ -137,6 +138,7 @@ impl ViewPainter {
         if let UiState::SelectingRect(selecting) = &draw.ui_state {
             if selecting.kind == SelectingKind::Rect {
                 self.draw_selection_outline(
+                    gl,
                     selecting.rect(),
                     &draw.camera,
                     &draw.frames,
@@ -148,7 +150,7 @@ impl ViewPainter {
         // Draw brush preview
         if let Some(brush_preview) = &draw.brush_preview {
             self.brush_preview_painter
-                .draw(brush_preview, world_to_device, draw.time);
+                .draw(gl, brush_preview, world_to_device, draw.time);
         }
 
         self.i_frame += 1;

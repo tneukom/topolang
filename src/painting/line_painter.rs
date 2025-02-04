@@ -6,10 +6,7 @@ use crate::{
     },
 };
 use glow::HasContext;
-use std::{
-    mem::{offset_of, size_of},
-    sync::Arc,
-};
+use std::mem::{offset_of, size_of};
 
 #[derive(Debug, Clone, Copy)]
 struct LineVertex {
@@ -21,26 +18,26 @@ pub struct LinePainter {
     array_buffer: GlBuffer<LineVertex>,
     element_buffer: GlBuffer<u32>,
     vertex_array: GlVertexArray,
-    gl: Arc<glow::Context>,
 }
 
 impl LinePainter {
-    pub unsafe fn new(gl: Arc<glow::Context>) -> Self {
+    pub unsafe fn new(gl: &glow::Context) -> Self {
         let vs_source = include_str!("shaders/line.vert");
         let fs_source = include_str!("shaders/line.frag");
-        let shader = Shader::from_source(gl.clone(), &vs_source, &fs_source);
+        let shader = Shader::from_source(gl, &vs_source, &fs_source);
 
         // Create vertex, index buffers and assign to shader
-        let array_buffer = GlBuffer::new(gl.clone(), GlBufferTarget::ArrayBuffer);
-        let element_buffer = GlBuffer::new(gl.clone(), GlBufferTarget::ElementArrayBuffer);
-        let vertex_array = GlVertexArray::new(gl.clone());
+        let array_buffer = GlBuffer::new(gl, GlBufferTarget::ArrayBuffer);
+        let element_buffer = GlBuffer::new(gl, GlBufferTarget::ElementArrayBuffer);
+        let vertex_array = GlVertexArray::new(gl);
 
-        vertex_array.bind();
-        array_buffer.bind();
-        element_buffer.bind();
+        vertex_array.bind(gl);
+        array_buffer.bind(gl);
+        element_buffer.bind(gl);
 
         let size = size_of::<LineVertex>();
         shader.assign_attribute_f32(
+            gl,
             "in_device_position",
             &VertexAttribDesc::VEC2,
             offset_of!(LineVertex, position) as i32,
@@ -52,12 +49,12 @@ impl LinePainter {
             array_buffer,
             element_buffer,
             vertex_array,
-            gl,
         }
     }
 
     pub unsafe fn draw_lines(
         &mut self,
+        gl: &glow::Context,
         lines: &[Arrow<f64>],
         to_device: AffineMap<f64>,
         time: f64,
@@ -77,24 +74,29 @@ impl LinePainter {
         }
 
         // Draw call
-        self.gl.enable(glow::BLEND);
-        self.gl.blend_func(glow::ALPHA, glow::ONE_MINUS_SRC_ALPHA);
-        self.gl.blend_equation(glow::FUNC_ADD);
+        gl.enable(glow::BLEND);
+        gl.blend_func(glow::ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+        gl.blend_equation(glow::FUNC_ADD);
 
-        self.vertex_array.bind();
-        self.array_buffer.buffer_data(&vertices);
-        self.element_buffer.buffer_data(&indices);
+        self.vertex_array.bind(gl);
+        self.array_buffer.buffer_data(gl, &vertices);
+        self.element_buffer.buffer_data(gl, &indices);
 
-        self.shader.use_program();
+        self.shader.use_program(gl);
 
-        self.shader.uniform("time", time);
+        self.shader.uniform(gl, "time", time);
 
-        self.gl
-            .draw_elements(glow::LINES, indices.len() as i32, glow::UNSIGNED_INT, 0);
+        gl.draw_elements(glow::LINES, indices.len() as i32, glow::UNSIGNED_INT, 0);
     }
 
-    pub unsafe fn draw_rect(&mut self, rect: Rect<f64>, to_device: AffineMap<f64>, time: f64) {
+    pub unsafe fn draw_rect(
+        &mut self,
+        gl: &glow::Context,
+        rect: Rect<f64>,
+        to_device: AffineMap<f64>,
+        time: f64,
+    ) {
         let sides = rect.ccw_side_arrows();
-        self.draw_lines(&sides, to_device, time);
+        self.draw_lines(gl, &sides, to_device, time);
     }
 }

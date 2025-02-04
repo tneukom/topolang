@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{
     field::RgbaField,
     math::{affine_map::AffineMap, point::Point, rect::Rect, rgba8::Rgba8},
@@ -12,15 +10,13 @@ use crate::{
 pub struct RgbaFieldPainter {
     rect_painter: FillRectPainter,
     texture: Option<(GlTexture, Point<i64>)>,
-    gl: Arc<glow::Context>,
 }
 
 impl RgbaFieldPainter {
-    pub unsafe fn new(gl: Arc<glow::Context>) -> Self {
+    pub unsafe fn new(gl: &glow::Context) -> Self {
         Self {
             texture: None,
-            rect_painter: FillRectPainter::new(gl.clone()),
-            gl: gl,
+            rect_painter: FillRectPainter::new(gl),
         }
     }
 
@@ -34,7 +30,13 @@ impl RgbaFieldPainter {
     }
 
     /// Draw whole texture as a single rectangle
-    pub unsafe fn draw(&mut self, rgba_field: &RgbaField, to_device: AffineMap<f64>, time: f64) {
+    pub unsafe fn draw(
+        &mut self,
+        gl: &glow::Context,
+        rgba_field: &RgbaField,
+        to_device: AffineMap<f64>,
+        time: f64,
+    ) {
         if !rgba_field.bounds().has_positive_area() {
             println!("Trying to draw empty field.");
             return;
@@ -58,21 +60,17 @@ impl RgbaFieldPainter {
             let texture_size = Point(texture_width, texture_height);
 
             // TODO: Check mipmap generation
-            let mut texture = GlTexture::from_size(
-                self.gl.clone(),
-                texture_width,
-                texture_height,
-                Filter::Nearest,
-            );
+            let mut texture =
+                GlTexture::from_size(gl, texture_width, texture_height, Filter::Nearest);
             let transparent = RgbaField::filled(
                 Rect::low_size(Point::ZERO, texture_size),
                 Rgba8::TRANSPARENT,
             );
-            texture.texture_image(&transparent);
+            texture.texture_image(gl, &transparent);
             (texture, rgba_field.size())
         });
 
-        texture.texture_sub_image(Point::ZERO, &rgba_field);
+        texture.texture_sub_image(gl, Point::ZERO, &rgba_field);
 
         let texture_rect = Rect::low_size(Point::ZERO, *bitmap_size);
         let rect = texture_rect + rgba_field.bounds().low();
@@ -82,6 +80,6 @@ impl RgbaFieldPainter {
         };
 
         self.rect_painter
-            .draw(&[draw_tile], texture, to_device, time);
+            .draw(gl, &[draw_tile], texture, to_device, time);
     }
 }

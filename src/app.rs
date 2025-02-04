@@ -154,7 +154,10 @@ impl EguiApp {
     }
 
     pub unsafe fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let view_painter = ViewPainter::new(cc.gl.as_ref().unwrap().clone());
+        // let gl = cc.gl.as_ref().map(|arc| arc.as_ref());
+        let gl_arc = cc.gl.clone().unwrap();
+        let gl = gl_arc.as_ref();
+        let view_painter = ViewPainter::new(gl);
         let start_time = Instant::now();
 
         // Load topology from file
@@ -670,7 +673,8 @@ impl EguiApp {
         let view_painter = self.view_painter.clone();
 
         let cb = egui_glow::CallbackFn::new(move |_info, painter| {
-            let gl = painter.gl().clone();
+            let gl = painter.gl().as_ref();
+
             let mut view_painter = view_painter.lock().unwrap();
 
             unsafe {
@@ -701,7 +705,7 @@ impl EguiApp {
                 gl.disable(glow::DEPTH_TEST);
                 // self.gl.enable(glow::FRAMEBUFFER_SRGB);
 
-                view_painter.draw_view(&draw_view);
+                view_painter.draw_view(gl, &draw_view);
             }
         });
 

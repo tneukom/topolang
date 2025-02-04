@@ -1,7 +1,4 @@
-use std::{
-    mem::{offset_of, size_of},
-    sync::Arc,
-};
+use std::mem::{offset_of, size_of};
 
 use glow::HasContext;
 
@@ -32,32 +29,33 @@ pub struct FillRectPainter {
     array_buffer: GlBuffer<TileVertex>,
     element_buffer: GlBuffer<u32>,
     vertex_array: GlVertexArray,
-    gl: Arc<glow::Context>,
 }
 
 impl FillRectPainter {
-    pub unsafe fn new(gl: Arc<glow::Context>) -> Self {
+    pub unsafe fn new(gl: &glow::Context) -> Self {
         let vs_source = include_str!("shaders/fill_rect.vert");
         let fs_source = include_str!("shaders/fill_rect.frag");
-        let shader = Shader::from_source(gl.clone(), &vs_source, &fs_source);
+        let shader = Shader::from_source(gl, &vs_source, &fs_source);
 
         // Create vertex, index buffers and assign to shader
-        let array_buffer = GlBuffer::new(gl.clone(), GlBufferTarget::ArrayBuffer);
-        let element_buffer = GlBuffer::new(gl.clone(), GlBufferTarget::ElementArrayBuffer);
-        let vertex_array = GlVertexArray::new(gl.clone());
+        let array_buffer = GlBuffer::new(gl, GlBufferTarget::ArrayBuffer);
+        let element_buffer = GlBuffer::new(gl, GlBufferTarget::ElementArrayBuffer);
+        let vertex_array = GlVertexArray::new(gl);
 
-        vertex_array.bind();
-        array_buffer.bind();
-        element_buffer.bind();
+        vertex_array.bind(gl);
+        array_buffer.bind(gl);
+        element_buffer.bind(gl);
 
         let size = size_of::<TileVertex>();
         shader.assign_attribute_f32(
+            gl,
             "in_device_position",
             &VertexAttribDesc::VEC2,
             offset_of!(TileVertex, position) as i32,
             size as i32,
         );
         shader.assign_attribute_f32(
+            gl,
             "in_texcoord",
             &VertexAttribDesc::VEC2,
             offset_of!(TileVertex, texcoord) as i32,
@@ -69,7 +67,6 @@ impl FillRectPainter {
             array_buffer,
             element_buffer,
             vertex_array,
-            gl,
         }
     }
 
@@ -77,6 +74,7 @@ impl FillRectPainter {
     /// AffineMap, it does not have to map axis aligned rectangles to axis aligned rectangles.
     pub unsafe fn draw(
         &mut self,
+        gl: &glow::Context,
         draw_rects: &[DrawRect],
         texture: &GlTexture,
         to_device: AffineMap<f64>,
@@ -104,24 +102,24 @@ impl FillRectPainter {
         }
 
         // Alpha blending with premultiplied alpha
-        self.gl.enable(glow::BLEND);
-        self.gl.blend_func(glow::ONE, glow::ONE_MINUS_SRC_ALPHA);
-        self.gl.blend_equation(glow::FUNC_ADD);
+        gl.enable(glow::BLEND);
+        gl.blend_func(glow::ONE, glow::ONE_MINUS_SRC_ALPHA);
+        gl.blend_equation(glow::FUNC_ADD);
 
         // Bind texture
-        self.gl.active_texture(glow::TEXTURE0);
-        self.gl.bind_texture(glow::TEXTURE_2D, Some(texture.id));
+        gl.active_texture(glow::TEXTURE0);
+        gl.bind_texture(glow::TEXTURE_2D, Some(texture.id));
 
-        self.vertex_array.bind();
-        self.array_buffer.buffer_data(&vertices);
-        self.element_buffer.buffer_data(&indices);
+        self.vertex_array.bind(gl);
+        self.array_buffer.buffer_data(gl, &vertices);
+        self.element_buffer.buffer_data(gl, &indices);
 
-        self.shader.use_program();
+        self.shader.use_program(gl);
 
-        self.shader.uniform("tile_atlas_texture", glow::TEXTURE0);
-        self.shader.uniform("time", time);
+        self.shader
+            .uniform(gl, "tile_atlas_texture", glow::TEXTURE0);
+        self.shader.uniform(gl, "time", time);
 
-        self.gl
-            .draw_elements(glow::TRIANGLES, indices.len() as i32, glow::UNSIGNED_INT, 0);
+        gl.draw_elements(glow::TRIANGLES, indices.len() as i32, glow::UNSIGNED_INT, 0);
     }
 }

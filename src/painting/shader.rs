@@ -1,6 +1,7 @@
 use crate::math::{matrix2::Matrix2, matrix3::Matrix3, point::Point, rgba8::Rgba8};
 use glow::{self, HasContext};
-use std::{collections::HashMap, sync::Arc};
+use log::warn;
+use std::collections::HashMap;
 
 pub struct VertexAttribDesc {
     components: i32,
@@ -51,8 +52,6 @@ pub struct Shader {
 
     pub uniforms: HashMap<String, (glow::UniformLocation, glow::ActiveUniform)>,
     pub attributes: HashMap<String, (u32, glow::ActiveAttribute)>,
-
-    context: Arc<glow::Context>,
 }
 
 impl Shader {
@@ -73,7 +72,7 @@ impl Shader {
     }
 
     pub unsafe fn from_source(
-        gl: Arc<glow::Context>,
+        gl: &glow::Context,
         vertex_shader_source: &str,
         fragment_shader_source: &str,
     ) -> Shader {
@@ -125,20 +124,20 @@ impl Shader {
             fragment_shader,
             uniforms,
             attributes,
-            context: gl,
         }
     }
 
     pub unsafe fn assign_attribute_f32(
         &self,
+        gl: &glow::Context,
         name: &str,
         desc: &VertexAttribDesc,
         offset: i32,
         stride: i32,
     ) {
         let (location, _attrib) = &self.attributes[name];
-        self.context.enable_vertex_attrib_array(*location);
-        self.context.vertex_attrib_pointer_f32(
+        gl.enable_vertex_attrib_array(*location);
+        gl.vertex_attrib_pointer_f32(
             *location,
             desc.components,
             desc.utype,
@@ -150,35 +149,31 @@ impl Shader {
 
     pub unsafe fn assign_attribute_i32(
         &self,
+        gl: &glow::Context,
         name: &str,
         desc: &VertexAttribDesc,
         offset: i32,
         stride: i32,
     ) {
         let (location, _attrib) = &self.attributes[name];
-        self.context.enable_vertex_attrib_array(*location);
-        self.context.vertex_attrib_pointer_i32(
-            *location,
-            desc.components,
-            desc.utype,
-            stride,
-            offset,
-        );
+        gl.enable_vertex_attrib_array(*location);
+        gl.vertex_attrib_pointer_i32(*location, desc.components, desc.utype, stride, offset);
     }
 
-    pub unsafe fn use_program(&self) {
-        self.context.use_program(Some(self.program));
+    pub unsafe fn use_program(&self, gl: &glow::Context) {
+        gl.use_program(Some(self.program));
     }
 
     pub unsafe fn uniform_location<T: AssignUniform>(
         &self,
+        gl: &glow::Context,
         location: &glow::UniformLocation,
         arg: T,
     ) {
-        T::assign_uniform(&self.context, location, arg);
+        T::assign_uniform(gl, location, arg);
     }
 
-    pub unsafe fn uniform<T: AssignUniform>(&self, name: &str, arg: T) {
+    pub unsafe fn uniform<T: AssignUniform>(&self, gl: &glow::Context, name: &str, arg: T) {
         match self.uniforms.get(name) {
             None => {
                 println!("Uniform {name} does not exist in shader");
@@ -186,7 +181,7 @@ impl Shader {
                 //     println!("existing name: {name}");
                 // }
             }
-            Some((location, _)) => self.uniform_location(location, arg),
+            Some((location, _)) => self.uniform_location(gl, location, arg),
         }
     }
 
@@ -228,11 +223,12 @@ impl Shader {
 
 impl Drop for Shader {
     fn drop(&mut self) {
-        unsafe {
-            self.context.delete_program(self.program);
-            self.context.delete_shader(self.vertex_shader);
-            self.context.delete_shader(self.fragment_shader);
-        }
+        warn!("Leaking OpneGL program, vertex and fragment shader.");
+        // unsafe {
+        //     self.context.delete_program(self.program);
+        //     self.context.delete_shader(self.vertex_shader);
+        //     self.context.delete_shader(self.fragment_shader);
+        // }
     }
 }
 

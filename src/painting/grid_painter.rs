@@ -1,7 +1,4 @@
-use std::{
-    mem::{offset_of, size_of},
-    sync::Arc,
-};
+use std::mem::{offset_of, size_of};
 
 use glow::HasContext;
 
@@ -24,25 +21,24 @@ pub struct GridPainter {
     pub array_buffer: GlBuffer<GridVertex>,
     pub element_buffer: GlBuffer<u32>,
     pub vertex_array: GlVertexArray,
-
-    gl: Arc<glow::Context>,
 }
 
 impl GridPainter {
-    pub unsafe fn new(gl: Arc<glow::Context>) -> GridPainter {
+    pub unsafe fn new(gl: &glow::Context) -> GridPainter {
         let vs_source = include_str!("shaders/grid.vert");
         let fs_source = include_str!("shaders/grid.frag");
-        let shader = Shader::from_source(gl.clone(), &vs_source, &fs_source);
+        let shader = Shader::from_source(gl, &vs_source, &fs_source);
 
-        let array_buffer = GlBuffer::new(gl.clone(), GlBufferTarget::ArrayBuffer);
-        let element_buffer = GlBuffer::new(gl.clone(), GlBufferTarget::ElementArrayBuffer);
-        let vertex_array = GlVertexArray::new(gl.clone());
+        let array_buffer = GlBuffer::new(gl, GlBufferTarget::ArrayBuffer);
+        let element_buffer = GlBuffer::new(gl, GlBufferTarget::ElementArrayBuffer);
+        let vertex_array = GlVertexArray::new(gl);
 
-        vertex_array.bind();
-        array_buffer.bind();
-        element_buffer.bind();
+        vertex_array.bind(gl);
+        array_buffer.bind(gl);
+        element_buffer.bind(gl);
 
         shader.assign_attribute_f32(
+            gl,
             "in_device_position",
             &VertexAttribDesc::VEC2,
             offset_of!(GridVertex, position) as i32,
@@ -54,34 +50,38 @@ impl GridPainter {
             position: corner.cwise_as().to_array(),
         });
 
-        array_buffer.buffer_data(&vertices);
-        element_buffer.buffer_data(&Rect::<f64>::TRIANGLE_INDICES);
+        array_buffer.buffer_data(gl, &vertices);
+        element_buffer.buffer_data(gl, &Rect::<f64>::TRIANGLE_INDICES);
 
         GridPainter {
             shader,
             array_buffer,
             element_buffer,
             vertex_array,
-            gl,
         }
     }
 
     // Draw a grid, the lines are 1 pixel wide.
     // The offset and spacing are in the view coordinate system
-    pub unsafe fn draw(&self, offset: Point<f64>, spacing: Point<f64>, frames: &CoordinateFrames) {
-        self.gl.enable(glow::BLEND);
-        self.gl
-            .blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
-        self.gl.blend_equation(glow::FUNC_ADD);
+    pub unsafe fn draw(
+        &self,
+        gl: &glow::Context,
+        offset: Point<f64>,
+        spacing: Point<f64>,
+        frames: &CoordinateFrames,
+    ) {
+        gl.enable(glow::BLEND);
+        gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+        gl.blend_equation(glow::FUNC_ADD);
 
-        self.vertex_array.bind();
-        self.shader.use_program();
-        self.shader.uniform("offset", offset);
-        self.shader.uniform("spacing", spacing);
+        self.vertex_array.bind(gl);
+        self.shader.use_program(gl);
+        self.shader.uniform(gl, "offset", offset);
+        self.shader.uniform(gl, "spacing", spacing);
         let mat_device_to_view: Matrix3<_> = frames.device_to_view().into();
-        self.shader.uniform("device_to_view", &mat_device_to_view);
+        self.shader
+            .uniform(gl, "device_to_view", &mat_device_to_view);
 
-        self.gl
-            .draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0)
+        gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0)
     }
 }

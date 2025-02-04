@@ -3,10 +3,9 @@ use crate::{
     math::{affine_map::AffineMap, point::Point, rgba8::Rgba8},
 };
 use glow::{HasContext, PixelUnpackData};
-use std::sync::Arc;
+use log::warn;
 
 pub struct GlTexture {
-    pub context: Arc<glow::Context>,
     pub id: glow::Texture,
     pub width: i64,
     pub height: i64,
@@ -20,12 +19,7 @@ pub enum Filter {
 }
 
 impl GlTexture {
-    pub unsafe fn from_size(
-        gl: Arc<glow::Context>,
-        width: i64,
-        height: i64,
-        filter: Filter,
-    ) -> Self {
+    pub unsafe fn from_size(gl: &glow::Context, width: i64, height: i64, filter: Filter) -> Self {
         let id = gl.create_texture().expect("Failed to create texture");
 
         gl.active_texture(glow::TEXTURE0);
@@ -44,34 +38,25 @@ impl GlTexture {
             glow::CLAMP_TO_EDGE as i32,
         );
 
-        GlTexture {
-            context: gl,
-            id,
-            width,
-            height,
-        }
+        GlTexture { id, width, height }
     }
 
     /// Bitmap colorspace is assumed to be SRGB
-    pub unsafe fn from_bitmap(
-        context: Arc<glow::Context>,
-        bitmap: &RgbaField,
-        filter: Filter,
-    ) -> Self {
-        let mut texture = Self::from_size(context.clone(), bitmap.width(), bitmap.height(), filter);
-        texture.texture_image(bitmap);
+    pub unsafe fn from_bitmap(gl: &glow::Context, bitmap: &RgbaField, filter: Filter) -> Self {
+        let mut texture = Self::from_size(gl, bitmap.width(), bitmap.height(), filter);
+        texture.texture_image(gl, bitmap);
         texture
     }
 
-    pub unsafe fn texture_image(&mut self, bitmap: &Field<Rgba8>) {
+    pub unsafe fn texture_image(&mut self, gl: &glow::Context, bitmap: &Field<Rgba8>) {
         assert_eq!(bitmap.width(), self.width);
         assert_eq!(bitmap.height(), self.height);
 
         let bitmap_bytes = bitmap.linear_slice().align_to::<u8>().1;
 
-        self.context.active_texture(glow::TEXTURE0);
-        self.context.bind_texture(glow::TEXTURE_2D, Some(self.id));
-        self.context.tex_image_2d(
+        gl.active_texture(glow::TEXTURE0);
+        gl.bind_texture(glow::TEXTURE_2D, Some(self.id));
+        gl.tex_image_2d(
             glow::TEXTURE_2D,
             0,
             // glow::SRGB8_ALPHA8 as i32, see notes/srgb.md
@@ -85,12 +70,17 @@ impl GlTexture {
         );
     }
 
-    pub unsafe fn texture_sub_image(&mut self, offset: Point<i64>, field: &Field<Rgba8>) {
+    pub unsafe fn texture_sub_image(
+        &mut self,
+        gl: &glow::Context,
+        offset: Point<i64>,
+        field: &Field<Rgba8>,
+    ) {
         let bitmap_bytes = field.linear_slice().align_to::<u8>().1;
 
-        self.context.active_texture(glow::TEXTURE0);
-        self.context.bind_texture(glow::TEXTURE_2D, Some(self.id));
-        self.context.tex_sub_image_2d(
+        gl.active_texture(glow::TEXTURE0);
+        gl.bind_texture(glow::TEXTURE_2D, Some(self.id));
+        gl.tex_sub_image_2d(
             glow::TEXTURE_2D,
             0,
             offset.x as i32,
@@ -122,8 +112,9 @@ impl GlTexture {
 
 impl Drop for GlTexture {
     fn drop(&mut self) {
-        unsafe {
-            self.context.delete_texture(self.id);
-        }
+        warn!("Leaking GlTexture");
+        // unsafe {
+        //     self.context.delete_texture(self.id);
+        // }
     }
 }
