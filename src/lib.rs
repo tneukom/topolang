@@ -2,6 +2,7 @@
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::JsCast;
 
 pub(crate) mod brush;
 pub(crate) mod camera;
@@ -45,11 +46,27 @@ pub fn main() {
 
     unsafe {
         wasm_bindgen_futures::spawn_local(async {
+            let document = web_sys::window()
+                .expect("No window")
+                .document()
+                .expect("No document");
+
+            let canvas = document
+                .get_element_by_id("the_canvas_id")
+                .expect("Failed to find the_canvas_id")
+                .dyn_into::<web_sys::HtmlCanvasElement>()
+                .expect("the_canvas_id was not a HtmlCanvasElement");
+
             eframe::WebRunner::new()
                 .start(
-                    "the_canvas_id", // hardcode it
+                    canvas, // hardcode it
                     web_options,
-                    Box::new(|cc| Box::new(EguiApp::new(cc))),
+                    Box::new(|cc| {
+                        egui_extras::install_image_loaders(&cc.egui_ctx);
+                        use crate::app::EguiApp;
+                        let app = EguiApp::new(cc);
+                        Ok(Box::new(app))
+                    }),
                 )
                 .await
                 .expect("failed to start eframe");

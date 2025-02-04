@@ -42,6 +42,7 @@ rfd = { version = "0.15.2", default-features = false, features = ["gtk3"] }
 # memory addresses as a source of randomness.
 # Meh good enough, otherwise it's a hassle with WASM
 ahash = { version ="0.8.11", default-features = false, features = ["std" ] }
+web-sys = "0.3.77"
 
 #[dev-dependencies]
 #rstest = "0.21.0"
