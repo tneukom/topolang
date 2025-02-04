@@ -50,8 +50,8 @@ pub struct Shader {
     pub vertex_shader: glow::Shader,
     pub fragment_shader: glow::Shader,
 
-    pub uniforms: HashMap<String, (glow::UniformLocation, glow::ActiveUniform)>,
-    pub attributes: HashMap<String, (u32, glow::ActiveAttribute)>,
+    pub uniforms: HashMap<String, glow::ActiveUniform>,
+    pub attributes: HashMap<String, glow::ActiveAttribute>,
 }
 
 impl Shader {
@@ -92,28 +92,23 @@ impl Shader {
         }
 
         let n_uniforms = gl.get_active_uniforms(program);
-        let mut uniforms: HashMap<String, (glow::UniformLocation, glow::ActiveUniform)> =
-            HashMap::new();
+        let mut uniforms: HashMap<String, glow::ActiveUniform> = HashMap::new();
         for i in 0..n_uniforms {
             let active_uniform = gl
                 .get_active_uniform(program, i)
                 .expect("Failed to get active uniform");
-            let location = gl
-                .get_uniform_location(program, &active_uniform.name)
-                .expect("Failed to get uniform location");
-            uniforms.insert(active_uniform.name.clone(), (location, active_uniform));
+
+            uniforms.insert(active_uniform.name.clone(), active_uniform);
         }
 
         let n_attributes = gl.get_active_attributes(program);
-        let mut attributes: HashMap<String, (u32, glow::ActiveAttribute)> = HashMap::new();
+        let mut attributes: HashMap<String, glow::ActiveAttribute> = HashMap::new();
         for i in 0..n_attributes {
             let active_attribute = gl
                 .get_active_attribute(program, i)
                 .expect("Failed to get active attribute");
-            let location = gl
-                .get_attrib_location(program, &active_attribute.name)
-                .expect("Failed to get attribute location");
-            attributes.insert(active_attribute.name.clone(), (location, active_attribute));
+
+            attributes.insert(active_attribute.name.clone(), active_attribute);
         }
 
         Shader {
@@ -127,6 +122,14 @@ impl Shader {
         }
     }
 
+    pub unsafe fn attribute_location(&self, gl: &glow::Context, name: &str) -> u32 {
+        let active_attribute = &self.attributes[name];
+        let location = gl
+            .get_attrib_location(self.program, &active_attribute.name)
+            .expect("Failed to get attribute location");
+        location
+    }
+
     pub unsafe fn assign_attribute_f32(
         &self,
         gl: &glow::Context,
@@ -135,10 +138,11 @@ impl Shader {
         offset: i32,
         stride: i32,
     ) {
-        let (location, _attrib) = &self.attributes[name];
-        gl.enable_vertex_attrib_array(*location);
+        let location = self.attribute_location(gl, name);
+
+        gl.enable_vertex_attrib_array(location);
         gl.vertex_attrib_pointer_f32(
-            *location,
+            location,
             desc.components,
             desc.utype,
             desc.normalized,
@@ -155,9 +159,10 @@ impl Shader {
         offset: i32,
         stride: i32,
     ) {
-        let (location, _attrib) = &self.attributes[name];
-        gl.enable_vertex_attrib_array(*location);
-        gl.vertex_attrib_pointer_i32(*location, desc.components, desc.utype, stride, offset);
+        let location = self.attribute_location(gl, name);
+
+        gl.enable_vertex_attrib_array(location);
+        gl.vertex_attrib_pointer_i32(location, desc.components, desc.utype, stride, offset);
     }
 
     pub unsafe fn use_program(&self, gl: &glow::Context) {
@@ -181,7 +186,13 @@ impl Shader {
                 //     println!("existing name: {name}");
                 // }
             }
-            Some((location, _)) => self.uniform_location(gl, location, arg),
+            Some(active_uniform) => {
+                let location = gl
+                    .get_uniform_location(self.program, &active_uniform.name)
+                    .expect("Failed to get uniform location");
+
+                self.uniform_location(gl, &location, arg)
+            }
         }
     }
 
