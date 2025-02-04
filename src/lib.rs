@@ -2,6 +2,7 @@
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
 
 pub(crate) mod brush;

@@ -21,7 +21,6 @@ use image::{
     codecs::gif::{GifEncoder, Repeat},
     ExtendedColorType,
 };
-use instant::Instant;
 use log::{info, warn};
 use std::{
     fs,
@@ -30,6 +29,7 @@ use std::{
     rc::Rc,
     sync::{mpsc, Arc, Mutex},
 };
+use web_time::Instant;
 
 pub struct GifRecorder {
     start: Option<Rc<Snapshot>>,

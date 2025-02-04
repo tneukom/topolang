@@ -1,8 +1,4 @@
-use crate::{
-    pixmap::MaterialMap,
-    utils::{unix_timestamp, ReflectEnum},
-    view::Selection,
-};
+use crate::{pixmap::MaterialMap, utils::ReflectEnum, view::Selection};
 use std::rc::Rc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -60,9 +56,6 @@ pub struct Snapshot {
     selection: Option<Selection>,
     cause: SnapshotCause,
 
-    /// Unix time
-    timestamp: f64,
-
     parent: Option<Rc<Snapshot>>,
 }
 
@@ -76,7 +69,6 @@ impl Snapshot {
         Self {
             material_map,
             selection,
-            timestamp: unix_timestamp(),
             cause,
             parent,
         }

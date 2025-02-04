@@ -1,8 +1,4 @@
-use std::{
-    collections::BTreeSet,
-    fmt::Debug,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{collections::BTreeSet, fmt::Debug};
 
 pub trait ReflectEnum: Sized + Copy + 'static {
     fn all() -> &'static [Self];
@@ -34,13 +30,6 @@ impl<T: Ord> UndirectedEdge<T> {
 }
 
 pub type UndirectedGraph<T> = BTreeSet<UndirectedEdge<T>>;
-
-pub fn unix_timestamp() -> f64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs_f64()
-}
 
 pub trait IntoT: Sized {
     fn intot<S: From<Self>>(self) -> S;

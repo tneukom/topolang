@@ -33,7 +33,7 @@ data-encoding = "2.6.0"
 smallvec = { version = "1.13.1", features = ["union", "const_generics", "const_new"] }
 num-traits = "0.2.19"
 anyhow = { version = "1.0.95", features = ["backtrace"] }
-instant = { version = "0.1.13", features = ["wasm-bindgen"] }
+web-time = "1.1.0"
 rfd = { version = "0.15.2", default-features = false, features = ["gtk3"] }
 #walkdir = "2.5.0"
 
