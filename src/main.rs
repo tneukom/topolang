@@ -85,10 +85,10 @@ pub fn main() {
         env_logger::init();
         warn!("Logging!");
 
-        use seamlang::benchmarks::main_benchmark;
-        main_benchmark();
+        // use seamlang::benchmarks::main_benchmark;
+        // main_benchmark();
 
-        // main_editor();
+        main_editor();
 
         // benchmark_topology_new();
         // color_replace();

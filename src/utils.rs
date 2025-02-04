@@ -1,6 +1,8 @@
-use std::{collections::BTreeSet, fmt::Debug, time::UNIX_EPOCH};
-
-use instant::SystemTime;
+use std::{
+    collections::BTreeSet,
+    fmt::Debug,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 pub trait ReflectEnum: Sized + Copy + 'static {
     fn all() -> &'static [Self];

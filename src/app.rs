@@ -312,8 +312,13 @@ impl EguiApp {
 
         if ui.button("Save File").clicked() {
             let task = rfd::AsyncFileDialog::new().save_file();
-            let color_map = self.view.world.material_map();
-            let bitmap = color_map.to_bitmap();
+
+            let bitmap = self
+                .view
+                .world
+                .material_map()
+                .to_rgba8_field(Material::TRANSPARENT);
+
             match bitmap.to_png() {
                 Ok(file_content) => {
                     wasm_bindgen_futures::spawn_local(async move {
