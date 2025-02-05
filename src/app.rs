@@ -574,7 +574,8 @@ impl EguiApp {
 
             // Scroll captured if the mouse pointer is over view, even if it doesn't have focus.
             let scroll_delta = if response.contains_pointer() {
-                input.smooth_scroll_delta.y as f64 / 50.0
+                let scroll_delta = input.smooth_scroll_delta.y as f64 / 50.0;
+                scroll_delta.clamp(-0.2, 0.2)
             } else {
                 0.0
             };
