@@ -5,13 +5,17 @@ use wasm_bindgen::prelude::wasm_bindgen;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
 
+pub mod app;
+pub mod benchmarks;
 pub(crate) mod brush;
 pub(crate) mod camera;
 pub(crate) mod coordinate_frame;
 pub(crate) mod cycle_segments;
 pub(crate) mod field;
+pub(crate) mod gif_recorder;
 pub(crate) mod history;
 pub(crate) mod interpreter;
+pub(crate) mod line_drawing;
 pub(crate) mod material;
 pub(crate) mod math;
 pub(crate) mod morphism;
@@ -27,10 +31,6 @@ pub(crate) mod utils;
 pub(crate) mod view;
 pub(crate) mod widgets;
 pub(crate) mod world;
-
-pub mod app;
-pub mod benchmarks;
-pub(crate) mod line_drawing;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]

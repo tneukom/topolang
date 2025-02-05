@@ -2,7 +2,8 @@ use crate::{
     brush::Brush,
     coordinate_frame::CoordinateFrames,
     field::RgbaField,
-    history::{Snapshot, SnapshotCause},
+    gif_recorder::GifRecorder,
+    history::SnapshotCause,
     interpreter::{CompiledRules, Compiler},
     material::Material,
     math::{point::Point, rect::Rect, rgba8::Pico8Palette},
@@ -13,75 +14,17 @@ use crate::{
     widgets::{brush_chooser, FileChooser},
     world::World,
 };
-use anyhow::Context;
 use data_encoding::BASE64;
 use egui::Widget;
 use glow::HasContext;
-use image::{
-    codecs::gif::{GifEncoder, Repeat},
-    ExtendedColorType,
-};
 use log::{info, warn};
 use std::{
     fs,
-    fs::File,
     path::{Path, PathBuf},
     rc::Rc,
     sync::{mpsc, Arc, Mutex},
 };
 use web_time::Instant;
-
-pub struct GifRecorder {
-    start: Option<Rc<Snapshot>>,
-    stop: Option<Rc<Snapshot>>,
-}
-
-impl GifRecorder {
-    pub fn new() -> Self {
-        Self {
-            start: None,
-            stop: None,
-        }
-    }
-
-    /// Try to find a path from start to stop or from stop to start
-    fn history_path(&self) -> Option<Vec<&Rc<Snapshot>>> {
-        let start = self.start.as_ref()?;
-        let stop = self.stop.as_ref()?;
-        if let Some(path) = stop.path_to(start) {
-            return Some(path);
-        }
-        if let Some(path) = start.path_to(stop) {
-            return Some(path);
-        }
-        None
-    }
-
-    pub fn export(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
-        let snapshot_path = self.history_path().context("No path")?;
-
-        let file = File::create(path)?;
-        let mut gif_encoder = GifEncoder::new_with_speed(file, 10);
-        gif_encoder.set_repeat(Repeat::Infinite).unwrap();
-
-        for snapshot in snapshot_path {
-            // TODO: Offset world pixmap by bounds.low()
-            // TODO: Paint over white background to remove transparency or use apng instead
-            let image = snapshot
-                .material_map()
-                .to_rgba8_field(Material::TRANSPARENT);
-
-            gif_encoder.encode(
-                image.as_raw(),
-                image.width() as u32,
-                image.height() as u32,
-                ExtendedColorType::Rgba8,
-            )?;
-        }
-
-        Ok(())
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct Clipboard {
@@ -134,7 +77,6 @@ pub struct EguiApp {
 
     // stabilize: bool,
     // stabilize_count: i64,
-
     #[cfg(not(target_arch = "wasm32"))]
     file_chooser: FileChooser,
 
