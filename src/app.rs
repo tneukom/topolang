@@ -134,6 +134,8 @@ pub struct EguiApp {
 
     // stabilize: bool,
     // stabilize_count: i64,
+
+    #[cfg(not(target_arch = "wasm32"))]
     file_chooser: FileChooser,
 
     gif_recorder: GifRecorder,
@@ -181,10 +183,6 @@ impl EguiApp {
 
         let (channel_sender, channel_receiver) = mpsc::sync_channel(1);
 
-        let saves_path = PathBuf::from("resources/saves")
-            .canonicalize()
-            .expect("Failed to canonicalize saves path");
-
         Self {
             view_painter: Arc::new(Mutex::new(view_painter)),
             start_time,
@@ -195,7 +193,13 @@ impl EguiApp {
             file_name: "".to_string(),
             run: false,
             view_input: ViewInput::EMPTY,
-            file_chooser: FileChooser::new(saves_path),
+            #[cfg(not(target_arch = "wasm32"))]
+            file_chooser: {
+                let saves_path = PathBuf::from("resources/saves")
+                    .canonicalize()
+                    .expect("Failed to canonicalize saves path");
+                FileChooser::new(saves_path)
+            },
             compiler: Compiler::new(),
             compiled_rules: None,
             gif_recorder: GifRecorder::new(),
@@ -298,7 +302,7 @@ impl EguiApp {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub fn open_save_ui(&mut self, ui: &mut egui::Ui) {
+    pub fn file_dialog_ui(&mut self, ui: &mut egui::Ui) {
         if ui.button("Open File").clicked() {
             let channel_sender = self.channel_sender.clone();
             wasm_bindgen_futures::spawn_local(async move {
@@ -345,7 +349,7 @@ impl EguiApp {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn open_save_ui(&mut self, ui: &mut egui::Ui) {
+    pub fn file_dialog_ui(&mut self, ui: &mut egui::Ui) {
         if ui.button("Open File").clicked() {
             if let Some(path) = rfd::FileDialog::new()
                 .add_filter("png", &["png"])
@@ -373,7 +377,8 @@ impl EguiApp {
         }
     }
 
-    pub fn load_save_ui(&mut self, ui: &mut egui::Ui) {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn file_chooser_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             if ui.button("New").clicked() {
                 let bounds = Rect::low_size(Point(0, 0), self.new_size);
@@ -571,11 +576,13 @@ impl EguiApp {
 
     pub fn top_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.menu_button("File", |ui| {
-                self.load_save_ui(ui);
+            #[cfg(not(target_arch = "wasm32"))]
+            ui.menu_button("File Chooser", |ui| {
+                self.file_chooser_ui(ui);
             });
-            ui.menu_button("File2", |ui| {
-                self.open_save_ui(ui);
+
+            ui.menu_button("File", |ui| {
+                self.file_dialog_ui(ui);
             })
         });
     }
