@@ -214,6 +214,11 @@ impl Pixmap<Material> {
             .map(|material| material.unwrap_or(default).to_rgba())
     }
 
+    pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let rgba_field = RgbaField::load(path)?;
+        Ok(MaterialMap::from(rgba_field))
+    }
+
     pub fn save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         self.clone().into_rgba8().save(path)
     }

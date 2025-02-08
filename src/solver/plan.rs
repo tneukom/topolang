@@ -5,9 +5,10 @@ use crate::{
         element::Element,
         propagations::{morphism_propagations, AnyPropagation, Propagation},
     },
-    topology::{BorderKey, RegionKey, Seam, Topology},
+    topology::{BorderKey, RegionKey, Seam, StrongRegionKey, Topology},
 };
 use ahash::HashSet;
+use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Guess {
@@ -61,17 +62,17 @@ impl Guess {
 }
 
 #[derive(Debug)]
-pub struct Step {
+pub struct SearchStep {
     guess: Guess,
     propagations: Vec<AnyPropagation>,
     constraints: Vec<AnyConstraint>,
 }
 
-pub struct Plan {
-    steps: Vec<Step>,
+pub struct SearchPlan {
+    steps: Vec<SearchStep>,
 }
 
-impl Plan {
+impl SearchPlan {
     /// Choose a free variable to guess we guess seams if possible, then borders, then regions.
     pub fn choose_guess(
         free_variables: &HashSet<Element>,
@@ -199,7 +200,7 @@ impl Plan {
                 }
             }
 
-            let step = Step {
+            let step = SearchStep {
                 guess,
                 propagations,
                 constraints,
@@ -213,7 +214,13 @@ impl Plan {
         Self { steps }
     }
 
-    pub fn search_step(&self, i_step: usize, phi: &mut Morphism, codom: &Topology, found: &mut impl FnMut(&Morphism)) {
+    pub fn search_step(
+        &self,
+        i_step: usize,
+        phi: &mut Morphism,
+        codom: &Topology,
+        found: &mut impl FnMut(&Morphism),
+    ) {
         println!("Step {i_step}");
 
         if i_step >= self.steps.len() {
@@ -228,7 +235,12 @@ impl Plan {
                 let derived = propagation.derives();
                 match propagation.derive(phi, codom) {
                     Ok(phi_derived) => {
-                        println!("Propagated by {} {:?} -> {:?}", propagation.name(), derived, phi_derived);
+                        println!(
+                            "Propagated by {} {:?} -> {:?}",
+                            propagation.name(),
+                            derived,
+                            phi_derived
+                        );
                         phi.insert(derived, phi_derived);
                     }
                     Err(_err) => {
@@ -261,17 +273,51 @@ impl Plan {
         });
         solutions
     }
+
+    fn is_excluded(
+        phi: &Morphism,
+        codom: &Topology,
+        excluding: &BTreeSet<StrongRegionKey>,
+    ) -> bool {
+        phi.region_map.values().any(|phi_region_key| {
+            let strong_phi_region_key = codom.regions[phi_region_key].top_left_interior_pixel();
+            excluding.contains(&strong_phi_region_key)
+        })
+    }
+
+    pub fn solutions_excluding(
+        &self,
+        codom: &Topology,
+        excluding: &BTreeSet<StrongRegionKey>,
+    ) -> Vec<Morphism> {
+        let mut solutions = Vec::new();
+        self.search(codom, |phi| {
+            if !Self::is_excluded(phi, codom, excluding) {
+                solutions.push(phi.clone());
+            }
+
+        });
+        solutions
+    }
+
+    pub fn first_solution(&self, codom: &Topology) -> Option<Morphism> {
+        // TODO: Abort search after first solution found
+        self.solutions(codom).into_iter().next()
+    }
 }
 
 #[cfg(test)]
 mod test {
     use crate::{
-        field::RgbaField, material::Material, pixmap::MaterialMap, solver::plan::Plan,
+        field::RgbaField,
+        material::Material,
+        math::rgba8::Rgba8,
+        pixmap::MaterialMap,
+        solver::{plan::SearchPlan, propagations::Propagation},
         topology::Topology,
     };
-    use std::path::Path;
     use itertools::Itertools;
-    use crate::solver::propagations::Propagation;
+    use std::path::Path;
 
     fn load(path: impl AsRef<Path>) -> Topology {
         let rgba_field = RgbaField::load(path).unwrap();
@@ -279,25 +325,54 @@ mod test {
         Topology::new(material_map)
     }
 
-    fn assert_proper_plan(dom_filename: &str, codom_filename: &str) {
-        let folder = "test_resources/morphism/";
+    #[inline(never)]
+    pub fn extract_pattern(material_map: &mut MaterialMap) -> MaterialMap {
+        let topo = Topology::new(material_map.clone());
 
-        let dom = load(format!("{folder}/{dom_filename}"));
-        // let codom = load(format!("{folder}/{codom_filename}"));
+        const PATTERN_FRAME_MATERIAL: Material = Material::from_rgba(Rgba8::MAGENTA);
 
-        let plan = Plan::for_morphism(&dom);
-        // for (i_step, step) in plan.steps.iter().enumerate() {
-        //     println!("Step {i_step}");
-        //     println!("  Guess {:?}", &step.guess);
-        //     println!("  Propagations");
-        //     for propagation in &step.propagations {
-        //         println!("    {:?}", propagation.as_propagation());
-        //     }
-        //     println!("  Constraints");
-        //     for constraint in &step.constraints {
-        //         println!("    {:?}", constraint.as_constraint());
-        //     }
-        // }
+        let frame = topo
+            .regions
+            .values()
+            .find(|&region| region.material == PATTERN_FRAME_MATERIAL)
+            .unwrap();
+        assert_eq!(frame.boundary.borders.len(), 2);
+
+        let inner_border = frame
+            .boundary
+            .borders
+            .iter()
+            .find(|border| !border.is_outer)
+            .unwrap();
+
+        // Extract right of border
+        let right_of_border = material_map.right_of_border(inner_border);
+        for pixel in right_of_border.keys() {
+            material_map.remove(pixel);
+        }
+
+        right_of_border
+    }
+
+    fn load_material_map(path: impl AsRef<Path>) -> MaterialMap {
+        let rgba_field = RgbaField::load(path).unwrap();
+        MaterialMap::from(rgba_field).without(Material::VOID)
+    }
+
+    fn assert_extract_inner_outer(name: &str) {
+        let folder = "test_resources/extract_pattern";
+        let mut pixmap = RgbaField::load(format!("{folder}/{name}.png"))
+            .unwrap()
+            .into();
+        let inner = extract_pattern(&mut pixmap);
+
+        // Load expected inner and outer pixmaps
+        let expected_inner = load_material_map(format!("{folder}/{name}_inner.png"));
+        assert!(inner.defined_equals(&expected_inner));
+
+        let expected_outer = load_material_map(format!("{folder}/{name}_outer.png"));
+        // pixmap.save(format!("{folder}/{name}_outer_actual.png")).unwrap();
+        assert!(pixmap.defined_equals(&expected_outer));
     }
 
     fn assert_solve(dom_filename: &str, codom_filename: &str, expected_solutions_len: usize) {
@@ -306,13 +381,17 @@ mod test {
         let dom = load(format!("{folder}/{dom_filename}"));
         let codom = load(format!("{folder}/{codom_filename}"));
 
-        let plan = Plan::for_morphism(&dom);
+        let plan = SearchPlan::for_morphism(&dom);
         for (i_step, step) in plan.steps.iter().enumerate() {
             println!("Step {i_step}");
             println!("  Guess {:?}", &step.guess);
             println!("  Propagations");
             for propagation in &step.propagations {
-                println!("    {:?} -> {:?}", propagation.as_propagation(), propagation.derives());
+                println!(
+                    "    {:?} -> {:?}",
+                    propagation.as_propagation(),
+                    propagation.derives()
+                );
             }
             println!("  Constraints");
             for constraint in &step.constraints {
@@ -335,30 +414,20 @@ mod test {
         assert_eq!(solutions.len(), expected_solutions_len);
     }
 
-    // #[test]
-    // fn plan_a() {
-    //     assert_solve("a.png", "phi_a.png", 1);
-    // }
-    //
-    // #[test]
-    // fn plan_b() {
-    //     assert_solve("b.png", "phi_b.png", 1);
-    // }
-    //
-    // #[test]
-    // fn plan_c() {
-    //     assert_solve("c.png", "phi_c.png", 1);
-    // }
-    //
-    // #[test]
-    // fn plan_d() {
-    //     assert_solve("d.png", "phi_d.png", 1);
-    // }
-    //
-    // #[test]
-    // fn plan_e() {
-    //     assert_solve("e.png", "phi_e.png", 1);
-    // }
+    #[test]
+    fn extract_pattern_a() {
+        assert_extract_inner_outer("a");
+    }
+
+    #[test]
+    fn extract_pattern_b() {
+        assert_extract_inner_outer("b");
+    }
+
+    #[test]
+    fn extract_pattern_c() {
+        assert_extract_inner_outer("c");
+    }
 
     #[test]
     fn pattern_matches_a() {

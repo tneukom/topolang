@@ -21,7 +21,6 @@ pub(crate) mod math;
 pub(crate) mod morphism;
 pub(crate) mod painting;
 pub(crate) mod palettes;
-pub(crate) mod pattern;
 pub(crate) mod pixmap;
 pub(crate) mod regions;
 pub(crate) mod rule;

@@ -1,10 +1,10 @@
 use crate::{
     morphism::Morphism,
-    pattern::{NullTrace, SearchMorphism},
     topology::{FillRegion, RegionKey, Topology},
     world::World,
 };
 use itertools::Itertools;
+use crate::solver::plan::SearchPlan;
 
 pub struct Rule {
     /// The pattern
@@ -12,6 +12,9 @@ pub struct Rule {
 
     /// The substitution
     pub after: Topology,
+
+    /// Plan for finding morphisms
+    pub search_plan: SearchPlan
 }
 
 impl Rule {
@@ -40,7 +43,9 @@ impl Rule {
             Self::assert_phi_region_constant(&before, &after, region_key)?
         }
 
-        Ok(Rule { before, after })
+        let search_plan = SearchPlan::for_morphism(&before);
+
+        Ok(Rule { before, after, search_plan })
     }
 
     /// Given a match for the pattern `self.before` and the world, apply the substitution determined
@@ -52,7 +57,7 @@ impl Rule {
             let after_material = self
                 .after
                 .material_map
-                .get(before_region.arbitrary_interior_pixel())
+                .get(before_region.top_left_interior_pixel())
                 .unwrap();
             if before_region.material == after_material {
                 continue;
@@ -77,8 +82,7 @@ pub fn stabilize(world: &mut World, rules: &Vec<Rule>) -> usize {
     loop {
         let mut applied = false;
         for rule in rules {
-            if let Some(phi) = SearchMorphism::new(world.topology(), &rule.before)
-                .find_first_match(NullTrace::new())
+            if let Some(phi) = rule.search_plan.first_solution(world.topology())
             {
                 rule.substitute(&phi, world);
                 steps += 1;
@@ -97,38 +101,34 @@ mod test {
     use crate::{
         field::RgbaField,
         material::Material,
-        pattern::{NullTrace, SearchMorphism},
         pixmap::MaterialMap,
         rule::Rule,
         topology::Topology,
-        utils::IntoT,
         world::World,
     };
+    use crate::solver::plan::SearchPlan;
 
     fn assert_rule_application(folder: &str, expected_application_count: usize) {
         let folder = format!("test_resources/rules/{folder}");
 
-        let before_material_map = RgbaField::load(format!("{folder}/before.png"))
-            .unwrap()
-            .intot::<MaterialMap>();
+        let before_material_map = MaterialMap::load(format!("{folder}/before.png")).unwrap();
         let before = Topology::new(before_material_map);
         let before = before.filter_by_material(Material::is_not_void);
 
-        let after_material_map = RgbaField::load(format!("{folder}/after.png"))
-            .unwrap()
-            .intot::<MaterialMap>();
+        let after_material_map = MaterialMap::load(format!("{folder}/after.png")).unwrap();
         let after = Topology::new(after_material_map);
 
         let rule = Rule::new(before, after).unwrap();
 
-        let world_material_map = RgbaField::load(format!("{folder}/world.png"))
-            .unwrap()
-            .into();
+        let world_material_map = MaterialMap::load(format!("{folder}/world.png"))
+            .unwrap();
         let mut world = World::from_material_map(world_material_map);
 
         let mut application_count: usize = 0;
-        while let Some(phi) =
-            SearchMorphism::new(world.topology(), &rule.before).find_first_match(NullTrace::new())
+
+        let search_plan = SearchPlan::for_morphism(&rule.before);
+
+        while let Some(phi) = search_plan.solutions(world.topology()).first()
         {
             let changed = rule.substitute(&phi, &mut world);
             if !changed {

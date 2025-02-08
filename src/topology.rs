@@ -256,10 +256,6 @@ impl Boundary {
         Self { borders }
     }
 
-    pub fn arbitrary_interior_pixel(&self) -> Pixel {
-        self.top_left_interior_pixel()
-    }
-
     pub fn top_left_interior_pixel(&self) -> Pixel {
         let first_border = &self.borders[0];
         assert!(first_border.is_outer);
@@ -296,10 +292,6 @@ impl Region {
             .borders
             .iter()
             .flat_map(|border| border.atomic_seams())
-    }
-
-    pub fn arbitrary_interior_pixel(&self) -> Pixel {
-        self.boundary.arbitrary_interior_pixel()
     }
 
     pub fn top_left_interior_pixel(&self) -> Pixel {
@@ -445,7 +437,7 @@ impl Topology {
 
             let region = Region {
                 material: material_map
-                    .get(boundary.arbitrary_interior_pixel())
+                    .get(boundary.top_left_interior_pixel())
                     .unwrap(),
                 boundary: boundary,
                 bounds: region_bounding_rect,

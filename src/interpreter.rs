@@ -1,10 +1,10 @@
 use std::collections::BTreeSet;
 
+use crate::solver::plan::SearchPlan;
 use crate::{
     field::RgbaField,
     material::Material,
     math::{pixel::Pixel, rgba8::Rgba8},
-    pattern::{NullTrace, SearchMorphism},
     pixmap::MaterialMap,
     rule::Rule,
     topology::{BorderKey, Region, StrongRegionKey, Topology},
@@ -15,9 +15,11 @@ use crate::{
 pub struct CompiledRule {
     /// All regions in the Rule frame, before and after. These elements should be hidden during Rule
     /// execution. Contains an arbitrary pixel of each region.
-    source: Vec<StrongRegionKey>,
+    source: BTreeSet<StrongRegionKey>,
 
     rule: Rule,
+
+
 }
 
 pub struct CompiledRules {
@@ -35,11 +37,10 @@ impl CompiledRules {
             .copied()
             .collect();
 
-        for CompiledRule { rule, .. } in &self.rules {
-            let mut search = SearchMorphism::new(world.topology(), &rule.before);
-            search.hidden = Some(&hidden);
+        for CompiledRule { rule, source, .. } in &self.rules {
+            let solutions = rule.search_plan.solutions_excluding(world.topology(), source);
 
-            let solutions = search.find_matches(NullTrace::new());
+            // TODO: Reject solutions with hidden elements
 
             for phi in solutions {
                 let modified = rule.substitute(&phi, world);
@@ -103,8 +104,11 @@ impl Compiler {
     #[inline(never)]
     pub fn compile(&self, world: &World) -> anyhow::Result<CompiledRules> {
         // Find all matches for rule_frame in world
-        let search = SearchMorphism::new(world.topology(), &self.rule_frame);
-        let matches = search.find_matches(NullTrace::new());
+        let matches = {
+            let search_plan = SearchPlan::for_morphism(&self.rule_frame);
+            search_plan.solutions(world.topology())
+        };
+
         let topology = world.topology();
 
         // Extract all matches and creates rules from them
@@ -119,19 +123,19 @@ impl Compiler {
             let after = topology.topology_right_of_border(&topology[phi_after_border]);
 
             // Collect regions that are part of the source for this Rule.
-            let mut source: Vec<StrongRegionKey> = Vec::new();
+            let mut source: BTreeSet<StrongRegionKey> = BTreeSet::new();
             // Before and after regions
             source.extend(
                 before
                     .regions
                     .values()
-                    .map(Region::arbitrary_interior_pixel),
+                    .map(Region::top_left_interior_pixel),
             );
-            source.extend(after.regions.values().map(Region::arbitrary_interior_pixel));
+            source.extend(after.regions.values().map(Region::top_left_interior_pixel));
             // Rule frame regions
             for &region_key in self.rule_frame.iter_region_keys() {
                 let phi_region_key = phi[region_key];
-                source.push(topology[phi_region_key].arbitrary_interior_pixel());
+                source.insert(topology[phi_region_key].top_left_interior_pixel());
             }
 
             let before = before.filter_by_material(Material::is_not_void);
