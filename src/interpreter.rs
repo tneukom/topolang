@@ -18,8 +18,6 @@ pub struct CompiledRule {
     source: BTreeSet<StrongRegionKey>,
 
     rule: Rule,
-
-
 }
 
 pub struct CompiledRules {

@@ -44,6 +44,7 @@ impl Propagation for BothSidedSeamFromCorner {
         self.seam.into()
     }
 
+    #[inline(never)]
     fn derive(&self, phi: &Morphism, codom: &Topology) -> anyhow::Result<Element> {
         // Find phi_seam in codom
         // on phi(border)
@@ -87,6 +88,7 @@ impl Propagation for SoleSeamOnBorder {
         self.seam.into()
     }
 
+    #[inline(never)]
     fn derive(&self, phi: &Morphism, codom: &Topology) -> anyhow::Result<Element> {
         let phi_border_key = phi.border_map[&self.border_key];
         let phi_border = &codom[phi_border_key];
@@ -121,6 +123,7 @@ impl Propagation for SeamFromBothCorners {
         self.seam.into()
     }
 
+    #[inline(never)]
     fn derive(&self, phi: &Morphism, codom: &Topology) -> anyhow::Result<Element> {
         let phi_start_corner = phi.corner_map[&self.seam.start_corner()];
         let phi_stop_corner = phi.corner_map[&self.seam.stop_corner()];
@@ -155,6 +158,7 @@ impl Propagation for SeamReverse {
         self.seam.atom_reversed().into()
     }
 
+    #[inline(never)]
     fn derive(&self, phi: &Morphism, codom: &Topology) -> anyhow::Result<Element> {
         let phi_seam = phi.seam_map[&self.seam];
         if !phi_seam.is_atom() {
@@ -192,6 +196,7 @@ impl Propagation for LeftRegionOfSeam {
         self.region_key.into()
     }
 
+    #[inline(never)]
     fn derive(&self, phi: &Morphism, codom: &Topology) -> anyhow::Result<Element> {
         let phi_seam = phi.seam_map[&self.seam];
         let phi_region_key = codom.left_of(phi_seam);
@@ -221,6 +226,7 @@ impl Propagation for CornerFromSeam {
         self.seam.corner(self.corner).into()
     }
 
+    #[inline(never)]
     fn derive(&self, phi: &Morphism, _codom: &Topology) -> anyhow::Result<Element> {
         let phi_seam = phi.seam_map[&self.seam];
         let phi_corner = phi_seam.corner(self.corner);
@@ -254,6 +260,7 @@ impl Propagation for OuterBorder {
         self.outer_border().into()
     }
 
+    #[inline(never)]
     fn derive(&self, phi: &Morphism, _codom: &Topology) -> anyhow::Result<Element> {
         let &phi_region_key = &phi.region_map[&self.region_key];
         let phi_outer_border = BorderKey::new(phi_region_key, 0);
@@ -303,6 +310,7 @@ impl Propagation for LastInnerBorder {
         self.inner_border_key().into()
     }
 
+    #[inline(never)]
     fn derive(&self, phi: &Morphism, codom: &Topology) -> anyhow::Result<Element> {
         // Find which border in codom is not yet assigned
         let phi_region_key = phi.region_map[&self.region_key];

@@ -214,6 +214,7 @@ impl SearchPlan {
         Self { steps }
     }
 
+    #[inline(never)]
     pub fn search_step(
         &self,
         i_step: usize,
@@ -261,11 +262,13 @@ impl SearchPlan {
         })
     }
 
+    #[inline(never)]
     pub fn search(&self, codom: &Topology, mut found: impl FnMut(&Morphism)) {
         let mut phi = Morphism::new();
         self.search_step(0, &mut phi, codom, &mut found);
     }
 
+    #[inline(never)]
     pub fn solutions(&self, codom: &Topology) -> Vec<Morphism> {
         let mut solutions = Vec::new();
         self.search(codom, |phi| {
@@ -285,6 +288,7 @@ impl SearchPlan {
         })
     }
 
+    #[inline(never)]
     pub fn solutions_excluding(
         &self,
         codom: &Topology,
@@ -300,6 +304,7 @@ impl SearchPlan {
         solutions
     }
 
+    #[inline(never)]
     pub fn first_solution(&self, codom: &Topology) -> Option<Morphism> {
         // TODO: Abort search after first solution found
         self.solutions(codom).into_iter().next()

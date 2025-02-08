@@ -49,6 +49,7 @@ impl Constraint for PreservesSeam {
         ]
     }
 
+    #[inline(never)]
     fn is_satisfied(&self, phi: &Morphism, codom: &Topology) -> bool {
         let phi_seam = phi.seam_map[&self.seam];
 
@@ -76,6 +77,7 @@ impl Constraint for PreservesSeamReverse {
         vec![self.seam.into(), self.seam.atom_reversed().into()]
     }
 
+    #[inline(never)]
     fn is_satisfied(&self, phi: &Morphism, _codom: &Topology) -> bool {
         let phi_seam = phi.seam_map[&self.seam];
         let phi_reverse_seam = phi.seam_map[&self.seam.atom_reversed()];
@@ -106,6 +108,7 @@ impl Constraint for PreservesMaterial {
         vec![self.region_key.into()]
     }
 
+    #[inline(never)]
     fn is_satisfied(&self, phi: &Morphism, codom: &Topology) -> bool {
         let phi_region_key = phi.region_map[&self.region_key];
         let phi_region = &codom[phi_region_key];
@@ -134,6 +137,7 @@ impl Constraint for PreservesBorderCount {
         vec![self.region_key.into()]
     }
 
+    #[inline(never)]
     fn is_satisfied(&self, phi: &Morphism, codom: &Topology) -> bool {
         let phi_region_key = phi.region_map[&self.region_key];
         let phi_region = &codom[phi_region_key];
@@ -168,6 +172,7 @@ impl Constraint for PreservesSolid {
         variables
     }
 
+    #[inline(never)]
     fn is_satisfied(&self, phi: &Morphism, codom: &Topology) -> bool {
         let phi_region_key = phi.region_map[&self.region_key];
         let phi_region = &codom[phi_region_key];
@@ -197,6 +202,7 @@ impl Constraint for PreservesBorderOrientation {
         vec![self.border_key.into()]
     }
 
+    #[inline(never)]
     fn is_satisfied(&self, phi: &Morphism, codom: &Topology) -> bool {
         let phi_border_key = phi.border_map[&self.border_key];
         let phi_border = &codom[phi_border_key];
@@ -222,6 +228,7 @@ impl Constraint for NonOverlappingSeams {
         vec![self.seam_a.into(), self.seam_b.into()]
     }
 
+    #[inline(never)]
     fn is_satisfied(&self, phi: &Morphism, codom: &Topology) -> bool {
         let phi_seam_a = phi.seam_map[&self.seam_a];
         let phi_seam_b = phi.seam_map[&self.seam_b];
@@ -251,6 +258,7 @@ impl Constraint for DistinctRegions {
         vec![self.region_a_key.into(), self.region_b_key.into()]
     }
 
+    #[inline(never)]
     fn is_satisfied(&self, phi: &Morphism, _codom: &Topology) -> bool {
         let phi_region_a_key = phi.region_map[&self.region_a_key];
         let phi_region_b_key = phi.region_map[&self.region_b_key];
