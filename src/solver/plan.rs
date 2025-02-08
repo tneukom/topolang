@@ -35,7 +35,7 @@ impl Guess {
             &Self::Region(region_key) => {
                 for &phi_region_key in codom.regions.keys() {
                     phi.region_map.insert(region_key, phi_region_key);
-                    println!("Guess Region {region_key} -> Region {phi_region_key}");
+                    // println!("Guess Region {region_key} -> Region {phi_region_key}");
                     f(phi);
                 }
             }
@@ -53,7 +53,7 @@ impl Guess {
                 let phi_border = &codom[phi_border_key];
                 for phi_seam in phi_border.atomic_seams() {
                     phi.seam_map.insert(seam, phi_seam);
-                    println!("Guess {seam:?} -> {phi_seam:?}");
+                    // println!("Guess {seam:?} -> {phi_seam:?}");
                     f(phi);
                 }
             }
@@ -221,7 +221,7 @@ impl SearchPlan {
         codom: &Topology,
         found: &mut impl FnMut(&Morphism),
     ) {
-        println!("Step {i_step}");
+        // println!("Step {i_step}");
 
         if i_step >= self.steps.len() {
             found(phi);
@@ -235,16 +235,16 @@ impl SearchPlan {
                 let derived = propagation.derives();
                 match propagation.derive(phi, codom) {
                     Ok(phi_derived) => {
-                        println!(
-                            "Propagated by {} {:?} -> {:?}",
-                            propagation.name(),
-                            derived,
-                            phi_derived
-                        );
+                        // println!(
+                        //     "Propagated by {} {:?} -> {:?}",
+                        //     propagation.name(),
+                        //     derived,
+                        //     phi_derived
+                        // );
                         phi.insert(derived, phi_derived);
                     }
                     Err(_err) => {
-                        println!("Propagation {propagation:?} failed");
+                        // println!("Propagation {propagation:?} failed");
                         return;
                     }
                 }
@@ -252,7 +252,7 @@ impl SearchPlan {
 
             for constraint in &step.constraints {
                 if !constraint.is_satisfied(phi, codom) {
-                    println!("Constraint {constraint:?} failed");
+                    // println!("Constraint {constraint:?} failed");
                     return;
                 }
             }
