@@ -31,6 +31,9 @@ impl Material {
 
     pub const TRANSPARENT: Self = Self::from_rgba(Rgba8::TRANSPARENT);
     pub const BLACK: Self = Self::from_rgba(Rgba8::BLACK);
+    pub const RED: Self = Self::from_rgba(Rgba8::RED);
+    pub const GREEN: Self = Self::from_rgba(Rgba8::GREEN);
+    pub const BLUE: Self = Self::from_rgba(Rgba8::BLUE);
 
     pub const fn from_rgba(rgba: Rgba8) -> Self {
         Self { rgba }
@@ -102,3 +105,4 @@ impl From<Material> for Rgba8 {
         material.to_rgba()
     }
 }
+

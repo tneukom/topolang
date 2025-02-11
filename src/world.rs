@@ -145,7 +145,7 @@ impl World {
     pub fn region_selection(&mut self, region_key: RegionKey) -> Selection {
         let topology = self.topology.get_or_init(&self.material_map);
 
-        let bounds = topology.regions[&region_key].bounds;
+        let bounds = topology.regions[&region_key].bounds();
         let mut selection = MaterialMap::nones(bounds);
         for pixel in topology.iter_region_interior(region_key) {
             selection.put(pixel, self.material_map.set(pixel, Material::TRANSPARENT));

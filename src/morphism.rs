@@ -155,7 +155,7 @@ impl Morphism {
         let offset = phi_region.top_left_interior_pixel() - region.top_left_interior_pixel();
 
         // Some checks that can be done quickly
-        if region.bounds + offset != phi_region.bounds {
+        if region.bounds() + offset != phi_region.bounds() {
             // Bounding boxes incompatible
             return false;
         }

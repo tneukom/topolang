@@ -247,13 +247,23 @@ impl Border {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Boundary {
     pub borders: Vec<Border>,
+
+    pub interior_bounds: Rect<i64>,
 }
 
 impl Boundary {
-    pub fn new(borders: Vec<Border>) -> Self {
+    pub fn new(borders: Vec<Border>, interior_bounds: Rect<i64>) -> Self {
         assert!(!borders.is_empty());
         assert!(borders[0].is_outer);
-        Self { borders }
+        Self { borders, interior_bounds }
+    }
+
+    pub fn outer_border(&self) -> &Border {
+        self.borders.first().unwrap()
+    }
+
+    pub fn holes(&self) -> &[Border] {
+        &self.borders[1..]
     }
 
     pub fn top_left_interior_pixel(&self) -> Pixel {
@@ -282,8 +292,6 @@ pub struct Region {
     pub boundary: Boundary,
 
     pub material: Material,
-
-    pub bounds: Rect<i64>,
 }
 
 impl Region {
@@ -296,6 +304,10 @@ impl Region {
 
     pub fn top_left_interior_pixel(&self) -> Pixel {
         self.boundary.top_left_interior_pixel()
+    }
+
+    pub fn bounds(&self) -> Rect<i64> {
+        self.boundary.interior_bounds
     }
 }
 
@@ -433,14 +445,13 @@ impl Topology {
                 borders.push(border);
             }
 
-            let boundary = Boundary::new(borders);
+            let boundary = Boundary::new(borders, region_bounding_rect);
 
             let region = Region {
                 material: material_map
                     .get(boundary.top_left_interior_pixel())
                     .unwrap(),
                 boundary: boundary,
-                bounds: region_bounding_rect,
             };
             regions.insert(region_id, region);
         }
@@ -590,7 +601,7 @@ impl Topology {
         region_key: RegionKey,
     ) -> impl Iterator<Item = Pixel> + Clone + 'a {
         let region = &self.regions[&region_key];
-        self.region_map.iter_where_value(region.bounds, region_key)
+        self.region_map.iter_where_value(region.bounds(), region_key)
     }
 
     pub fn region_at(&self, pixel: Pixel) -> Option<RegionKey> {

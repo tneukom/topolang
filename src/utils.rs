@@ -40,3 +40,42 @@ impl<T> IntoT for T {
         S::from(self)
     }
 }
+
+pub trait KeyValueItertools: Iterator {
+    /// Filter by the key (fist item in pair) but return the value (second item in pair)
+    fn filter_key_by_value<K, V>(self, pred: impl FnMut(&V) -> bool) -> impl Iterator<Item = K>
+    where
+        Self: Iterator<Item = (K, V)>;
+
+    fn find_key_by_value<K, V>(self, pred: impl FnMut(&V) -> bool) -> Option<K>
+    where
+        Self: Iterator<Item = (K, V)>;
+
+    fn filter_by_value<K, V>(self, pred: impl FnMut(&V) -> bool) -> impl Iterator<Item = (K, V)>
+    where
+        Self: Iterator<Item = (K, V)>;
+}
+
+impl<Iter: Iterator> KeyValueItertools for Iter {
+    fn filter_key_by_value<K, V>(self, mut pred: impl FnMut(&V) -> bool) -> impl Iterator<Item = K>
+    where
+        Self: Iterator<Item = (K, V)>,
+    {
+        self.filter_map(move |(key, value)| pred(&value).then_some(key))
+    }
+
+    fn find_key_by_value<K, V>(mut self, mut pred: impl FnMut(&V) -> bool) -> Option<K>
+    where
+        Self: Iterator<Item = (K, V)>,
+    {
+        self.find_map(|(key, value)| pred(&value).then_some(key))
+    }
+
+    fn filter_by_value<K, V>(self, mut pred: impl FnMut(&V) -> bool) -> impl Iterator<Item = (K, V)>
+    where
+        Self: Iterator<Item = (K, V)>,
+    {
+        self.filter_map(move |(key, value)| pred(&value).then_some((key, value)))
+    }
+}
+
