@@ -1,10 +1,10 @@
 use crate::{
     morphism::Morphism,
+    solver::plan::SearchPlan,
     topology::{FillRegion, RegionKey, Topology},
     world::World,
 };
 use itertools::Itertools;
-use crate::solver::plan::SearchPlan;
 
 pub struct Rule {
     /// The pattern
@@ -14,7 +14,7 @@ pub struct Rule {
     pub after: Topology,
 
     /// Plan for finding morphisms
-    pub search_plan: SearchPlan
+    pub search_plan: SearchPlan,
 }
 
 impl Rule {
@@ -45,7 +45,11 @@ impl Rule {
 
         let search_plan = SearchPlan::for_morphism(&before);
 
-        Ok(Rule { before, after, search_plan })
+        Ok(Rule {
+            before,
+            after,
+            search_plan,
+        })
     }
 
     /// Given a match for the pattern `self.before` and the world, apply the substitution determined
@@ -82,8 +86,7 @@ pub fn stabilize(world: &mut World, rules: &Vec<Rule>) -> usize {
     loop {
         let mut applied = false;
         for rule in rules {
-            if let Some(phi) = rule.search_plan.first_solution(world.topology())
-            {
+            if let Some(phi) = rule.search_plan.first_solution(world.topology()) {
                 rule.substitute(&phi, world);
                 steps += 1;
                 applied = true;
@@ -99,14 +102,9 @@ pub fn stabilize(world: &mut World, rules: &Vec<Rule>) -> usize {
 #[cfg(test)]
 mod test {
     use crate::{
-        field::RgbaField,
-        material::Material,
-        pixmap::MaterialMap,
-        rule::Rule,
-        topology::Topology,
-        world::World,
+        field::RgbaField, material::Material, pixmap::MaterialMap, rule::Rule,
+        solver::plan::SearchPlan, topology::Topology, world::World,
     };
-    use crate::solver::plan::SearchPlan;
 
     fn assert_rule_application(folder: &str, expected_application_count: usize) {
         let folder = format!("test_resources/rules/{folder}");
@@ -120,16 +118,14 @@ mod test {
 
         let rule = Rule::new(before, after).unwrap();
 
-        let world_material_map = MaterialMap::load(format!("{folder}/world.png"))
-            .unwrap();
+        let world_material_map = MaterialMap::load(format!("{folder}/world.png")).unwrap();
         let mut world = World::from_material_map(world_material_map);
 
         let mut application_count: usize = 0;
 
         let search_plan = SearchPlan::for_morphism(&rule.before);
 
-        while let Some(phi) = search_plan.solutions(world.topology()).first()
-        {
+        while let Some(phi) = search_plan.solutions(world.topology()).first() {
             let changed = rule.substitute(&phi, &mut world);
             if !changed {
                 break;

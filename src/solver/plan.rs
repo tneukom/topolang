@@ -299,7 +299,6 @@ impl SearchPlan {
             if !Self::is_excluded(phi, codom, excluding) {
                 solutions.push(phi.clone());
             }
-
         });
         solutions
     }

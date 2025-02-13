@@ -1,5 +1,7 @@
-use crate::math::pixel::Corner;
-use crate::topology::{BorderKey, RegionKey, Seam};
+use crate::{
+    math::pixel::Corner,
+    topology::{BorderKey, RegionKey, Seam},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Element {

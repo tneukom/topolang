@@ -1,12 +1,12 @@
 use std::collections::BTreeSet;
 
-use crate::solver::plan::SearchPlan;
 use crate::{
     field::RgbaField,
     material::Material,
     math::{pixel::Pixel, rgba8::Rgba8},
     pixmap::MaterialMap,
     rule::Rule,
+    solver::plan::SearchPlan,
     topology::{BorderKey, Region, StrongRegionKey, Topology},
     utils::IntoT,
     world::World,
@@ -36,7 +36,9 @@ impl CompiledRules {
             .collect();
 
         for CompiledRule { rule, source, .. } in &self.rules {
-            let solutions = rule.search_plan.solutions_excluding(world.topology(), source);
+            let solutions = rule
+                .search_plan
+                .solutions_excluding(world.topology(), source);
 
             // TODO: Reject solutions with hidden elements
 
@@ -123,12 +125,7 @@ impl Compiler {
             // Collect regions that are part of the source for this Rule.
             let mut source: BTreeSet<StrongRegionKey> = BTreeSet::new();
             // Before and after regions
-            source.extend(
-                before
-                    .regions
-                    .values()
-                    .map(Region::top_left_interior_pixel),
-            );
+            source.extend(before.regions.values().map(Region::top_left_interior_pixel));
             source.extend(after.regions.values().map(Region::top_left_interior_pixel));
             // Rule frame regions
             for &region_key in self.rule_frame.iter_region_keys() {

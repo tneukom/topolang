@@ -105,4 +105,3 @@ impl From<Material> for Rgba8 {
         material.to_rgba()
     }
 }
-

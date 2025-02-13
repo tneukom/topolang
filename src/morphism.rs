@@ -6,9 +6,9 @@ use crate::{
 use itertools::Itertools;
 use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    fmt::{Display, Formatter},
     ops::Index,
 };
-use std::fmt::{Display, Formatter};
 
 // Orientation preserving!
 //
@@ -309,7 +309,6 @@ impl Display for Morphism {
         }
 
         Ok(())
-
     }
 }
 

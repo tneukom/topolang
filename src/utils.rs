@@ -78,4 +78,3 @@ impl<Iter: Iterator> KeyValueItertools for Iter {
         self.filter_map(move |(key, value)| pred(&value).then_some((key, value)))
     }
 }
-

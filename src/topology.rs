@@ -1,5 +1,6 @@
 use crate::{
     cycle_segments::{CycleSegment, CycleSegments},
+    field::RgbaField,
     material::Material,
     math::{
         pixel::{Corner, Pixel, Side},
@@ -17,9 +18,8 @@ use std::{
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
     ops::{Index, IndexMut},
+    path::Path,
 };
-use std::path::Path;
-use crate::field::RgbaField;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SeamCorner {
@@ -99,7 +99,11 @@ impl Seam {
 
 impl Display for Seam {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Seam({} -> {}, atoms: {})", self.start, self.stop, self.atoms)
+        write!(
+            f,
+            "Seam({} -> {}, atoms: {})",
+            self.start, self.stop, self.atoms
+        )
     }
 }
 
@@ -236,11 +240,7 @@ impl Border {
         // start and stop seam are part of the resulting seam so it's + 1
         let atoms = (i_stop + self.seams_len() - i_start) % self.seams_len() + 1;
 
-        Some(Seam::new_with_len(
-            start_seam.start,
-            stop_seam.stop,
-            atoms,
-        ))
+        Some(Seam::new_with_len(start_seam.start, stop_seam.stop, atoms))
     }
 }
 
@@ -255,7 +255,10 @@ impl Boundary {
     pub fn new(borders: Vec<Border>, interior_bounds: Rect<i64>) -> Self {
         assert!(!borders.is_empty());
         assert!(borders[0].is_outer);
-        Self { borders, interior_bounds }
+        Self {
+            borders,
+            interior_bounds,
+        }
     }
 
     pub fn outer_border(&self) -> &Border {
@@ -601,7 +604,8 @@ impl Topology {
         region_key: RegionKey,
     ) -> impl Iterator<Item = Pixel> + Clone + 'a {
         let region = &self.regions[&region_key];
-        self.region_map.iter_where_value(region.bounds(), region_key)
+        self.region_map
+            .iter_where_value(region.bounds(), region_key)
     }
 
     pub fn region_at(&self, pixel: Pixel) -> Option<RegionKey> {
