@@ -7,42 +7,14 @@ in highp vec2 frag_texcoord;
 
 out highp vec4 out_color;
 
-// All components are in the range [0...1], including hue.
-// https://stackoverflow.com/a/17897228
-highp vec3 hsv2rgb(highp vec3 c)
-{
-    highp vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-    highp vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
-
 void main() {
     highp vec2 window_frag_coord = gl_FragCoord.xy;
     highp vec4 texcolor = texture(tile_atlas_texture, frag_texcoord);
     // Wave effect
-    const highp float PI = 3.141592653589;
 
     highp float u = dot(window_frag_coord, vec2(1.0, 1.0)) / sqrt(2.0);
     highp float v = dot(window_frag_coord, vec2(-1.0, 1.0)) / sqrt(2.0);
     highp vec2 uv = vec2(u, v);
 
-    const highp float EPS = 1e-3;
-
-    // alpha = 180 is rule frame and alpha = 181 is rule arrow
-    if(abs(texcolor.a - 180.0/255.0) < EPS) {
-        // Rule frame and arrow
-        highp float s = u + 4.0 * sin(1.0/25.0 * PI * v) + 4.0 * time;
-        //highp float s = 1.0/10.0 * PI * (window_frag_coord.x + window_frag_coord.y);
-        highp float c = mod(s, 16.0) > 8.0 ? 1.0 : 0.8;
-        highp float alpha = 0.5 * c;
-        out_color = vec4(alpha * texcolor.rgb, alpha);
-    } else if(abs(texcolor.a - 170.0/255.0) < EPS) {
-        // Rigid match
-        highp vec2 i = floor(uv / 16.0);
-        highp float checkers = mod(i.x + i.y, 2.0) > 0.0 ? 1.0 : 0.6;
-        out_color = vec4(checkers * texcolor.a * texcolor.rgb, 1.0);
-    } else {
-        out_color = vec4(texcolor.a * texcolor.rgb, texcolor.a);
-    }
-
+    out_color = vec4(texcolor.a * texcolor.rgb, texcolor.a);
 }

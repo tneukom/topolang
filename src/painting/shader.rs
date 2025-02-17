@@ -181,7 +181,7 @@ impl Shader {
     pub unsafe fn uniform<T: AssignUniform>(&self, gl: &glow::Context, name: &str, arg: T) {
         match self.uniforms.get(name) {
             None => {
-                println!("Uniform {name} does not exist in shader");
+                // println!("Uniform {name} does not exist in shader");
                 // for name in self.uniforms.keys() {
                 //     println!("existing name: {name}");
                 // }

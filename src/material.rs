@@ -1,79 +1,131 @@
 use crate::math::rgba8::Rgba8;
+use std::ops::{Range, RangeInclusive};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[repr(u8)]
+pub enum MaterialClass {
+    Normal,
+    Solid,
+    Rule,
+    Wildcard,
+    Transparent,
+}
 
 // TODO: Material should be optimized for RegionEq, not converting from and to Rgba8!
 // TODO: TRANSPARENT | SOLID should be possible, unclear how to represent as Rgba8 or on screen
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Material {
-    rgba: Rgba8,
+    pub rgb: [u8; 3],
+    pub class: MaterialClass,
 }
 
 impl Material {
-    pub const SOLID_ALPHA: u8 = 170;
-    pub const OPAQUE_ALPHA: u8 = 255;
-    pub const RULE_ALPHA: u8 = 180;
-    pub const TRANSPARENT_ALPHA: u8 = 0;
+    pub const fn new(rgb: [u8; 3], class: MaterialClass) -> Self {
+        Self { rgb, class }
+    }
 
-    /// #360c29
-    pub const RULE_BEFORE_COLOR: Rgba8 = Rgba8::new(0x36, 0x0C, 0x29, Self::RULE_ALPHA);
+    // Opaque material (default)
+    pub const OPAQUE_ALPHA: u8 = 255;
+
+    // Solid materials
+    #[deprecated]
+    pub const LEGACY_SOLID_ALPHA: u8 = 170;
+
+    pub const SOLID_MAIN_ALPHA: u8 = 254;
+    pub const SOLID_LIGHTEN_ALPHA: u8 = 253;
+    pub const SOLID_DARKEN_ALPHA_RANGE: Range<u8> =
+        (Self::SOLID_LIGHTEN_ALPHA - 8)..Self::SOLID_LIGHTEN_ALPHA;
+    pub const SOLID_ALPHA_RANGE: RangeInclusive<u8> =
+        Self::SOLID_DARKEN_ALPHA_RANGE.start..=Self::SOLID_MAIN_ALPHA;
+
+    // Rule materials
+    #[deprecated]
+    pub const LEGACY_RULE_ALPHA: u8 = 180;
+
+    pub const RULE_GAP_ALPHA: u8 = 56;
+    pub const RULE_BORDER_ALPHA: u8 = 191;
+    pub const RULE_INTERIOR_ALPHA: u8 = 111;
+
+    pub const RULE_ALPHAS: [u8; 4] = [
+        Self::LEGACY_RULE_ALPHA,
+        Self::RULE_GAP_ALPHA,
+        Self::RULE_BORDER_ALPHA,
+        Self::RULE_INTERIOR_ALPHA,
+    ];
+
+    /// #360C29
+    pub const RULE_BEFORE_RGB: [u8; 3] = [0x36, 0x0C, 0x29];
+
+    pub const RULE_BEFORE: Self = Self::new(Self::RULE_BEFORE_RGB, MaterialClass::Rule);
+
     /// #FF6E00
-    pub const RULE_AFTER_COLOR: Rgba8 = Rgba8::new(0xFF, 0x6E, 0x00, Self::RULE_ALPHA);
+    pub const RULE_AFTER_RGB: [u8; 3] = [0xFF, 0x6E, 0x00];
+
+    pub const RULE_AFTER: Self = Self::new(Self::RULE_AFTER_RGB, MaterialClass::Rule);
+
+    // Wildcard material
+    pub const WILDCARD_ALPHA: u8 = 230;
+
+    pub const WILDCARD_RGB: [u8; 3] = [0x0C, 0x36, 0x19];
+    pub const WILDCARD_ALT_RGB: [u8; 3] = [0x17, 0x69, 0x32];
+
+    /// Wildcard matches any material except transparent
     /// #0C3619
-    pub const WILDCARD_COLOR: Rgba8 = Rgba8::new(0x0C, 0x36, 0x19, Self::RULE_ALPHA);
+    pub const WILDCARD: Self = Self::new(Self::WILDCARD_RGB, MaterialClass::Wildcard);
+
+    /// #0c3619
+    #[deprecated]
+    pub const LEGACY_WILDCARD_RGB: [u8; 3] = [0x0c, 0x36, 0x19];
+
+    #[deprecated]
+    pub const LEGACY_WILDCARD_RGBA: Rgba8 =
+        Rgba8::from_rgb_a(Self::LEGACY_WILDCARD_RGB, Self::LEGACY_RULE_ALPHA);
 
     pub const UNDEF_COLOR: Rgba8 = Rgba8::new(0xFF, 0xFF, 0xFF, 0x00);
 
-    pub const VOID: Self = Self::from_rgba(Self::RULE_BEFORE_COLOR);
-    pub const RULE_BEFORE: Self = Self::VOID;
-    pub const RULE_AFTER: Self = Self::from_rgba(Self::RULE_AFTER_COLOR);
+    // Some opaque color materials
+    pub const BLACK: Self = Self::normal(Rgba8::BLACK.rgb());
+    pub const RED: Self = Self::normal(Rgba8::RED.rgb());
+    pub const GREEN: Self = Self::normal(Rgba8::GREEN.rgb());
+    pub const BLUE: Self = Self::normal(Rgba8::BLUE.rgb());
+    pub const YELLOW: Self = Self::normal(Rgba8::YELLOW.rgb());
+    pub const CYAN: Self = Self::normal(Rgba8::CYAN.rgb());
+    pub const MAGENTA: Self = Self::normal(Rgba8::MAGENTA.rgb());
 
-    /// Wildcard matches any material except transparent
-    pub const WILDCARD: Self = Self::from_rgba(Self::WILDCARD_COLOR);
+    pub const TRANSPARENT: Self = Self::new(Rgba8::TRANSPARENT.rgb(), MaterialClass::Transparent);
 
-    pub const TRANSPARENT: Self = Self::from_rgba(Rgba8::TRANSPARENT);
-    pub const BLACK: Self = Self::from_rgba(Rgba8::BLACK);
-    pub const RED: Self = Self::from_rgba(Rgba8::RED);
-    pub const GREEN: Self = Self::from_rgba(Rgba8::GREEN);
-    pub const BLUE: Self = Self::from_rgba(Rgba8::BLUE);
-
-    pub const fn from_rgba(rgba: Rgba8) -> Self {
-        Self { rgba }
-    }
-
-    pub const fn from_rgb_a(rgb: [u8; 3], a: u8) -> Self {
+    pub const fn normal(rgb: [u8; 3]) -> Self {
         Self {
-            rgba: Rgba8::from_rgb_a(rgb, a),
+            rgb,
+            class: MaterialClass::Normal,
         }
     }
 
-    pub const fn to_rgba(self) -> Rgba8 {
-        self.rgba
-    }
-
-    pub fn is_void(self) -> bool {
-        self == Self::VOID
-    }
-
-    pub fn is_not_void(self) -> bool {
-        !self.is_void()
-    }
-
     pub fn is_solid(self) -> bool {
-        self.rgba.a == Self::SOLID_ALPHA
+        self.class == MaterialClass::Solid
     }
 
     pub fn is_normal(self) -> bool {
-        self.rgba.a == Self::OPAQUE_ALPHA
+        self.class == MaterialClass::Normal
+    }
+
+    pub fn is_rule(self) -> bool {
+        self.class == MaterialClass::Rule
+    }
+
+    pub fn is_not_rule(self) -> bool {
+        !self.is_rule()
     }
 
     pub fn as_solid(mut self) -> Material {
         assert!(self.is_normal() || self.is_solid());
-        self.rgba.a = Self::SOLID_ALPHA;
+        self.class = MaterialClass::Solid;
         self
     }
 
     /// Discard flags like `Self::SOLID_FLAG`
     pub fn as_normal(mut self) -> Material {
-        self.rgba.a = Self::OPAQUE_ALPHA;
+        self.class = MaterialClass::Normal;
         self
     }
 
@@ -86,22 +138,87 @@ impl Material {
             self == other
         }
     }
+
+    pub fn solid_main_rgba(self) -> Rgba8 {
+        Rgba8::from_rgb_a(self.rgb, Self::SOLID_MAIN_ALPHA)
+    }
+
+    pub fn solid_alt_rgba(self) -> Rgba8 {
+        let [r, g, b] = self.rgb;
+
+        if r >= 128 || g >= 128 || b >= 128 {
+            // darken color
+            let alpha_offset = (r & 1) | (g & 1) << 1 | (b & 1) << 2;
+            let alpha = Self::SOLID_DARKEN_ALPHA_RANGE.start + alpha_offset;
+            assert!(Self::SOLID_DARKEN_ALPHA_RANGE.contains(&alpha));
+            let darkened_rgb = [r >> 1, g >> 1, b >> 1];
+            Rgba8::from_rgb_a(darkened_rgb, alpha)
+        } else {
+            let lightened_rgb = [r << 1, g << 1, b << 1];
+            Rgba8::from_rgb_a(lightened_rgb, Self::SOLID_LIGHTEN_ALPHA)
+        }
+    }
+
+    /// Convert to Rgba8 without applying any effects
+    pub fn to_rgba(self) -> Rgba8 {
+        match self.class {
+            MaterialClass::Normal => Rgba8::from_rgb_a(self.rgb, Self::OPAQUE_ALPHA),
+            MaterialClass::Solid => Rgba8::from_rgb_a(self.rgb, Self::SOLID_MAIN_ALPHA),
+            MaterialClass::Rule => Rgba8::from_rgb_a(self.rgb, Self::RULE_INTERIOR_ALPHA),
+            MaterialClass::Wildcard => Rgba8::from_rgb_a(self.rgb, Self::WILDCARD_ALPHA),
+            MaterialClass::Transparent => Rgba8::from_rgb_a(self.rgb, 0),
+        }
+    }
 }
 
 impl From<Rgba8> for Material {
+    /// Some materials have multiple variants that are considered equivalent. For example
+    /// "rule before" and "rule after" can have different alpha values that are used to improve
+    /// how the regions look by giving them a border effect.
     fn from(rgba: Rgba8) -> Self {
-        Self::from_rgba(rgba)
+        let rgb = rgba.rgb();
+        let [r, g, b, a] = rgba.to_array();
+
+        if rgba == Self::LEGACY_WILDCARD_RGBA {
+            Self::WILDCARD
+        } else if a == Self::OPAQUE_ALPHA {
+            Self::new(rgb, MaterialClass::Normal)
+        } else if a == 0 {
+            Self::TRANSPARENT
+        } else if Self::RULE_ALPHAS.contains(&a) {
+            match rgb {
+                Self::RULE_BEFORE_RGB => Self::RULE_BEFORE,
+                Self::RULE_AFTER_RGB => Self::RULE_AFTER,
+                _ => unimplemented!(),
+            }
+        } else if Self::SOLID_DARKEN_ALPHA_RANGE.contains(&a) {
+            let alpha_offset = a - Self::SOLID_DARKEN_ALPHA_RANGE.start;
+            let r_lsb = alpha_offset & 1;
+            let g_lsb = (alpha_offset >> 1) & 1;
+            let b_lsb = (alpha_offset >> 2) & 1;
+            let rgb = [(r << 1) | r_lsb, (g << 1) | g_lsb, (b << 1) | b_lsb];
+            Self::new(rgb, MaterialClass::Solid)
+        } else if a == Self::SOLID_LIGHTEN_ALPHA {
+            let rgb = [r >> 1, g >> 1, b >> 1];
+            Self::new(rgb, MaterialClass::Solid)
+        } else if a == Self::SOLID_MAIN_ALPHA {
+            Self::new(rgb, MaterialClass::Solid)
+        } else if a == Self::LEGACY_SOLID_ALPHA {
+            Self::new(rgb, MaterialClass::Solid)
+        } else if a == Self::WILDCARD_ALPHA {
+            match rgb {
+                Self::WILDCARD_RGB => Self::WILDCARD,
+                Self::WILDCARD_ALT_RGB => Self::WILDCARD,
+                _ => unimplemented!(),
+            }
+        } else {
+            unimplemented!();
+        }
     }
 }
 
 impl From<&Rgba8> for Material {
     fn from(rgba: &Rgba8) -> Self {
-        Self::from_rgba(*rgba)
-    }
-}
-
-impl From<Material> for Rgba8 {
-    fn from(material: Material) -> Self {
-        material.to_rgba()
+        Self::from(*rgba)
     }
 }

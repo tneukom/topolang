@@ -44,8 +44,30 @@ impl<T> Field<T> {
         Self::from_linear(bounds, elems)
     }
 
+    pub fn from_rows_array<const WIDTH: usize, const HEIGHT: usize>(
+        rows: [[T; WIDTH]; HEIGHT],
+    ) -> Self {
+        // TODO: Transmute and Vec::from?
+        let mut elems = Vec::with_capacity(WIDTH * HEIGHT);
+        for row in rows {
+            elems.extend(row);
+        }
+        Self::from_linear(
+            Rect::low_size(Point::ZERO, Point(WIDTH as i64, HEIGHT as i64)),
+            elems,
+        )
+    }
+
     pub fn linear_slice(&self) -> &[T] {
         &self.elems
+    }
+
+    pub fn low(&self) -> Point<i64> {
+        self.bounds.low()
+    }
+
+    pub fn high(&self) -> Point<i64> {
+        self.bounds.high()
     }
 
     pub fn bounds(&self) -> Rect<i64> {
@@ -274,7 +296,7 @@ impl RgbaField {
 
 impl MaterialField {
     pub fn into_rgba(self) -> RgbaField {
-        self.into_map(|material| material.into())
+        self.into_map(|material| material.to_rgba())
     }
 }
 

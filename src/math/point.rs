@@ -59,6 +59,13 @@ impl<T: Num> Point<T> {
         (rhs - self).norm_squared()
     }
 
+    pub fn cwise_rem_euclid(self, rhs: Self) -> Self {
+        Point {
+            x: self.x.rem_euclid(&rhs.x),
+            y: self.y.rem_euclid(&rhs.y),
+        }
+    }
+
     pub const E_X: Self = Point::new(T::ONE, T::ZERO);
     pub const E_Y: Self = Point::new(T::ZERO, T::ONE);
     pub const ZERO: Self = Point::new(T::ZERO, T::ZERO);

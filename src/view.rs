@@ -195,10 +195,10 @@ impl Selection {
         &self.material_map
     }
 
-    pub fn blit(&self, target: &mut MaterialMap) {
-        // Ignore transparent
-        target.blit(&self.material_map.without(Material::TRANSPARENT));
-    }
+    // pub fn blit_to(&self, target: &mut MaterialMap) {
+    //     // Ignore transparent
+    //     target.blit(&self.material_map.without(Material::TRANSPARENT));
+    // }
 }
 
 pub struct View {
@@ -250,8 +250,8 @@ impl View {
     /// If there currently is a selection, cancel it and integrate its content back into the world
     pub fn cancel_selection(&mut self) {
         if let Some(selection) = self.selection.take() {
-            self.world
-                .mut_material_map(|material_map| selection.blit(material_map));
+            let selection_material_map = selection.material_map().without(Material::TRANSPARENT);
+            self.world.blit(&selection_material_map);
         }
     }
 
@@ -301,13 +301,8 @@ impl View {
         let change = op.brush.draw_line(Arrow(op.world_mouse, input.world_mouse));
         op.world_mouse = input.world_mouse;
 
-        self.world.mut_material_map(|material_map| {
-            for (pixel, material) in change {
-                if material_map.bounding_rect().half_open_contains(pixel) {
-                    material_map.set(pixel, material);
-                }
-            }
-        });
+        let change_pixmap = Pixmap::from(&change);
+        self.world.blit(&change_pixmap);
 
         UiState::Brushing(op)
     }

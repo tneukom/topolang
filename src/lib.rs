@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+extern crate core;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -31,6 +32,7 @@ pub(crate) mod view;
 pub(crate) mod widgets;
 pub(crate) mod world;
 
+// pub(crate) mod material_effects;
 pub(crate) mod material_effects;
 pub(crate) mod solver;
 

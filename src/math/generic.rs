@@ -1,4 +1,4 @@
-use num_traits::{ConstOne, ConstZero, Float, Inv, Signed};
+use num_traits::{ConstOne, ConstZero, Euclid, Float, Inv, Signed};
 use std::{
     fmt::Debug,
     ops::{Add, Div, Mul, Neg, Sub},
@@ -70,6 +70,7 @@ pub trait Num:
     + Sub<Output = Self>
     + Mul<Output = Self>
     + Div<Output = Self>
+    + Euclid
     + MinMax
 {
 }

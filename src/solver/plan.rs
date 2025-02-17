@@ -308,24 +308,40 @@ impl SearchPlan {
         // TODO: Abort search after first solution found
         self.solutions(codom).into_iter().next()
     }
+
+    pub fn print(&self) {
+        // Print plan
+        for (i_step, step) in self.steps.iter().enumerate() {
+            println!("Step {i_step}");
+            println!("  Guess {:?}", &step.guess);
+            println!("  Propagations");
+            for propagation in &step.propagations {
+                println!(
+                    "    {:?} -> {:?}",
+                    propagation.as_propagation(),
+                    propagation.derives()
+                );
+            }
+            println!("  Constraints");
+            for constraint in &step.constraints {
+                println!("    {:?}", constraint.as_constraint());
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
     use crate::{
-        field::RgbaField,
-        material::Material,
-        math::rgba8::Rgba8,
-        pixmap::MaterialMap,
-        solver::{plan::SearchPlan, propagations::Propagation},
-        topology::Topology,
+        field::RgbaField, material::Material, math::rgba8::Rgba8, pixmap::MaterialMap,
+        solver::plan::SearchPlan, topology::Topology,
     };
     use itertools::Itertools;
     use std::path::Path;
 
     fn load(path: impl AsRef<Path>) -> Topology {
         let rgba_field = RgbaField::load(path).unwrap();
-        let material_map = MaterialMap::from(rgba_field).without(Material::VOID);
+        let material_map = MaterialMap::from(rgba_field).without(Material::RULE_BEFORE);
         Topology::new(material_map)
     }
 
@@ -333,7 +349,7 @@ mod test {
     pub fn extract_pattern(material_map: &mut MaterialMap) -> MaterialMap {
         let topo = Topology::new(material_map.clone());
 
-        const PATTERN_FRAME_MATERIAL: Material = Material::from_rgba(Rgba8::MAGENTA);
+        const PATTERN_FRAME_MATERIAL: Material = Material::normal(Rgba8::MAGENTA.rgb());
 
         let frame = topo
             .regions
@@ -360,7 +376,7 @@ mod test {
 
     fn load_material_map(path: impl AsRef<Path>) -> MaterialMap {
         let rgba_field = RgbaField::load(path).unwrap();
-        MaterialMap::from(rgba_field).without(Material::VOID)
+        MaterialMap::from(rgba_field).without(Material::RULE_BEFORE)
     }
 
     fn assert_extract_inner_outer(name: &str) {
@@ -386,29 +402,14 @@ mod test {
         let codom = load(format!("{folder}/{codom_filename}"));
 
         let plan = SearchPlan::for_morphism(&dom);
-        for (i_step, step) in plan.steps.iter().enumerate() {
-            println!("Step {i_step}");
-            println!("  Guess {:?}", &step.guess);
-            println!("  Propagations");
-            for propagation in &step.propagations {
-                println!(
-                    "    {:?} -> {:?}",
-                    propagation.as_propagation(),
-                    propagation.derives()
-                );
-            }
-            println!("  Constraints");
-            for constraint in &step.constraints {
-                println!("    {:?}", constraint.as_constraint());
-            }
-        }
+        // plan.print();
 
         let solutions = plan.solutions(&codom);
 
         println!("Number of solutions found: {}", solutions.len());
         for phi in &solutions {
             assert!(phi.is_homomorphism(&dom, &codom));
-            println!("{phi}");
+            // println!("{phi}");
         }
 
         // Check if there are duplicate solutions

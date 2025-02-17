@@ -28,19 +28,17 @@ impl CompiledRules {
     /// Returns if a Rule was applied
     #[inline(never)]
     pub fn step(&self, world: &mut World) -> bool {
-        let hidden: BTreeSet<_> = self
+        let source: BTreeSet<_> = self
             .rules
             .iter()
             .flat_map(|compiled_rule| compiled_rule.source.iter())
             .copied()
             .collect();
 
-        for CompiledRule { rule, source, .. } in &self.rules {
+        for CompiledRule { rule, .. } in &self.rules {
             let solutions = rule
                 .search_plan
-                .solutions_excluding(world.topology(), source);
-
-            // TODO: Reject solutions with hidden elements
+                .solutions_excluding(world.topology(), &source);
 
             for phi in solutions {
                 let modified = rule.substitute(&phi, world);
@@ -71,7 +69,7 @@ pub struct Compiler {
 
 impl Compiler {
     // Not the same as the actual RULE_FRAME color
-    const RULE_FRAME_MATERIAL: Material = Material::from_rgba(Rgba8::CYAN);
+    const RULE_FRAME_MATERIAL: Material = Material::normal(Rgba8::CYAN.rgb());
 
     pub fn new() -> Self {
         // Load rule_frame pattern from file
@@ -133,8 +131,8 @@ impl Compiler {
                 source.insert(topology[phi_region_key].top_left_interior_pixel());
             }
 
-            let before = before.filter_by_material(Material::is_not_void);
-            let after = after.filter_by_material(Material::is_not_void);
+            let before = before.filter_by_material(Material::is_not_rule);
+            let after = after.filter_by_material(Material::is_not_rule);
 
             // Find translation from after to before
             let before_bounds = before.not_none_bounding_rect();

@@ -42,9 +42,7 @@ impl GifRecorder {
         for snapshot in snapshot_path {
             // TODO: Offset world pixmap by bounds.low()
             // TODO: Paint over white background to remove transparency or use apng instead
-            let image = snapshot
-                .material_map()
-                .to_rgba8_field(Material::TRANSPARENT);
+            let image = snapshot.material_map().to_rgba_field(Material::TRANSPARENT);
 
             gif_encoder.encode(
                 image.as_raw(),

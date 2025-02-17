@@ -8,13 +8,14 @@ use crate::{
     painting::{line_painter::LinePainter, material_map_painter::RgbaFieldPainter},
     view::{EditMode, SelectingKind, UiState, View, ViewInput, ViewSettings},
 };
+use std::sync::{Arc, RwLock};
 
 /// What is necessary to paint the view
 pub struct DrawView {
     camera: Camera,
     frames: CoordinateFrames,
     time: f64,
-    world_rgba_field: RgbaField,
+    world_rgba_field: Arc<RwLock<RgbaField>>,
     // TODO: Can we use world_rgba_field for this?
     selection_rgba_field: Option<RgbaField>,
     brush_preview: Option<RgbaField>,
@@ -29,15 +30,12 @@ impl DrawView {
         frames: CoordinateFrames,
         time: f64,
     ) -> Self {
-        let world_rgba_field = view
-            .world
-            .material_map()
-            .to_rgba8_field(Material::TRANSPARENT);
+        let world_rgba_field = view.world.fresh_rgba_field();
 
         let selection_rgba_field = view.selection.as_ref().map(|selection| {
             selection
                 .material_map()
-                .to_rgba8_field(Material::TRANSPARENT)
+                .to_rgba_field(Material::TRANSPARENT)
         });
 
         let brush_preview = if view_settings.edit_mode == EditMode::Brush {
@@ -106,13 +104,14 @@ impl ViewPainter {
         // Grid in the background
         self.draw_grid(gl, &draw.camera, &draw.frames);
 
+        let read_world_rgba_field = draw.world_rgba_field.read().unwrap();
         self.world_painter
-            .draw(gl, &draw.world_rgba_field, world_to_device, draw.time);
+            .draw(gl, &read_world_rgba_field, world_to_device, draw.time);
 
         // Draw a rectangle around the scene
         self.draw_selection_outline(
             gl,
-            draw.world_rgba_field.bounds(),
+            read_world_rgba_field.bounds(),
             &draw.camera,
             &draw.frames,
             draw.time,

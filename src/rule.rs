@@ -111,7 +111,7 @@ mod test {
 
         let before_material_map = MaterialMap::load(format!("{folder}/before.png")).unwrap();
         let before = Topology::new(before_material_map);
-        let before = before.filter_by_material(Material::is_not_void);
+        let before = before.filter_by_material(Material::is_not_rule);
 
         let after_material_map = MaterialMap::load(format!("{folder}/after.png")).unwrap();
         let after = Topology::new(after_material_map);

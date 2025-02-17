@@ -1,168 +1,110 @@
 use crate::{
-    field::Field,
-    math::{point::Point, rect::Rect},
-    pixmap::Pixmap,
-    regions::{area_left_of_boundary, area_right_of_boundary},
-    topology::{Border, Boundary},
+    field::RgbaField,
+    material::{Material, MaterialClass},
+    math::{point::Point, rgba8::Rgba8},
+    pixmap::MaterialMap,
 };
 
-pub fn border_pixels(interior: &Field<bool>) -> impl Iterator<Item = Point<i64>> + '_ {
-    interior.enumerate().filter_map(|(pixel, &inside)| {
-        let has_outside_neighbor = pixel
-            .neighbors()
-            .into_iter()
-            .any(|neighbor| !interior.get(neighbor).copied().unwrap_or(false));
-        (inside && has_outside_neighbor).then_some(pixel)
-    })
+enum BorderClass {
+    Border,
+    Gap,
+    Inside,
 }
 
-/// Remove the outermost pixels and return them.
-pub fn contract(interior: &mut Field<bool>) -> Vec<Point<i64>> {
-    let border: Vec<_> = border_pixels(interior).collect();
-    for &pixel in &border {
-        interior.set(pixel, false);
+/// Classify where `pixel` lies in an area defined by the `area` predicate. Assumes `area(pixel)`.
+fn border_class(pixel: Point<i64>, mut area: impl FnMut(Point<i64>) -> bool) -> BorderClass {
+    const GAP_NEIGHBORS: [Point<i64>; 4] = [Point(-1, 0), Point(0, 1), Point(1, 0), Point(0, -1)];
+    const BORDER_NEIGHBORS: [Point<i64>; 8] = [
+        Point(-2, 0),
+        Point(-1, 1),
+        Point(0, 2),
+        Point(1, 1),
+        Point(2, 0),
+        Point(1, -1),
+        Point(0, -2),
+        Point(-1, -1),
+    ];
+
+    if GAP_NEIGHBORS
+        .into_iter()
+        .any(|offset| !area(pixel + offset))
+    {
+        BorderClass::Gap
+    } else if BORDER_NEIGHBORS
+        .into_iter()
+        .any(|offset| !area(pixel + offset))
+    {
+        BorderClass::Border
+    } else {
+        BorderClass::Inside
     }
-    border
 }
 
-fn border_interior_field(border: &Border, bounds: Rect<i64>) -> Field<bool> {
-    assert!(border.is_outer);
+/// Convert Material to Rgba8 using effects for rule and solid areas
+pub fn material_effect(material_map: &MaterialMap, pixel: Point<i64>) -> Rgba8 {
+    let material = material_map.get(pixel).unwrap();
 
-    let mut interior = Field::filled(bounds, false);
-    for pixel in area_left_of_boundary(border.sides()) {
-        interior.set(pixel, true);
-    }
-    interior
-}
-
-pub fn border_fade_effect<T: Copy>(
-    mut interior: Field<bool>,
-    border_colors: &[T],
-    interior_color: T,
-) -> Pixmap<T> {
-    let mut pixmap = Pixmap::nones(interior.bounds());
-    for &color in border_colors {
-        let border = contract(&mut interior);
-        for pixel in border {
-            pixmap.set(pixel, color);
+    match material.class {
+        MaterialClass::Solid => {
+            // alternating lines effect
+            if pixel.y % 2 == 0 {
+                material.solid_main_rgba()
+            } else {
+                material.solid_alt_rgba()
+            }
         }
-    }
+        MaterialClass::Rule => {
+            // Border with gap effect
+            let border_class = border_class(pixel, |neighbor| match material_map.get(neighbor) {
+                None => false,
+                Some(material) => material.is_rule(),
+            });
+            let alpha = match border_class {
+                BorderClass::Border => Material::RULE_BORDER_ALPHA,
+                BorderClass::Gap => Material::RULE_GAP_ALPHA,
+                BorderClass::Inside => Material::RULE_INTERIOR_ALPHA,
+            };
 
-    // Fill what's left of the interior.
-    for (pixel, &inside) in interior.enumerate() {
-        if inside {
-            pixmap.set(pixel, interior_color);
+            Rgba8::from_rgb_a(material.rgb, alpha)
         }
+        MaterialClass::Wildcard => {
+            // alternating diagonal lines effect
+            if (pixel.x + pixel.y) % 3 == 0 {
+                Rgba8::from_rgb_a(Material::WILDCARD_ALT_RGB, Material::WILDCARD_ALPHA)
+            } else {
+                Rgba8::from_rgb_a(Material::WILDCARD_RGB, Material::WILDCARD_ALPHA)
+            }
+        }
+        _ => material.to_rgba(),
     }
-
-    pixmap
 }
 
-pub fn boundary_fade_effect<T: Copy>(
-    boundary: &Boundary,
-    border_colors: &[T],
-    interior_color: T,
-) -> Pixmap<T> {
-    let interior = border_interior_field(boundary.outer_border(), boundary.interior_bounds);
-    let mut effect = border_fade_effect(interior, border_colors, interior_color);
+pub fn material_map_effects(material_map: &MaterialMap, rgba_field: &mut RgbaField) {
+    assert_eq!(material_map.bounding_rect(), rgba_field.bounds());
 
-    // Clear holes
-    for hole in boundary.holes() {
-        for pixel in area_right_of_boundary(hole.sides()) {
-            effect.remove(pixel);
-        }
-    }
-
-    effect
-}
-
-pub fn alternating_pattern_effect<T: Copy>(
-    pixmap: &mut Pixmap<T>,
-    area: impl IntoIterator<Item = Point<i64>>,
-    color_even: T,
-    color_odd: T,
-) {
-    for pixel in area.into_iter() {
-        let is_even = (pixel.x + pixel.y) % 2 == 0;
-        let color = if is_even { color_even } else { color_odd };
-        pixmap.set(pixel, color);
+    for pixel in material_map.keys() {
+        let effect_rgba = material_effect(material_map, pixel);
+        rgba_field.set(pixel, effect_rgba);
     }
 }
 
 #[cfg(test)]
 mod test {
     use crate::{
-        field::RgbaField,
-        material::Material,
-        material_effects::{alternating_pattern_effect, border_fade_effect, boundary_fade_effect},
-        math::rgba8::Rgba8,
-        pixmap::{MaterialMap, Pixmap},
-        topology::Topology,
-        utils::KeyValueItertools,
+        field::RgbaField, material_effects::material_map_effects, math::rgba8::Rgba8,
+        pixmap::MaterialMap,
     };
 
     #[test]
-    fn test_border_fade_effect() {
-        let area = RgbaField::load("test_resources/material_effects/area_0.png").unwrap();
-        let interior = area.map(|&color| color == Rgba8::RED);
+    fn test_apply_material_effects() {
+        let mut material_map =
+            MaterialMap::load("test_resources/material_effects/gates4.png").unwrap();
 
-        let alphas = [255, 200, 150];
-        let border_colors = alphas.map(|alpha| Rgba8::new(255, 0, 0, alpha));
-        let interior_color = Rgba8::new(255, 0, 0, 100);
+        let mut rgba_field = RgbaField::filled(material_map.bounding_rect(), Rgba8::ZERO);
+        material_map_effects(&material_map, &mut rgba_field);
 
-        let effect = border_fade_effect(interior, &border_colors, interior_color);
-        effect
-            .save("test_resources/material_effects/area_0_border_fade_effect.png")
-            .unwrap();
-    }
-
-    #[test]
-    fn test_boundary_fade_effect() {
-        let material_map = MaterialMap::load("test_resources/material_effects/area_1.png").unwrap();
-        let topology = Topology::new(material_map.clone());
-
-        let red_region = topology
-            .regions
-            .values()
-            .find(|region| region.material == Material::RED)
-            .unwrap();
-
-        let alphas = [255, 200, 150];
-        let border_materials =
-            alphas.map(|alpha| Material::from_rgba(Rgba8::new(255, 0, 0, alpha)));
-        let interior_material = Material::from_rgba(Rgba8::new(255, 0, 0, 100));
-
-        let effect =
-            boundary_fade_effect(&red_region.boundary, &border_materials, interior_material);
-
-        effect
-            .save("test_resources/material_effects/area_1_border_fade_effect.png")
-            .unwrap();
-    }
-
-    #[test]
-    fn test_alternating_pattern_effect() {
-        let material_map = MaterialMap::load("test_resources/material_effects/area_0.png").unwrap();
-        let mut effect = Pixmap::nones_like(&material_map);
-        let topology = Topology::new(material_map);
-
-        let &region_key = topology
-            .regions
-            .iter()
-            .find_key_by_value(|region| region.material == Material::RED)
-            .unwrap();
-
-        let material_even = Material::BLUE;
-        let material_odd = Material::GREEN;
-        alternating_pattern_effect(
-            &mut effect,
-            topology.iter_region_interior(region_key),
-            material_even,
-            material_odd,
-        );
-
-        effect
-            .save("test_resources/material_effects/area_0_alternating_effect.png")
+        rgba_field
+            .save("test_resources/material_effects/gates4_effects.png")
             .unwrap();
     }
 }

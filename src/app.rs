@@ -9,7 +9,7 @@ use crate::{
     math::{point::Point, rect::Rect, rgba8::Pico8Palette},
     painting::view_painter::{DrawView, ViewPainter},
     pixmap::MaterialMap,
-    utils::{IntoT, ReflectEnum},
+    utils::ReflectEnum,
     view::{EditMode, View, ViewInput, ViewSettings},
     widgets::{brush_chooser, FileChooser},
     world::World,
@@ -51,7 +51,7 @@ impl Clipboard {
     }
 
     pub fn encode(&self) -> String {
-        let rgba_field = self.material_map.to_rgba8_field(Material::TRANSPARENT);
+        let rgba_field = self.material_map.to_rgba_field(Material::TRANSPARENT);
         let png = rgba_field.to_png().unwrap();
         let base64_png = BASE64.encode(&png);
         format!("{}{}", Self::DATA_URL_HEADER, base64_png)
@@ -266,7 +266,7 @@ impl EguiApp {
                 .view
                 .world
                 .material_map()
-                .to_rgba8_field(Material::TRANSPARENT);
+                .to_rgba_field(Material::TRANSPARENT);
 
             match bitmap.to_png() {
                 Ok(file_content) => {
@@ -311,7 +311,7 @@ impl EguiApp {
                     .view
                     .world
                     .material_map()
-                    .to_rgba8_field(Material::TRANSPARENT);
+                    .to_rgba_field(Material::TRANSPARENT);
                 if let Err(err) = bitmap.save(path) {
                     warn!("Failed to save with error {err}");
                 }
@@ -343,7 +343,7 @@ impl EguiApp {
                 .view
                 .world
                 .material_map()
-                .to_rgba8_field(Material::TRANSPARENT);
+                .to_rgba_field(Material::TRANSPARENT);
             match bitmap.save(&path) {
                 Ok(_) => println!("Saved {path:?}"),
                 Err(err) => println!("Failed to save {path:?} with error {err}"),
@@ -536,7 +536,8 @@ impl EguiApp {
             return;
         };
         self.new_size = rgba_field.size();
-        let world = rgba_field.intot::<MaterialMap>().into();
+        let material_map = MaterialMap::from(rgba_field);
+        let mut world = World::from(material_map);
         self.view = View::new(world);
         self.reset_camera_requested = true;
     }

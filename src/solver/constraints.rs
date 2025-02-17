@@ -82,7 +82,7 @@ impl Constraint for PreservesSeamReverse {
         let phi_seam = phi.seam_map[&self.seam];
         let phi_reverse_seam = phi.seam_map[&self.seam.atom_reversed()];
 
-        phi_seam.atom_reversed() == phi_reverse_seam
+        phi_seam.is_atom() && phi_seam.atom_reversed() == phi_reverse_seam
     }
 }
 

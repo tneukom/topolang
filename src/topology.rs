@@ -759,7 +759,6 @@ impl From<MaterialMap> for Topology {
 pub mod test {
     use crate::{
         material::Material,
-        math::rgba8::Rgba8,
         topology::Topology,
         utils::{UndirectedEdge, UndirectedGraph},
     };
@@ -775,20 +774,11 @@ pub mod test {
     }
 
     fn rgb_edges_from<const N: usize>(
-        rgb_edges: [(Rgba8, Rgba8); N],
+        rgb_edges: [(Material, Option<Material>); N],
     ) -> UndirectedGraph<Option<Material>> {
-        let colorf = |rgba| {
-            let material = Material::from(rgba);
-            if material == Material::VOID {
-                None
-            } else {
-                Some(material)
-            }
-        };
-
         rgb_edges
             .into_iter()
-            .map(|(a, b)| UndirectedEdge::new(colorf(a), colorf(b)))
+            .map(|(a, b)| UndirectedEdge::new(Some(a), b))
             .collect()
     }
 
@@ -820,8 +810,8 @@ pub mod test {
         // }
 
         let expected_edges = rgb_edges_from([
-            (Rgba8::TRANSPARENT, Material::RULE_BEFORE_COLOR),
-            (Rgba8::RED, Rgba8::TRANSPARENT),
+            (Material::TRANSPARENT, None),
+            (Material::RED, Some(Material::TRANSPARENT)),
         ]);
         assert_eq!(edges, expected_edges);
     }
@@ -830,10 +820,10 @@ pub mod test {
     fn seam_graph_2a() {
         let rgb_edges = load_rgb_seam_graph("2a.png");
         let expected_rgb_edges = rgb_edges_from([
-            (Rgba8::TRANSPARENT, Material::RULE_BEFORE_COLOR),
-            (Rgba8::RED, Rgba8::BLUE),
-            (Rgba8::RED, Rgba8::TRANSPARENT),
-            (Rgba8::BLUE, Rgba8::TRANSPARENT),
+            (Material::TRANSPARENT, None),
+            (Material::RED, Some(Material::BLUE)),
+            (Material::RED, Some(Material::TRANSPARENT)),
+            (Material::BLUE, Some(Material::TRANSPARENT)),
         ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
     }
@@ -842,9 +832,9 @@ pub mod test {
     fn seam_graph_2b() {
         let rgb_edges = load_rgb_seam_graph("2b.png");
         let expected_rgb_edges = rgb_edges_from([
-            (Rgba8::TRANSPARENT, Material::RULE_BEFORE_COLOR),
-            (Rgba8::RED, Rgba8::BLUE),
-            (Rgba8::RED, Rgba8::TRANSPARENT),
+            (Material::TRANSPARENT, None),
+            (Material::RED, Some(Material::BLUE)),
+            (Material::RED, Some(Material::TRANSPARENT)),
         ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
     }
@@ -859,10 +849,10 @@ pub mod test {
     fn seam_graph_3a() {
         let rgb_edges = load_rgb_seam_graph("3a.png");
         let expected_rgb_edges = rgb_edges_from([
-            (Rgba8::TRANSPARENT, Material::RULE_BEFORE_COLOR),
-            (Rgba8::RED, Rgba8::GREEN),
-            (Rgba8::RED, Rgba8::BLUE),
-            (Rgba8::RED, Rgba8::TRANSPARENT),
+            (Material::TRANSPARENT, None),
+            (Material::RED, Some(Material::GREEN)),
+            (Material::RED, Some(Material::BLUE)),
+            (Material::RED, Some(Material::TRANSPARENT)),
         ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
     }
@@ -871,9 +861,9 @@ pub mod test {
     fn seam_graph_3b() {
         let rgb_edges = load_rgb_seam_graph("3b.png");
         let expected_rgb_edges = rgb_edges_from([
-            (Rgba8::RED, Material::RULE_BEFORE_COLOR),
-            (Rgba8::RED, Rgba8::GREEN),
-            (Rgba8::GREEN, Rgba8::BLUE),
+            (Material::RED, None),
+            (Material::RED, Some(Material::GREEN)),
+            (Material::GREEN, Some(Material::BLUE)),
         ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
     }
@@ -882,11 +872,11 @@ pub mod test {
     fn seam_graph_3c() {
         let rgb_edges = load_rgb_seam_graph("3c.png");
         let expected_rgb_edges = rgb_edges_from([
-            (Rgba8::TRANSPARENT, Material::RULE_BEFORE_COLOR),
-            (Rgba8::RED, Rgba8::YELLOW),
-            (Rgba8::RED, Rgba8::BLUE),
-            (Rgba8::YELLOW, Rgba8::BLUE),
-            (Rgba8::RED, Rgba8::TRANSPARENT),
+            (Material::TRANSPARENT, None),
+            (Material::RED, Some(Material::YELLOW)),
+            (Material::RED, Some(Material::BLUE)),
+            (Material::YELLOW, Some(Material::BLUE)),
+            (Material::RED, Some(Material::TRANSPARENT)),
         ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
     }
@@ -895,13 +885,13 @@ pub mod test {
     fn seam_graph_4a() {
         let rgb_edges = load_rgb_seam_graph("4a.png");
         let expected_rgb_edges = rgb_edges_from([
-            (Rgba8::TRANSPARENT, Material::RULE_BEFORE_COLOR),
-            (Rgba8::RED, Rgba8::BLUE),
-            (Rgba8::BLUE, Rgba8::GREEN),
-            (Rgba8::GREEN, Rgba8::CYAN),
-            (Rgba8::BLUE, Rgba8::CYAN),
-            (Rgba8::RED, Rgba8::CYAN),
-            (Rgba8::RED, Rgba8::TRANSPARENT),
+            (Material::TRANSPARENT, None),
+            (Material::RED, Some(Material::BLUE)),
+            (Material::BLUE, Some(Material::GREEN)),
+            (Material::GREEN, Some(Material::CYAN)),
+            (Material::BLUE, Some(Material::CYAN)),
+            (Material::RED, Some(Material::CYAN)),
+            (Material::RED, Some(Material::TRANSPARENT)),
         ]);
         assert_eq!(rgb_edges, expected_rgb_edges);
     }

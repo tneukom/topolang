@@ -9,6 +9,7 @@ use crate::{
     regions::{area_right_of_boundary, area_right_of_boundary_bounds},
     topology::Border,
 };
+use ahash::HashMap;
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -205,11 +206,11 @@ impl Pixmap<Rgba8> {
 }
 
 impl Pixmap<Material> {
-    pub fn into_rgba8(self) -> Pixmap<Rgba8> {
+    pub fn into_rgba(self) -> Pixmap<Rgba8> {
         self.into_map(|material| material.to_rgba())
     }
 
-    pub fn to_rgba8_field(&self, default: Material) -> Field<Rgba8> {
+    pub fn to_rgba_field(&self, default: Material) -> Field<Rgba8> {
         self.field
             .map(|material| material.unwrap_or(default).to_rgba())
     }
@@ -220,7 +221,7 @@ impl Pixmap<Material> {
     }
 
     pub fn save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
-        self.clone().into_rgba8().save(path)
+        self.clone().into_rgba().save(path)
     }
 }
 
@@ -259,5 +260,16 @@ impl From<&RgbaField> for MaterialMap {
 impl From<RgbaField> for MaterialMap {
     fn from(field: RgbaField) -> Self {
         Self::from(&field)
+    }
+}
+
+impl<T: Copy> From<&HashMap<Point<i64>, T>> for Pixmap<T> {
+    fn from(hash_map: &HashMap<Point<i64>, T>) -> Self {
+        let bounds = Rect::index_bounds(hash_map.keys().copied());
+        let mut pixmap = Pixmap::nones(bounds);
+        for (&index, &value) in hash_map {
+            pixmap.set(index, value);
+        }
+        pixmap
     }
 }

@@ -70,6 +70,7 @@ impl RgbaFieldPainter {
             (texture, rgba_field.size())
         });
 
+        // Upload texture data
         texture.texture_sub_image(gl, Point::ZERO, &rgba_field);
 
         let texture_rect = Rect::low_size(Point::ZERO, *bitmap_size);
