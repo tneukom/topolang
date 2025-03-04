@@ -13,16 +13,45 @@ enum BorderClass {
 
 /// Classify where `pixel` lies in an area defined by the `area` predicate. Assumes `area(pixel)`.
 fn border_class(pixel: Point<i64>, mut area: impl FnMut(Point<i64>) -> bool) -> BorderClass {
-    const GAP_NEIGHBORS: [Point<i64>; 4] = [Point(-1, 0), Point(0, 1), Point(1, 0), Point(0, -1)];
-    const BORDER_NEIGHBORS: [Point<i64>; 8] = [
-        Point(-2, 0),
-        Point(-1, 1),
-        Point(0, 2),
-        Point(1, 1),
-        Point(2, 0),
-        Point(1, -1),
-        Point(0, -2),
+    // const GAP_NEIGHBORS: [Point<i64>; 4] = [Point(-1, 0), Point(0, 1), Point(1, 0), Point(0, -1)];
+    // const BORDER_NEIGHBORS: [Point<i64>; 8] = [
+    //     Point(-2, 0),
+    //     Point(-1, 1),
+    //     Point(0, 2),
+    //     Point(1, 1),
+    //     Point(2, 0),
+    //     Point(1, -1),
+    //     Point(0, -2),
+    //     Point(-1, -1),
+    // ];
+
+    const GAP_NEIGHBORS: [Point<i64>; 8] = [
         Point(-1, -1),
+        Point(-1, 0),
+        Point(-1, 1),
+        Point(0, 1),
+        Point(1, 1),
+        Point(1, 0),
+        Point(1, -1),
+        Point(0, -1),
+    ];
+    const BORDER_NEIGHBORS: [Point<i64>; 16] = [
+        Point(-2, -2),
+        Point(-2, -1),
+        Point(-2, 0),
+        Point(-2, 1),
+        Point(-2, 2),
+        Point(-1, 2),
+        Point(0, 2),
+        Point(1, 2),
+        Point(2, 2),
+        Point(2, 1),
+        Point(2, 0),
+        Point(2, -1),
+        Point(2, -2),
+        Point(1, -2),
+        Point(0, -2),
+        Point(-1, -2),
     ];
 
     if GAP_NEIGHBORS
