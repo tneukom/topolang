@@ -467,11 +467,11 @@ impl View {
     }
 
     fn handle_camera_input(&mut self, input: &mut ViewInput) {
-        let scale_delta = 2.0_f64.powf(-input.mouse_wheel);
-        self.camera = self
-            .camera
-            .zoom_at_view_point(input.view_mouse, scale_delta)
-            .round();
+        if input.mouse_wheel < 0.0 {
+            self.camera = self.camera.zoom_in_at_view_point(input.view_mouse).round();
+        } else if input.mouse_wheel > 0.0 {
+            self.camera = self.camera.zoom_out_at_view_point(input.view_mouse).round();
+        }
         input.world_mouse = self.camera.view_to_world() * input.view_mouse;
         input.world_snapped = self.nearest_grid_vertex(input.world_mouse);
     }

@@ -1,13 +1,34 @@
 use crate::math::{affine_map::AffineMap, point::Point, rect::Rect};
 
 #[derive(Debug, Clone, Copy)]
-// An affine map that maps points from the view to the world coordinate system.
+/// An affine map that maps points from the view to the world coordinate system.
+/// `view_to_world`
 pub struct Camera {
     pub offset: Point<f64>,
     pub scale: f64,
 }
 
 impl Camera {
+    const ZOOM_LEVELS: [f64; 17] = [
+        1.0 / 16.0,
+        1.0 / 12.0,
+        1.0 / 8.0,
+        1.0 / 6.0,
+        1.0 / 5.0,
+        1.0 / 4.0,
+        1.0 / 3.0,
+        1.0 / 2.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        8.0,
+        12.0,
+        16.0,
+    ];
+
     fn new(offset: Point<f64>, scale: f64) -> Self {
         Camera { offset, scale }
     }
@@ -27,7 +48,7 @@ impl Camera {
     }
 
     pub fn default() -> Camera {
-        Camera::new(Point::ZERO, 1.0 / 16.0)
+        Camera::new(Point::ZERO, 1.0)
     }
 
     // The resulting camera maps view_point to world_point with the given scale
@@ -41,11 +62,33 @@ impl Camera {
         Camera::new(offset, scale)
     }
 
-    // Zoom in or out at the given point in the view reference frame.
-    // The result maps viewPoint to this.WorldView() * viewPoint
-    pub fn zoom_at_view_point(&self, view_point: Point<f64>, scale: f64) -> Camera {
+    // Zoom in at the given point in the view reference frame.
+    // The result maps `view_point` to `view_to_world * view_point`
+    pub fn zoom_in_at_view_point(&self, view_point: Point<f64>) -> Camera {
+        let Some(next_scale) = Self::ZOOM_LEVELS
+            .into_iter()
+            .filter(|&zoom| zoom > self.scale)
+            .next()
+        else {
+            return *self;
+        };
+
         let world_point = self.view_to_world() * view_point;
-        Self::map_view_to_world(view_point, world_point, self.scale * scale)
+        Self::map_view_to_world(view_point, world_point, next_scale)
+    }
+
+    /// See `zoom_in_at_view_point`
+    pub fn zoom_out_at_view_point(&self, view_point: Point<f64>) -> Camera {
+        let Some(next_scale) = Self::ZOOM_LEVELS
+            .into_iter()
+            .filter(|&zoom| zoom < self.scale)
+            .last()
+        else {
+            return *self;
+        };
+
+        let world_point = self.view_to_world() * view_point;
+        Self::map_view_to_world(view_point, world_point, next_scale)
     }
 
     /// A camera that maps the center of world_rect to the center of view_rect and

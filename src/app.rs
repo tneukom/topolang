@@ -525,7 +525,19 @@ impl EguiApp {
 
             ui.menu_button("File", |ui| {
                 self.file_dialog_ui(ui);
-            })
+            });
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // `Camera::scale` is view_to_world, we display world_to_view scale as zoom level
+                let zoom = 1.0 / self.view.camera.scale;
+
+                let zoom_fmt = if zoom < 1.0 {
+                    format!("Zoom: 1 / {}", 1.0 / zoom)
+                } else {
+                    format!("Zoom: {}", zoom)
+                };
+                ui.label(zoom_fmt);
+            });
         });
     }
 
@@ -575,8 +587,7 @@ impl EguiApp {
 
             // Scroll captured if the mouse pointer is over view, even if it doesn't have focus.
             let scroll_delta = if response.contains_pointer() {
-                let scroll_delta = input.smooth_scroll_delta.y as f64 / 50.0;
-                scroll_delta.clamp(-0.2, 0.2)
+                input.raw_scroll_delta.y as f64
             } else {
                 0.0
             };
