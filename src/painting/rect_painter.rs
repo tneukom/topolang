@@ -12,7 +12,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy)]
-pub struct TileVertex {
+struct Vertex {
     pub position: [f32; 2],
     pub texcoord: [f32; 2],
 }
@@ -26,7 +26,7 @@ pub struct DrawRect {
 /// Paint a textured rectangle
 pub struct FillRectPainter {
     shader: Shader,
-    array_buffer: GlBuffer<TileVertex>,
+    array_buffer: GlBuffer<Vertex>,
     element_buffer: GlBuffer<u32>,
     vertex_array: GlVertexArray,
 }
@@ -46,19 +46,19 @@ impl FillRectPainter {
         array_buffer.bind(gl);
         element_buffer.bind(gl);
 
-        let size = size_of::<TileVertex>();
+        let size = size_of::<Vertex>();
         shader.assign_attribute_f32(
             gl,
             "in_device_position",
             &VertexAttribDesc::VEC2,
-            offset_of!(TileVertex, position) as i32,
+            offset_of!(Vertex, position) as i32,
             size as i32,
         );
         shader.assign_attribute_f32(
             gl,
             "in_texcoord",
             &VertexAttribDesc::VEC2,
-            offset_of!(TileVertex, texcoord) as i32,
+            offset_of!(Vertex, texcoord) as i32,
             size as i32,
         );
 
@@ -82,13 +82,13 @@ impl FillRectPainter {
     ) {
         // Create list of vertices for draw_tiles with texture coordinates from atlas
         // Draw two triangles per tile
-        let mut vertices: Vec<TileVertex> = Vec::new();
+        let mut vertices: Vec<Vertex> = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
         for (i_tile, tile) in draw_rects.iter().enumerate() {
             let atlas_corners = tile.texture_rect.corners();
 
             for (tile_corner, atlas_corner) in tile.corners.into_iter().zip(atlas_corners) {
-                let vertex = TileVertex {
+                let vertex = Vertex {
                     texcoord: (texture.bitmap_to_gltexture() * atlas_corner.cwise_as())
                         .cwise_as()
                         .to_array(),

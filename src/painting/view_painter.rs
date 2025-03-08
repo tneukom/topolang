@@ -5,7 +5,10 @@ use crate::{
     field::RgbaField,
     material::Material,
     math::{point::Point, rect::Rect},
-    painting::{line_painter::LinePainter, material_map_painter::RgbaFieldPainter},
+    painting::{
+        checkerboard_painter::CheckerboardPainter, line_painter::LinePainter,
+        material_map_painter::RgbaFieldPainter,
+    },
     view::{EditMode, SelectingKind, UiState, View, ViewInput, ViewSettings},
 };
 use std::sync::{Arc, RwLock};
@@ -58,6 +61,7 @@ impl DrawView {
 }
 
 pub struct ViewPainter {
+    pub checkerboard_painter: CheckerboardPainter,
     pub grid_painter: GridPainter,
     pub line_painter: LinePainter,
     pub world_painter: RgbaFieldPainter,
@@ -70,6 +74,7 @@ pub struct ViewPainter {
 impl ViewPainter {
     pub unsafe fn new(gl: &glow::Context) -> ViewPainter {
         ViewPainter {
+            checkerboard_painter: CheckerboardPainter::new(gl),
             grid_painter: GridPainter::new(gl),
             line_painter: LinePainter::new(gl),
             world_painter: RgbaFieldPainter::new(gl),
@@ -100,11 +105,13 @@ impl ViewPainter {
 
     pub unsafe fn draw_view(&mut self, gl: &glow::Context, draw: &DrawView) {
         let world_to_device = draw.frames.view_to_device() * draw.camera.world_to_view();
-
-        // Grid in the background
-        self.draw_grid(gl, &draw.camera, &draw.frames);
-
         let read_world_rgba_field = draw.world_rgba_field.read().unwrap();
+
+        // Checkerboard pattern in background
+        let world_bounds = read_world_rgba_field.bounds().cwise_as();
+        self.checkerboard_painter
+            .draw(gl, world_bounds, 16.0, &draw.frames, &draw.camera);
+
         self.world_painter
             .draw(gl, &read_world_rgba_field, world_to_device, draw.time);
 
@@ -151,6 +158,9 @@ impl ViewPainter {
             self.brush_preview_painter
                 .draw(gl, brush_preview, world_to_device, draw.time);
         }
+
+        // Grid in the background
+        self.draw_grid(gl, &draw.camera, &draw.frames);
 
         self.i_frame += 1;
     }

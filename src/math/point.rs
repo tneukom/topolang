@@ -78,6 +78,12 @@ impl<T: AsPrimitive<f64>> Point<T> {
     }
 }
 
+impl<T: AsPrimitive<f32>> Point<T> {
+    pub fn as_f32(self) -> Point<f32> {
+        self.cwise_as()
+    }
+}
+
 impl<T: AsPrimitive<i64>> Point<T> {
     pub fn as_i64(self) -> Point<i64> {
         self.cwise_as()
