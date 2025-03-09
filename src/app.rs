@@ -17,6 +17,7 @@ use crate::{
 use data_encoding::BASE64;
 use egui::Widget;
 use glow::HasContext;
+use itertools::Itertools;
 use log::{info, warn};
 use std::{
     fs,
@@ -389,6 +390,19 @@ impl EguiApp {
         });
     }
 
+    pub fn grid_size_ui(&mut self, ui: &mut egui::Ui) {
+        const GRID_SIZE_CHOICES: [Option<i64>; 4] = [None, Some(4), Some(8), Some(16)];
+        const GRID_SIZE_LABELS: [&str; 4] = ["None", "4px", "8px", "16px"];
+
+        ui.horizontal(|ui| {
+            ui.label("Grid:");
+
+            for (choice, label) in GRID_SIZE_CHOICES.into_iter().zip_eq(GRID_SIZE_LABELS) {
+                ui.selectable_value(&mut self.view.grid_size, choice, label);
+            }
+        });
+    }
+
     pub fn compile(&mut self) {
         let compiled_rules = self.compiler.compile(&self.view.world);
         if let Err(err) = &compiled_rules {
@@ -514,6 +528,8 @@ impl EguiApp {
 
         ui.label("Document");
         self.document_ui(ui);
+
+        self.grid_size_ui(ui);
     }
 
     pub fn top_ui(&mut self, ui: &mut egui::Ui) {

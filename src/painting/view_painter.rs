@@ -4,7 +4,7 @@ use crate::{
     coordinate_frame::CoordinateFrames,
     field::RgbaField,
     material::Material,
-    math::{point::Point, rect::Rect},
+    math::rect::Rect,
     painting::{
         checkerboard_painter::CheckerboardPainter, line_painter::LinePainter,
         material_map_painter::RgbaFieldPainter,
@@ -23,6 +23,7 @@ pub struct DrawView {
     selection_rgba_field: Option<RgbaField>,
     brush_preview: Option<RgbaField>,
     ui_state: UiState,
+    grid_size: Option<i64>,
 }
 
 impl DrawView {
@@ -51,6 +52,7 @@ impl DrawView {
         Self {
             ui_state: view.ui_state.clone(),
             camera: view.camera,
+            grid_size: view.grid_size,
             world_rgba_field,
             selection_rgba_field,
             brush_preview,
@@ -82,12 +84,6 @@ impl ViewPainter {
             selection_painter: RgbaFieldPainter::new(gl),
             i_frame: 0,
         }
-    }
-
-    pub unsafe fn draw_grid(&self, gl: &glow::Context, camera: &Camera, frames: &CoordinateFrames) {
-        let origin = camera.world_to_view() * Point::ZERO;
-        let spacing = camera.world_to_view().linear * Point::ONE;
-        self.grid_painter.draw(gl, origin, spacing, frames);
     }
 
     pub unsafe fn draw_selection_outline(
@@ -160,7 +156,15 @@ impl ViewPainter {
         }
 
         // Grid in the background
-        self.draw_grid(gl, &draw.camera, &draw.frames);
+        if let Some(grid_size) = draw.grid_size {
+            self.grid_painter.draw(
+                gl,
+                world_bounds,
+                grid_size as f64,
+                &draw.frames,
+                &draw.camera,
+            );
+        }
 
         self.i_frame += 1;
     }

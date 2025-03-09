@@ -205,6 +205,7 @@ pub struct View {
     pub world: World,
     pub history: History,
     pub camera: Camera,
+    pub grid_size: Option<i64>,
 
     pub selection: Option<Selection>,
 
@@ -218,6 +219,7 @@ impl View {
             world,
             history,
             camera: Camera::default(),
+            grid_size: None,
             ui_state: UiState::Idle,
             selection: None,
         }
