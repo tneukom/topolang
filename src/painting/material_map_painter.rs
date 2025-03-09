@@ -1,22 +1,46 @@
 use crate::{
     field::RgbaField,
-    math::{affine_map::AffineMap, point::Point, rect::Rect, rgba8::Rgba8},
+    math::{affine_map::AffineMap, matrix3::Matrix3, point::Point, rect::Rect, rgba8::Rgba8},
     painting::{
+        gl_buffer::GlVertexArrayObject,
         gl_texture::{Filter, GlTexture},
-        rect_painter::{DrawRect, FillRectPainter},
+        rect_vertices::RectVertices,
+        shader::Shader,
     },
 };
+use glow::HasContext;
 
 pub struct RgbaFieldPainter {
-    rect_painter: FillRectPainter,
+    position_vertices: RectVertices,
+    texcoord_vertices: RectVertices,
+    vao: GlVertexArrayObject,
+    shader: Shader,
     texture: Option<(GlTexture, Point<i64>)>,
 }
 
 impl RgbaFieldPainter {
     pub unsafe fn new(gl: &glow::Context) -> Self {
+        let vs_source = include_str!("shaders/material.vert");
+        let fs_source = include_str!("shaders/material.frag");
+        let shader = Shader::from_source(gl, &vs_source, &fs_source);
+
+        let position_vertices = RectVertices::new(gl);
+        let texcoord_vertices = RectVertices::new(gl);
+
+        let vao = GlVertexArrayObject::new(gl);
+        vao.bind(gl);
+
+        // Update position and texcoord vertices
+        position_vertices.assign_attribute(gl, &shader, "in_world_position");
+
+        texcoord_vertices.assign_attribute(gl, &shader, "in_bitmap_uv");
+
         Self {
+            shader,
             texture: None,
-            rect_painter: FillRectPainter::new(gl),
+            position_vertices,
+            texcoord_vertices,
+            vao,
         }
     }
 
@@ -34,8 +58,7 @@ impl RgbaFieldPainter {
         &mut self,
         gl: &glow::Context,
         rgba_field: &RgbaField,
-        to_device: AffineMap<f64>,
-        time: f64,
+        world_to_device: AffineMap<f64>,
     ) {
         if !rgba_field.bounds().has_positive_area() {
             println!("Trying to draw empty field.");
@@ -75,12 +98,35 @@ impl RgbaFieldPainter {
 
         let texture_rect = Rect::low_size(Point::ZERO, *bitmap_size);
         let rect = texture_rect + rgba_field.bounds().low();
-        let draw_tile = DrawRect {
-            texture_rect,
-            corners: rect.cwise_as().corners(),
-        };
 
-        self.rect_painter
-            .draw(gl, &[draw_tile], texture, to_device, time);
+        // Alpha blending with premultiplied alpha
+        gl.enable(glow::BLEND);
+        gl.blend_func(glow::ONE, glow::ONE_MINUS_SRC_ALPHA);
+        gl.blend_equation(glow::FUNC_ADD);
+
+        // Bind texture
+        gl.active_texture(glow::TEXTURE0);
+        gl.bind_texture(glow::TEXTURE_2D, Some(texture.id));
+
+        self.position_vertices.update(gl, rect.cwise_as());
+        self.texcoord_vertices.update(gl, texture_rect.cwise_as());
+
+        self.vao.bind(gl);
+        self.shader.use_program(gl);
+
+        // Update uniforms
+        self.shader.uniform(gl, "material_texture", glow::TEXTURE0);
+
+        let mat_world_to_device = Matrix3::from(world_to_device);
+        self.shader
+            .uniform(gl, "world_to_device", &mat_world_to_device);
+
+        let bitmap_to_gltexture = texture.bitmap_to_gltexture();
+        let mat_bitmap_to_gltexture = Matrix3::from(bitmap_to_gltexture);
+        self.shader
+            .uniform(gl, "bitmap_to_gltexture", &mat_bitmap_to_gltexture);
+
+        // Paint 2 triangles
+        gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
     }
 }

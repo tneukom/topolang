@@ -64,16 +64,16 @@ impl<T> Drop for GlBuffer<T> {
     }
 }
 
-pub struct GlVertexArray {
+pub struct GlVertexArrayObject {
     pub id: glow::VertexArray,
 }
 
-impl GlVertexArray {
-    pub unsafe fn new(gl: &glow::Context) -> GlVertexArray {
+impl GlVertexArrayObject {
+    pub unsafe fn new(gl: &glow::Context) -> GlVertexArrayObject {
         let id = gl
             .create_vertex_array()
             .expect("Cannot create vertex array");
-        GlVertexArray { id }
+        GlVertexArrayObject { id }
     }
 
     pub unsafe fn bind(&self, gl: &glow::Context) {
@@ -85,7 +85,7 @@ impl GlVertexArray {
     }
 }
 
-impl Drop for GlVertexArray {
+impl Drop for GlVertexArrayObject {
     fn drop(&mut self) {
         warn!("Leaking GlVertexArray");
         // unsafe {

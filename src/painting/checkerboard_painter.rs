@@ -5,12 +5,13 @@ use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
     math::{matrix3::Matrix3, rect::Rect},
-    painting::rect_vertices::RectVertices,
+    painting::{gl_buffer::GlVertexArrayObject, rect_vertices::RectVertices},
 };
 
 pub struct CheckerboardPainter {
     pub shader: Shader,
     pub vertices: RectVertices,
+    pub vao: GlVertexArrayObject,
 }
 
 impl CheckerboardPainter {
@@ -20,9 +21,15 @@ impl CheckerboardPainter {
         let shader = Shader::from_source(gl, &vs_source, &fs_source);
 
         let vertices = RectVertices::new(gl);
+        let vao = GlVertexArrayObject::new(gl);
+        vao.bind(gl);
         vertices.assign_attribute(gl, &shader, "in_world_position");
 
-        Self { shader, vertices }
+        Self {
+            shader,
+            vertices,
+            vao,
+        }
     }
 
     // Draw a grid, the lines are 1 pixel wide.
@@ -37,16 +44,20 @@ impl CheckerboardPainter {
     ) {
         gl.disable(glow::BLEND);
 
-        self.vertices.bind_vertices(gl, rect);
+        self.vertices.update(gl, rect);
+        self.vao.bind(gl);
+
+        self.shader.use_program(gl);
+
+        // Update uniforms
+        self.shader.uniform(gl, "size", size);
 
         let world_to_device = frames.view_to_device() * camera.world_to_view();
         let mat_world_to_device = Matrix3::from(world_to_device);
-
-        self.shader.use_program(gl);
-        self.shader.uniform(gl, "size", size);
         self.shader
             .uniform(gl, "world_to_device", &mat_world_to_device);
 
-        self.vertices.draw_elements(gl);
+        // Draw 2 triangles
+        gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
     }
 }

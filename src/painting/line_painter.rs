@@ -1,7 +1,7 @@
 use crate::{
     math::{affine_map::AffineMap, arrow::Arrow, rect::Rect},
     painting::{
-        gl_buffer::{GlBuffer, GlBufferTarget, GlVertexArray},
+        gl_buffer::{GlBuffer, GlBufferTarget, GlVertexArrayObject},
         shader::{Shader, VertexAttribDesc},
     },
 };
@@ -17,7 +17,7 @@ pub struct LinePainter {
     shader: Shader,
     array_buffer: GlBuffer<LineVertex>,
     element_buffer: GlBuffer<u32>,
-    vertex_array: GlVertexArray,
+    vertex_array: GlVertexArrayObject,
 }
 
 impl LinePainter {
@@ -29,7 +29,7 @@ impl LinePainter {
         // Create vertex, index buffers and assign to shader
         let array_buffer = GlBuffer::new(gl, GlBufferTarget::ArrayBuffer);
         let element_buffer = GlBuffer::new(gl, GlBufferTarget::ElementArrayBuffer);
-        let vertex_array = GlVertexArray::new(gl);
+        let vertex_array = GlVertexArrayObject::new(gl);
 
         vertex_array.bind(gl);
         array_buffer.bind(gl);

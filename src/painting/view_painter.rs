@@ -109,7 +109,7 @@ impl ViewPainter {
             .draw(gl, world_bounds, 16.0, &draw.frames, &draw.camera);
 
         self.world_painter
-            .draw(gl, &read_world_rgba_field, world_to_device, draw.time);
+            .draw(gl, &read_world_rgba_field, world_to_device);
 
         // Draw a rectangle around the scene
         self.draw_selection_outline(
@@ -124,7 +124,7 @@ impl ViewPainter {
         if let Some(selection_rgba_field) = &draw.selection_rgba_field {
             if !selection_rgba_field.is_empty() {
                 self.selection_painter
-                    .draw(gl, &selection_rgba_field, world_to_device, draw.time);
+                    .draw(gl, &selection_rgba_field, world_to_device);
 
                 self.draw_selection_outline(
                     gl,
@@ -152,7 +152,7 @@ impl ViewPainter {
         // Draw brush preview
         if let Some(brush_preview) = &draw.brush_preview {
             self.brush_preview_painter
-                .draw(gl, brush_preview, world_to_device, draw.time);
+                .draw(gl, brush_preview, world_to_device);
         }
 
         // Grid in the background
