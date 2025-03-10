@@ -11,6 +11,19 @@ enum BorderClass {
     Inside,
 }
 
+const NEIGHBORS_8: [Point<i64>; 8] = [
+    Point(-1, -1),
+    Point(-1, 0),
+    Point(-1, 1),
+    Point(0, 1),
+    Point(1, 1),
+    Point(1, 0),
+    Point(1, -1),
+    Point(0, -1),
+];
+
+// const NEIGHBORS_4: [Point<i64>; 4] = [Point(-1, 0), Point(0, 1), Point(1, 0), Point(0, -1)];
+
 /// Classify where `pixel` lies in an area defined by the `area` predicate. Assumes `area(pixel)`.
 fn border_class(pixel: Point<i64>, mut area: impl FnMut(Point<i64>) -> bool) -> BorderClass {
     // const GAP_NEIGHBORS: [Point<i64>; 4] = [Point(-1, 0), Point(0, 1), Point(1, 0), Point(0, -1)];
@@ -25,16 +38,8 @@ fn border_class(pixel: Point<i64>, mut area: impl FnMut(Point<i64>) -> bool) -> 
     //     Point(-1, -1),
     // ];
 
-    const GAP_NEIGHBORS: [Point<i64>; 8] = [
-        Point(-1, -1),
-        Point(-1, 0),
-        Point(-1, 1),
-        Point(0, 1),
-        Point(1, 1),
-        Point(1, 0),
-        Point(1, -1),
-        Point(0, -1),
-    ];
+    const GAP_NEIGHBORS: [Point<i64>; 8] = NEIGHBORS_8;
+
     const BORDER_NEIGHBORS: [Point<i64>; 16] = [
         Point(-2, -2),
         Point(-2, -1),
@@ -69,6 +74,40 @@ fn border_class(pixel: Point<i64>, mut area: impl FnMut(Point<i64>) -> bool) -> 
     }
 }
 
+// /// Border and gap
+// pub fn rule_effect(material_map: &MaterialMap, pixel: Point<i64>, material: Material) -> Rgba8 {
+//     // Border with gap effect
+//     let border_class = border_class(pixel, |neighbor| match material_map.get(neighbor) {
+//         None => false,
+//         Some(material) => material.is_rule(),
+//     });
+//     let alpha = match border_class {
+//         BorderClass::Border => Material::RULE_BORDER_ALPHA,
+//         BorderClass::Gap => Material::RULE_GAP_ALPHA,
+//         BorderClass::Inside => Material::RULE_INTERIOR_ALPHA,
+//     };
+//
+//     Rgba8::from_rgb_a(material.rgb, alpha)
+// }
+
+/// Border to transparent color
+pub fn rule_effect(material_map: &MaterialMap, pixel: Point<i64>, material: Material) -> Rgba8 {
+    let is_border = NEIGHBORS_8.into_iter().any(|neighbor_offset| {
+        match material_map.get(pixel + neighbor_offset) {
+            None => true,
+            Some(neighbor_material) => neighbor_material == Material::TRANSPARENT,
+        }
+    });
+
+    let alpha = if is_border {
+        Material::RULE_BORDER_ALPHA
+    } else {
+        Material::RULE_INTERIOR_ALPHA
+    };
+
+    Rgba8::from_rgb_a(material.rgb, alpha)
+}
+
 /// Convert Material to Rgba8 using effects for rule and solid areas
 pub fn material_effect(material_map: &MaterialMap, pixel: Point<i64>) -> Rgba8 {
     let material = material_map.get(pixel).unwrap();
@@ -82,20 +121,7 @@ pub fn material_effect(material_map: &MaterialMap, pixel: Point<i64>) -> Rgba8 {
                 material.solid_alt_rgba()
             }
         }
-        MaterialClass::Rule => {
-            // Border with gap effect
-            let border_class = border_class(pixel, |neighbor| match material_map.get(neighbor) {
-                None => false,
-                Some(material) => material.is_rule(),
-            });
-            let alpha = match border_class {
-                BorderClass::Border => Material::RULE_BORDER_ALPHA,
-                BorderClass::Gap => Material::RULE_GAP_ALPHA,
-                BorderClass::Inside => Material::RULE_INTERIOR_ALPHA,
-            };
-
-            Rgba8::from_rgb_a(material.rgb, alpha)
-        }
+        MaterialClass::Rule => rule_effect(material_map, pixel, material),
         MaterialClass::Wildcard => {
             // alternating diagonal lines effect
             if (pixel.x + pixel.y) % 3 == 0 {
