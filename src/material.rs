@@ -73,14 +73,6 @@ impl Material {
     /// #0C3619
     pub const WILDCARD: Self = Self::new(Self::WILDCARD_RGB, MaterialClass::Wildcard);
 
-    /// #0c3619
-    #[deprecated]
-    pub const LEGACY_WILDCARD_RGB: [u8; 3] = [0x0c, 0x36, 0x19];
-
-    #[deprecated]
-    pub const LEGACY_WILDCARD_RGBA: Rgba8 =
-        Rgba8::from_rgb_a(Self::LEGACY_WILDCARD_RGB, Self::LEGACY_RULE_ALPHA);
-
     pub const UNDEF_COLOR: Rgba8 = Rgba8::new(0xFF, 0xFF, 0xFF, 0x00);
 
     // Some opaque color materials
@@ -179,9 +171,7 @@ impl From<Rgba8> for Material {
         let rgb = rgba.rgb();
         let [r, g, b, a] = rgba.to_array();
 
-        if rgba == Self::LEGACY_WILDCARD_RGBA {
-            Self::WILDCARD
-        } else if a == Self::OPAQUE_ALPHA {
+        if a == Self::OPAQUE_ALPHA {
             Self::new(rgb, MaterialClass::Normal)
         } else if a == 0 {
             Self::TRANSPARENT

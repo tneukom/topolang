@@ -65,7 +65,7 @@ pub fn main_benchmark_pixmap_regions() {
 
 pub fn main_benchmark() {
     let folder = "test_resources/benchmark";
-    let original_world = RgbaField::load(format!("{folder}/gates.png"))
+    let original_world = RgbaField::load(format!("{folder}/gates4.png"))
         .unwrap()
         .intot::<MaterialMap>()
         .intot::<World>();
