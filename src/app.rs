@@ -487,10 +487,10 @@ impl EguiApp {
 
         // Undo, Redo buttons
         ui.horizontal(|ui| {
-            if ui.button("Undo").clicked() {
+            if ui.button("⟲ Undo").clicked() {
                 history.undo();
             }
-            if ui.button("Redo").clicked() {
+            if ui.button("⟳ Redo").clicked() {
                 history.redo();
             }
         });

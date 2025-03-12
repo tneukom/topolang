@@ -23,6 +23,10 @@ impl Rgba8 {
         Self::new(rgb[0], rgb[1], rgb[2], a)
     }
 
+    pub const fn from_rgb(rgb: [u8; 3]) -> Rgba8 {
+        Self::new(rgb[0], rgb[1], rgb[2], 255)
+    }
+
     pub fn hex(self) -> String {
         format!("#{:02x}{:02x}{:02x}{:02x}", self.r, self.g, self.b, self.a)
     }

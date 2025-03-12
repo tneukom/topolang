@@ -1,4 +1,4 @@
-use crate::math::rgba8::Rgba8;
+use crate::{math::rgba8::Rgba8, utils::ReflectEnum};
 use std::ops::{Range, RangeInclusive};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -9,6 +9,35 @@ pub enum MaterialClass {
     Rule,
     Wildcard,
     Transparent,
+    Sleeping,
+}
+
+impl MaterialClass {
+    pub const ALL: [Self; 6] = [
+        Self::Normal,
+        Self::Solid,
+        Self::Rule,
+        Self::Wildcard,
+        Self::Transparent,
+        Self::Sleeping,
+    ];
+}
+
+impl ReflectEnum for MaterialClass {
+    fn all() -> &'static [Self] {
+        &Self::ALL
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Normal => "Normal",
+            Self::Solid => "Solid",
+            Self::Rule => "Rule",
+            Self::Wildcard => "Wildcard",
+            Self::Transparent => "Transparent",
+            Self::Sleeping => "Sleeping",
+        }
+    }
 }
 
 // TODO: Material should be optimized for RegionEq, not converting from and to Rgba8!
@@ -73,6 +102,8 @@ impl Material {
     /// #0C3619
     pub const WILDCARD: Self = Self::new(Self::WILDCARD_RGB, MaterialClass::Wildcard);
 
+    pub const SLEEPING_ALPHA: u8 = 131;
+
     pub const UNDEF_COLOR: Rgba8 = Rgba8::new(0xFF, 0xFF, 0xFF, 0x00);
 
     // Some opaque color materials
@@ -107,6 +138,14 @@ impl Material {
 
     pub fn is_not_rule(self) -> bool {
         !self.is_rule()
+    }
+
+    pub fn is_wildcard(self) -> bool {
+        self.class == MaterialClass::Wildcard
+    }
+
+    pub fn is_sleeping(self) -> bool {
+        self.class == MaterialClass::Sleeping
     }
 
     pub fn as_solid(mut self) -> Material {
@@ -159,6 +198,7 @@ impl Material {
             MaterialClass::Rule => Rgba8::from_rgb_a(self.rgb, Self::RULE_INTERIOR_ALPHA),
             MaterialClass::Wildcard => Rgba8::from_rgb_a(self.rgb, Self::WILDCARD_ALPHA),
             MaterialClass::Transparent => Rgba8::from_rgb_a(self.rgb, 0),
+            MaterialClass::Sleeping => Rgba8::from_rgb_a(self.rgb, Self::SLEEPING_ALPHA),
         }
     }
 }
@@ -201,6 +241,8 @@ impl From<Rgba8> for Material {
                 Self::WILDCARD_ALT_RGB => Self::WILDCARD,
                 _ => unimplemented!(),
             }
+        } else if a == Self::SLEEPING_ALPHA {
+            Self::new(rgb, MaterialClass::Sleeping)
         } else {
             unimplemented!();
         }

@@ -1,5 +1,9 @@
 use crate::{
-    brush::Brush, material::Material, math::rgba8::Rgba8, palettes::Palette, utils::ReflectEnum,
+    brush::Brush,
+    material::{Material, MaterialClass},
+    math::rgba8::Rgba8,
+    palettes::Palette,
+    utils::ReflectEnum,
 };
 use itertools::Itertools;
 use std::{ffi::OsStr, fs, path::PathBuf};
@@ -60,6 +64,16 @@ pub fn color_chooser(ui: &mut egui::Ui, color: &mut Rgba8) -> bool {
     palette_widget(ui, &palette, color)
 }
 
+pub fn rgb_chooser(ui: &mut egui::Ui, rgb: &mut [u8; 3]) -> bool {
+    let palette = palette_chooser(ui);
+
+    // Palette itself
+    let mut rgba = Rgba8::from_rgb(*rgb);
+    let changed = palette_widget(ui, &palette, &mut rgba);
+    *rgb = rgba.rgb();
+    changed
+}
+
 /// Returns true if the color was changed
 pub fn system_material_widget(ui: &mut egui::Ui, material: &mut Material) -> bool {
     let system_materials = [
@@ -82,35 +96,57 @@ pub fn system_material_widget(ui: &mut egui::Ui, material: &mut Material) -> boo
     color_set
 }
 
-pub fn brush_chooser(ui: &mut egui::Ui, brush: &mut Brush) {
-    // Keep solid flag to reapply it later
-    let mut is_solid = brush.material.is_solid();
-
-    // Brush color
-    let mut rgba = brush.material.as_normal().to_rgba();
-    if color_chooser(ui, &mut rgba) {
-        brush.material = Material::from(rgba);
-        if is_solid {
-            brush.material = brush.material.as_solid();
-        }
+pub fn material_chooser(ui: &mut egui::Ui, material: &mut Material) {
+    // Color
+    let mut rgb = material.rgb;
+    if rgb_chooser(ui, &mut rgb) {
+        *material = match material.class {
+            MaterialClass::Solid => Material::new(rgb, MaterialClass::Solid),
+            MaterialClass::Sleeping => Material::new(rgb, MaterialClass::Sleeping),
+            _ => Material::new(rgb, MaterialClass::Normal),
+        };
     }
 
     ui.label("System colors");
-    system_material_widget(ui, &mut brush.material);
+    system_material_widget(ui, material);
 
-    // Solid checkbox
-    ui.add_enabled_ui(
-        brush.material.is_normal() || brush.material.is_solid(),
-        |ui| {
-            if ui.checkbox(&mut is_solid, "Solid").clicked() {
-                if is_solid {
-                    brush.material = brush.material.as_solid();
-                } else {
-                    brush.material = brush.material.as_normal();
+    // Material classes
+    let is_reserved = material.is_rule() || material.is_wildcard();
+
+    let style = ui.style();
+    let frame = egui::Frame {
+        inner_margin: egui::Margin::same(6.0),
+        rounding: egui::Rounding::same(4.0),
+        fill: style.visuals.widgets.inactive.bg_fill,
+        ..Default::default()
+    };
+
+    frame.show(ui, |ui| {
+        ui.add_enabled_ui(!is_reserved, |ui| {
+            ui.horizontal(|ui| {
+                let class_choices = [
+                    MaterialClass::Solid,
+                    MaterialClass::Normal,
+                    MaterialClass::Sleeping,
+                ];
+
+                for choice in class_choices {
+                    ui.selectable_value(&mut material.class, choice, choice.as_str());
+
+                    // Buttons looks better
+                    // let button =
+                    //     egui::Button::new(choice.as_str()).selected(choice == material.class);
+                    // if ui.add(button).clicked() {
+                    //     material.class = choice;
+                    // }
                 }
-            }
-        },
-    );
+            })
+        });
+    });
+}
+
+pub fn brush_chooser(ui: &mut egui::Ui, brush: &mut Brush) {
+    material_chooser(ui, &mut brush.material);
 
     // Brush shape
     ui.add(egui::Slider::new(&mut brush.width, 1..=6).text("Radius"));
