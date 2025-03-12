@@ -70,13 +70,15 @@ impl Material {
     // Rule materials
     #[deprecated]
     pub const LEGACY_RULE_ALPHA: u8 = 180;
+    pub const LEGACY_RULE_ALPHA_2: u8 = 111;
 
     pub const RULE_GAP_ALPHA: u8 = 56;
     pub const RULE_BORDER_ALPHA: u8 = 191;
-    pub const RULE_INTERIOR_ALPHA: u8 = 111;
+    pub const RULE_INTERIOR_ALPHA: u8 = 81;
 
-    pub const RULE_ALPHAS: [u8; 4] = [
+    pub const RULE_ALPHAS: [u8; 5] = [
         Self::LEGACY_RULE_ALPHA,
+        Self::LEGACY_RULE_ALPHA_2,
         Self::RULE_GAP_ALPHA,
         Self::RULE_BORDER_ALPHA,
         Self::RULE_INTERIOR_ALPHA,
