@@ -7,7 +7,7 @@ use crate::{
     pixmap::MaterialMap,
     rule::Rule,
     solver::plan::SearchPlan,
-    topology::{BorderKey, Region, StrongRegionKey, Topology},
+    topology::{BorderKey, FillRegion, Region, StrongRegionKey, Topology},
     utils::IntoT,
     world::World,
 };
@@ -22,23 +22,17 @@ pub struct CompiledRule {
 
 pub struct CompiledRules {
     rules: Vec<CompiledRule>,
+    source_region_keys: BTreeSet<StrongRegionKey>,
 }
 
 impl CompiledRules {
     /// Returns if a Rule was applied
     #[inline(never)]
     pub fn step(&self, world: &mut World) -> bool {
-        let source: BTreeSet<_> = self
-            .rules
-            .iter()
-            .flat_map(|compiled_rule| compiled_rule.source.iter())
-            .copied()
-            .collect();
-
         for CompiledRule { rule, .. } in &self.rules {
             let solutions = rule
                 .search_plan
-                .solutions_excluding(world.topology(), &source);
+                .solutions_excluding(world.topology(), &self.source_region_keys);
 
             for phi in solutions {
                 let modified = rule.substitute(&phi, world);
@@ -58,6 +52,42 @@ impl CompiledRules {
         //     .to_bitmap_with_size(world_bitmap.size())
         //     .save(format!("{folder}/hidden.png"))
         //     .unwrap();
+    }
+
+    /// Returns true if the world is stable, meaning any rule either cannot be applied or an
+    /// application has no effect.
+    #[inline(never)]
+    pub fn stabilize(&self, world: &mut World, max_steps: usize) -> bool {
+        for _ in 0..max_steps {
+            let applied = self.step(world);
+            if !applied {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Wake up all sleeping regions (replace them
+    pub fn wake_up(&self, world: &mut World) {
+        let topology = world.topology();
+
+        let mut fill_regions = Vec::new();
+        for (&region_key, region) in &topology.regions {
+            if region.material.is_sleeping() {
+                let strong_region_key = region.top_left_interior_pixel();
+                if self.source_region_keys.contains(&strong_region_key) {
+                    continue;
+                }
+
+                let fill_region = FillRegion {
+                    region_key,
+                    material: region.material.as_normal(),
+                };
+                fill_regions.push(fill_region);
+            }
+        }
+
+        world.fill_regions(&fill_regions);
     }
 }
 
@@ -110,7 +140,7 @@ impl Compiler {
         let topology = world.topology();
 
         // Extract all matches and creates rules from them
-        let mut compiled_rules: Vec<CompiledRule> = Vec::new();
+        let mut rules: Vec<CompiledRule> = Vec::new();
 
         for phi in matches {
             // Extract before and after from rule
@@ -143,11 +173,18 @@ impl Compiler {
 
             let rule = Rule::new(before, after)?;
             let compiled_rule = CompiledRule { rule, source };
-            compiled_rules.push(compiled_rule);
+            rules.push(compiled_rule);
         }
 
+        let source_region_keys: BTreeSet<_> = rules
+            .iter()
+            .flat_map(|compiled_rule| compiled_rule.source.iter())
+            .copied()
+            .collect();
+
         Ok(CompiledRules {
-            rules: compiled_rules,
+            rules,
+            source_region_keys,
         })
     }
 }

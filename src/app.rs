@@ -11,7 +11,7 @@ use crate::{
     pixmap::MaterialMap,
     utils::ReflectEnum,
     view::{EditMode, View, ViewInput, ViewSettings},
-    widgets::{brush_chooser, FileChooser},
+    widgets::{brush_chooser, segmented_choice, segmented_enum_choice, FileChooser},
     world::World,
 };
 use data_encoding::BASE64;
@@ -72,9 +72,9 @@ pub struct EguiApp {
     new_size: Point<i64>,
     file_name: String,
     // current_folder: PathBuf,
-    run: bool,
     compiler: Compiler,
     compiled_rules: Option<CompiledRules>,
+    run_mode: RunMode,
 
     // stabilize: bool,
     // stabilize_count: i64,
@@ -134,7 +134,7 @@ impl EguiApp {
             gl,
             new_size: Point(512, 512),
             file_name: "".to_string(),
-            run: false,
+            run_mode: RunMode::Paused,
             view_input: ViewInput::EMPTY,
             #[cfg(not(target_arch = "wasm32"))]
             file_chooser: {
@@ -414,32 +414,46 @@ impl EguiApp {
 
     pub fn run_ui(&mut self, ui: &mut egui::Ui) {
         // Step and run
-        ui.horizontal(|ui| {
-            if ui
-                .add_enabled(!self.run, egui::Button::new("Step"))
-                .clicked()
-            {
-                self.compile();
-                if let Some(compiled_rules) = &self.compiled_rules {
-                    compiled_rules.step(&mut self.view.world);
-                    self.view.add_snapshot(SnapshotCause::Step);
-                }
-            }
+        let run_mode_before = self.run_mode;
+        segmented_enum_choice(ui, &mut self.run_mode);
 
-            if egui::Button::new("Run").selected(self.run).ui(ui).clicked() {
-                self.run = !self.run;
-                if self.run {
-                    self.compile();
-                } else {
-                    // Add a snapshot after run
-                    self.view.add_snapshot(SnapshotCause::Run);
-                }
-            }
-        });
+        if self.run_mode != RunMode::Paused && run_mode_before == RunMode::Paused {
+            self.compile();
+        }
 
-        if self.run {
+        if run_mode_before != RunMode::Paused && self.run_mode == RunMode::Paused {
+            self.view.add_snapshot(SnapshotCause::Run);
+        }
+
+        if self.run_mode == RunMode::Walk {
             if let Some(compiled_rules) = &self.compiled_rules {
-                compiled_rules.step(&mut self.view.world);
+                let is_stable = compiled_rules.stabilize(&mut self.view.world, 1);
+                if is_stable {
+                    compiled_rules.wake_up(&mut self.view.world);
+                }
+            }
+        } else if self.run_mode == RunMode::Run {
+            if let Some(compiled_rules) = &self.compiled_rules {
+                let is_stable = compiled_rules.stabilize(&mut self.view.world, 32);
+                if is_stable {
+                    compiled_rules.wake_up(&mut self.view.world);
+                }
+            }
+        }
+
+        if ui
+            .add_enabled(self.run_mode == RunMode::Paused, egui::Button::new("Step"))
+            .clicked()
+        {
+            self.compile();
+            if let Some(compiled_rules) = &self.compiled_rules {
+                let applied = compiled_rules.step(&mut self.view.world);
+                if applied {
+                    self.view.add_snapshot(SnapshotCause::Step);
+                } else {
+                    compiled_rules.wake_up(&mut self.view.world);
+                    self.view.add_snapshot(SnapshotCause::Wakeup);
+                }
             }
         }
     }
@@ -779,5 +793,30 @@ impl eframe::App for EguiApp {
 
         #[cfg(not(feature = "force_120hz"))]
         ctx.request_repaint();
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunMode {
+    Paused,
+    Walk,
+    Run,
+}
+
+impl RunMode {
+    pub const ALL: [Self; 3] = [Self::Paused, Self::Walk, Self::Run];
+}
+
+impl ReflectEnum for RunMode {
+    fn all() -> &'static [Self] {
+        &Self::ALL
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Paused => "Paused",
+            Self::Walk => "Walk",
+            Self::Run => "Run",
+        }
     }
 }

@@ -113,36 +113,13 @@ pub fn material_chooser(ui: &mut egui::Ui, material: &mut Material) {
     // Material classes
     let is_reserved = material.is_rule() || material.is_wildcard();
 
-    let style = ui.style();
-    let frame = egui::Frame {
-        inner_margin: egui::Margin::same(6.0),
-        rounding: egui::Rounding::same(4.0),
-        fill: style.visuals.widgets.inactive.bg_fill,
-        ..Default::default()
-    };
+    let choices = [
+        (MaterialClass::Solid, "Solid"),
+        (MaterialClass::Normal, "Normal"),
+        (MaterialClass::Sleeping, "Sleeping"),
+    ];
 
-    frame.show(ui, |ui| {
-        ui.add_enabled_ui(!is_reserved, |ui| {
-            ui.horizontal(|ui| {
-                let class_choices = [
-                    MaterialClass::Solid,
-                    MaterialClass::Normal,
-                    MaterialClass::Sleeping,
-                ];
-
-                for choice in class_choices {
-                    ui.selectable_value(&mut material.class, choice, choice.as_str());
-
-                    // Buttons looks better
-                    // let button =
-                    //     egui::Button::new(choice.as_str()).selected(choice == material.class);
-                    // if ui.add(button).clicked() {
-                    //     material.class = choice;
-                    // }
-                }
-            })
-        });
-    });
+    segmented_choice(ui, choices, &mut material.class);
 }
 
 pub fn brush_chooser(ui: &mut egui::Ui, brush: &mut Brush) {
@@ -166,6 +143,43 @@ pub fn enum_combo<T: ReflectEnum + PartialEq + 'static>(
                 ui.selectable_value(current, candidate, candidate.as_str());
             }
         });
+}
+
+pub fn segmented_choice<'a, T: Copy + Eq>(
+    ui: &mut egui::Ui,
+    choices: impl IntoIterator<Item = (T, &'a str)>,
+    selected: &mut T,
+) -> bool {
+    let style = ui.style();
+    let frame = egui::Frame {
+        inner_margin: egui::Margin::same(6.0),
+        rounding: egui::Rounding::same(4.0),
+        fill: style.visuals.widgets.inactive.bg_fill,
+        ..Default::default()
+    };
+
+    let mut clicked = false;
+    frame.show(ui, |ui| {
+        ui.horizontal(|ui| {
+            for (choice, label) in choices.into_iter() {
+                if ui.selectable_value(selected, choice, label).clicked() {
+                    clicked = true;
+                }
+            }
+        })
+    });
+
+    clicked
+}
+
+pub fn segmented_enum_choice<T: Copy + ReflectEnum + Eq>(
+    ui: &mut egui::Ui,
+    selected: &mut T,
+) -> bool {
+    let choices = T::all()
+        .into_iter()
+        .map(|&choice| (choice, choice.as_str()));
+    segmented_choice(ui, choices, selected)
 }
 
 pub struct FileChooser {
