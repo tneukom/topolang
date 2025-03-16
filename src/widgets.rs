@@ -165,12 +165,14 @@ pub fn material_chooser(ui: &mut egui::Ui, material: &mut Material) {
     let is_reserved = material.is_rule() || material.is_wildcard();
 
     let choices = [
-        (MaterialClass::Solid, "Solid"),
         (MaterialClass::Normal, "Normal"),
+        (MaterialClass::Solid, "Solid"),
         (MaterialClass::Sleeping, "Sleeping"),
     ];
 
-    segmented_choice(ui, choices, &mut material.class);
+    ui.add_enabled_ui(!is_reserved, |ui| {
+        segmented_choice(ui, choices, &mut material.class);
+    });
 }
 
 pub fn brush_chooser(ui: &mut egui::Ui, brush: &mut Brush) {

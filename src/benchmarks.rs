@@ -18,7 +18,7 @@ pub fn main_benchmark_field_regions() {
     let mut compact_labels = CompactLabels::new(color_map.len());
     for _ in 0..1000 {
         let now = Instant::now();
-        let region_map = field_regions_fast(&color_map);
+        let _region_map = field_regions_fast(&color_map);
         // compact_labels.clear();
         // compact_labels.compact(region_map.iter_mut());
 
@@ -49,7 +49,7 @@ pub fn main_benchmark_pixmap_regions() {
     let mut total_elapsed = Duration::from_millis(0);
     for _ in 0..500 {
         let now = Instant::now();
-        let region_map = pixmap_regions(&color_map);
+        let _region_map = pixmap_regions(&color_map);
         let elapsed = now.elapsed();
         total_elapsed += elapsed;
         println!("Elapsed = {:.3?}", now.elapsed());

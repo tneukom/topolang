@@ -11,7 +11,7 @@ use crate::{
     pixmap::MaterialMap,
     utils::ReflectEnum,
     view::{EditMode, View, ViewInput, ViewSettings},
-    widgets::{brush_chooser, segmented_choice, segmented_enum_choice, FileChooser},
+    widgets::{brush_chooser, segmented_enum_choice, FileChooser},
     world::World,
 };
 use data_encoding::BASE64;
@@ -580,7 +580,7 @@ impl EguiApp {
         };
         self.new_size = rgba_field.size();
         let material_map = MaterialMap::from(rgba_field);
-        let mut world = World::from(material_map);
+        let world = World::from(material_map);
         self.view = View::new(world);
         self.reset_camera_requested = true;
     }
