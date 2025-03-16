@@ -2,18 +2,21 @@ use crate::{
     brush::Brush,
     camera::Camera,
     coordinate_frame::CoordinateFrames,
-    field::{Field, MaterialField},
+    field::{Field, MaterialField, RgbaField},
     history::{History, SnapshotCause},
     material::Material,
+    material_effects::material_map_effects,
     math::{
         arrow::Arrow,
         pixel::Pixel,
         point::Point,
         rect::{Rect, RectBounds},
+        rgba8::Rgba8,
     },
     pixmap::{MaterialMap, Pixmap},
     world::World,
 };
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct ViewInput {
@@ -92,6 +95,10 @@ impl EditMode {
         Self::SelectWand,
         Self::PickColor,
     ];
+
+    pub fn is_select(self) -> bool {
+        self == Self::SelectWand || self == Self::SelectRect
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -166,11 +173,19 @@ impl UiState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Selection {
     material_map: MaterialMap,
+
+    /// Arc because we share it with the renderer.
+    rgba_field: Arc<RgbaField>,
 }
 
 impl Selection {
     pub fn new(material_map: MaterialMap) -> Self {
-        Self { material_map }
+        let mut rgba_field = RgbaField::filled(material_map.bounding_rect(), Rgba8::TRANSPARENT);
+        material_map_effects(&material_map, &mut rgba_field);
+        Self {
+            material_map,
+            rgba_field: Arc::new(rgba_field),
+        }
     }
 
     pub fn bounding_rect(&self) -> Rect<i64> {
@@ -188,11 +203,18 @@ impl Selection {
 
     pub fn translated(mut self, offset: Point<i64>) -> Self {
         self.material_map = self.material_map.translated(offset);
+        // Clones rgba_field when renderer currently uses it, should not be an issue.
+        let rgba_field = Arc::unwrap_or_clone(self.rgba_field);
+        self.rgba_field = Arc::new(rgba_field.translated(offset));
         self
     }
 
     pub fn material_map(&self) -> &MaterialMap {
         &self.material_map
+    }
+
+    pub fn rgba_field(&self) -> &Arc<RgbaField> {
+        &self.rgba_field
     }
 
     // pub fn blit_to(&self, target: &mut MaterialMap) {
@@ -484,6 +506,10 @@ impl View {
         if input.escape_pressed {
             self.cancel_selection();
             self.add_snapshot(SnapshotCause::SelectionCancelled);
+        }
+
+        if !settings.edit_mode.is_select() {
+            self.cancel_selection();
         }
 
         if input.delete_pressed {

@@ -3,7 +3,6 @@ use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
     field::RgbaField,
-    material::Material,
     math::rect::Rect,
     painting::{
         checkerboard_painter::CheckerboardPainter, line_painter::LinePainter,
@@ -20,7 +19,7 @@ pub struct DrawView {
     time: f64,
     world_rgba_field: Arc<RwLock<RgbaField>>,
     // TODO: Can we use world_rgba_field for this?
-    selection_rgba_field: Option<RgbaField>,
+    selection_rgba_field: Option<Arc<RgbaField>>,
     brush_preview: Option<RgbaField>,
     ui_state: UiState,
     grid_size: Option<i64>,
@@ -36,11 +35,10 @@ impl DrawView {
     ) -> Self {
         let world_rgba_field = view.world.fresh_rgba_field();
 
-        let selection_rgba_field = view.selection.as_ref().map(|selection| {
-            selection
-                .material_map()
-                .to_rgba_field(Material::TRANSPARENT)
-        });
+        let selection_rgba_field = view
+            .selection
+            .as_ref()
+            .map(|selection| selection.rgba_field().clone());
 
         let brush_preview = if view_settings.edit_mode == EditMode::Brush {
             let world_mouse = view.camera.view_to_world() * view_input.view_mouse;
