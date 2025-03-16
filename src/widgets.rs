@@ -1,31 +1,77 @@
 use crate::{
     brush::Brush,
+    field::RgbaField,
     material::{Material, MaterialClass},
-    math::rgba8::Rgba8,
+    material_effects::material_map_effects,
+    math::{point::Point, rect::Rect, rgba8::Rgba8},
     palettes::Palette,
+    pixmap::MaterialMap,
     utils::ReflectEnum,
 };
+use cached::proc_macro::cached;
 use itertools::Itertools;
 use std::{ffi::OsStr, fs, path::PathBuf};
 
-pub fn rgba_button(ui: &mut egui::Ui, rgba8: Rgba8, selected: bool) -> egui::Response {
-    let egui_color = egui::Color32::from_rgba_unmultiplied(rgba8.r, rgba8.g, rgba8.b, rgba8.a);
+const COLOR_BUTTON_MARGIN: f32 = 2.0;
 
-    let button = egui::Button::new("").fill(egui_color).selected(selected);
-    ui.add_sized([28.0, 28.0], button)
+#[cached(
+    key = "(Material, usize, usize)",
+    convert = r#"{ (material, width, height) }"#
+)]
+fn material_icon(
+    ui: &mut egui::Ui,
+    material: Material,
+    width: usize,
+    height: usize,
+) -> egui::TextureHandle {
+    let bounds = Rect::low_size(Point(0, 0), Point(width as i64, height as i64));
+    let material_map = MaterialMap::filled(bounds, material);
+
+    let mut rgba_field = RgbaField::filled(bounds, Rgba8::BLACK);
+    material_map_effects(&material_map, &mut rgba_field);
+
+    let image = egui::ColorImage::from_rgba_unmultiplied([width, height], rgba_field.as_raw());
+    ui.ctx()
+        .load_texture("icon_texture", image, Default::default())
 }
+
+/// Warning: A new egui texture is created for each material, and is cached forever.
+pub fn material_button(ui: &mut egui::Ui, material: Material, selected: bool) -> egui::Response {
+    let icon = material_icon(ui, material, 28, 28);
+
+    let sized_texture = egui::load::SizedTexture::from(&icon);
+    let button = egui::widgets::ImageButton::new(sized_texture).selected(selected);
+    ui.add(button)
+}
+
+// pub fn rgba_button(ui: &mut egui::Ui, rgba8: Rgba8, selected: bool) -> egui::Response {
+//     let egui_color = egui::Color32::from_rgba_unmultiplied(rgba8.r, rgba8.g, rgba8.b, rgba8.a);
+//
+//     let button = egui::Button::new("").fill(egui_color).selected(selected);
+//     ui.add_sized([28.0, 28.0], button)
+// }
 
 pub fn palette_widget(ui: &mut egui::Ui, palette: &Palette, rgba: &mut Rgba8) -> bool {
     let mut color_set = false;
 
-    // 8 colors per row
-    ui.horizontal_wrapped(|ui| {
-        for &choice in &palette.colors {
-            if rgba_button(ui, choice, choice == *rgba).clicked() {
-                *rgba = choice;
-                color_set = true;
+    ui.scope(|ui| {
+        ui.style_mut().spacing.button_padding =
+            egui::Vec2::new(COLOR_BUTTON_MARGIN, COLOR_BUTTON_MARGIN);
+
+        // 8 colors per row
+        ui.horizontal_wrapped(|ui| {
+            for &choice in &palette.colors {
+                let choice_material = Material::new(choice.rgb(), MaterialClass::Normal);
+                if material_button(ui, choice_material, choice == *rgba).clicked() {
+                    *rgba = choice;
+                    color_set = true;
+                }
+                // if rgba_button(ui, choice, choice == *rgba).clicked() {
+                //     *rgba = choice;
+                //     color_set = true;
+                // }
             }
-        }
+        });
     });
 
     // Link to palette
@@ -83,15 +129,20 @@ pub fn system_material_widget(ui: &mut egui::Ui, material: &mut Material) -> boo
     ];
 
     let mut color_set = false;
-    for (name, system_material) in system_materials {
-        ui.horizontal(|ui| {
-            if rgba_button(ui, system_material.to_rgba(), system_material == *material).clicked() {
-                *material = system_material;
-                color_set = true;
-            }
-            ui.label(name);
-        });
-    }
+    ui.scope(|ui| {
+        ui.style_mut().spacing.button_padding =
+            egui::Vec2::new(COLOR_BUTTON_MARGIN, COLOR_BUTTON_MARGIN);
+
+        for (name, system_material) in system_materials {
+            ui.horizontal(|ui| {
+                if material_button(ui, system_material, system_material == *material).clicked() {
+                    *material = system_material;
+                    color_set = true;
+                }
+                ui.label(name);
+            });
+        }
+    });
 
     color_set
 }

@@ -44,6 +44,7 @@ rfd = { version = "0.15.2", default-features = false, features = ["gtk3"] }
 # Meh good enough, otherwise it's a hassle with WASM
 ahash = { version ="0.8.11", default-features = false, features = ["std" ] }
 web-sys = "0.3.77"
+cached = "0.55.1"
 
 #[dev-dependencies]
 #rstest = "0.21.0"
