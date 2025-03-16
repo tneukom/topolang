@@ -226,15 +226,15 @@ impl EguiApp {
 
     pub fn copy_paste_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            if ui.button("Copy").clicked() {
+            if ui.button("🗐 Copy").clicked() {
                 self.clipboard_copy(ui.ctx());
             }
 
-            if ui.button("Cut").clicked() {
+            if ui.button("✂ Cut").clicked() {
                 self.clipboard_cut(ui.ctx());
             }
 
-            if ui.button("Paste").clicked() {
+            if ui.button("📋 Paste").clicked() {
                 if let Some(clipboard) = &self.clipboard {
                     self.view
                         .clipboard_paste(&self.view_input, clipboard.material_map.clone());
