@@ -97,12 +97,18 @@ impl Material {
     // Wildcard material
     pub const WILDCARD_ALPHA: u8 = 230;
 
-    pub const WILDCARD_RGB: [u8; 3] = [0x0C, 0x36, 0x19];
-    pub const WILDCARD_ALT_RGB: [u8; 3] = [0x17, 0x69, 0x32];
+    pub const WILDCARD_RAINBOW_RGB: [[u8; 3]; 6] = [
+        [0xFF, 0x00, 0x00],
+        [0xFF, 0x99, 0x00],
+        [0xFF, 0xFF, 0x00],
+        [0x33, 0xFF, 0x00],
+        [0x00, 0x99, 0xFF],
+        [0x66, 0x33, 0xFF],
+    ];
 
-    /// Wildcard matches any material except transparent
-    /// #0C3619
-    pub const WILDCARD: Self = Self::new(Self::WILDCARD_RGB, MaterialClass::Wildcard);
+    /// Use full rainbow instead of single color!
+    #[deprecated]
+    pub const WILDCARD: Self = Self::new(Self::WILDCARD_RAINBOW_RGB[0], MaterialClass::Wildcard);
 
     pub const SLEEPING_ALPHA: u8 = 131;
 
@@ -165,7 +171,7 @@ impl Material {
     /// Can a matching map a region with material `self` to a region with material `other`?
     /// Not symmetric!
     pub fn matches(self, other: Self) -> bool {
-        if self == Self::WILDCARD {
+        if self.is_wildcard() {
             other != Self::TRANSPARENT
         } else {
             self == other
@@ -238,11 +244,7 @@ impl From<Rgba8> for Material {
         } else if a == Self::LEGACY_SOLID_ALPHA {
             Self::new(rgb, MaterialClass::Solid)
         } else if a == Self::WILDCARD_ALPHA {
-            match rgb {
-                Self::WILDCARD_RGB => Self::WILDCARD,
-                Self::WILDCARD_ALT_RGB => Self::WILDCARD,
-                _ => unimplemented!(),
-            }
+            Self::new(rgb, MaterialClass::Wildcard)
         } else if a == Self::SLEEPING_ALPHA {
             Self::new(rgb, MaterialClass::Sleeping)
         } else {

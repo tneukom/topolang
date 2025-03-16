@@ -124,11 +124,9 @@ pub fn material_effect(material_map: &MaterialMap, pixel: Point<i64>) -> Rgba8 {
         MaterialClass::Rule => rule_effect(material_map, pixel, material),
         MaterialClass::Wildcard => {
             // alternating diagonal lines effect
-            if (pixel.x + pixel.y) % 3 == 0 {
-                Rgba8::from_rgb_a(Material::WILDCARD_ALT_RGB, Material::WILDCARD_ALPHA)
-            } else {
-                Rgba8::from_rgb_a(Material::WILDCARD_RGB, Material::WILDCARD_ALPHA)
-            }
+            let k = (pixel.x + pixel.y).rem_euclid(Material::WILDCARD_RAINBOW_RGB.len() as i64);
+            let rgb = Material::WILDCARD_RAINBOW_RGB[k as usize];
+            Rgba8::from_rgb_a(rgb, Material::WILDCARD_ALPHA)
         }
         _ => material.to_rgba(),
     }
