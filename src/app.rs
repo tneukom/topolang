@@ -171,10 +171,6 @@ impl EguiApp {
         //     self.view_input.world_snapped
         // ));
 
-        if ui.button("Reset camera").clicked() {
-            self.reset_camera_requested = true;
-        }
-
         // Edit mode choices
         ui.horizontal(|ui| {
             for mode in EditMode::ALL {
@@ -540,9 +536,6 @@ impl EguiApp {
         self.gif_ui(ui);
         ui.separator();
 
-        ui.label("Document");
-        self.document_ui(ui);
-
         self.grid_size_ui(ui);
     }
 
@@ -557,7 +550,15 @@ impl EguiApp {
                 self.file_dialog_ui(ui);
             });
 
+            ui.menu_button("Document", |ui| {
+                self.document_ui(ui);
+            });
+
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("Reset camera").clicked() {
+                    self.reset_camera_requested = true;
+                }
+
                 // `Camera::scale` is view_to_world, we display world_to_view scale as zoom level
                 let zoom = 1.0 / self.view.camera.scale;
 
