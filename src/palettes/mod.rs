@@ -44,7 +44,7 @@ impl Palette {
         let bitmap = RgbaField::load_from_memory(include_bytes!("windows16.png")).unwrap();
         Self::from_bitmap(
             &bitmap,
-            "WINDOWS-16",
+            "WIN16",
             "https://lospec.com/palette-list/microsoft-vga",
         )
     }
@@ -63,8 +63,35 @@ impl Palette {
         let bitmap = RgbaField::load_from_memory(include_bytes!("superfuture25.png")).unwrap();
         Self::from_bitmap(
             &bitmap,
-            "SUPERFUTURE25",
+            "FUTURE25",
             "https://lospec.com/palette-list/superfuture25",
+        )
+    }
+
+    pub fn palette_distinct20() -> Palette {
+        let bitmap = RgbaField::load_from_memory(include_bytes!("distinct20.png")).unwrap();
+        Self::from_bitmap(
+            &bitmap,
+            "DISTINCT",
+            "https://sashamaps.net/docs/resources/20-colors/",
+        )
+    }
+
+    pub fn palette_pxls_space() -> Palette {
+        let bitmap = RgbaField::load_from_memory(include_bytes!("pxls_space.png")).unwrap();
+        Self::from_bitmap(
+            &bitmap,
+            "PXLS.SPACE",
+            "https://lospec.com/palette-list/pxlsspace-nov2023",
+        )
+    }
+
+    pub fn palette_r_place() -> Palette {
+        let bitmap = RgbaField::load_from_memory(include_bytes!("r_place_32.png")).unwrap();
+        Self::from_bitmap(
+            &bitmap,
+            "R/PLACE",
+            "https://lospec.com/palette-list/r-place-2022-32-colors",
         )
     }
 
@@ -74,10 +101,13 @@ impl Palette {
             vec![
                 Palette::palette_pico8(),
                 Palette::palette_windows16(),
-                Palette::palette_na16(),
-                Palette::palette_desatur8(),
-                Palette::palette_hept32(),
-                Palette::palette_superfuture25(),
+                // Palette::palette_na16(),
+                // Palette::palette_desatur8(),
+                // Palette::palette_hept32(),
+                // Palette::palette_superfuture25(),
+                Palette::palette_distinct20(),
+                // Palette::palette_pxls_space(),
+                Palette::palette_r_place(),
             ]
         });
         palettes.as_slice()
