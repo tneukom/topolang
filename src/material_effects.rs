@@ -108,6 +108,78 @@ pub fn rule_effect(material_map: &MaterialMap, pixel: Point<i64>, material: Mate
     Rgba8::from_rgb_a(material.rgb, alpha)
 }
 
+pub fn sleep_effect(pixel: Point<i64>, rgb: [u8; 3]) -> Rgba8 {
+    // ███ ███ ███ ███
+    // █ █ █ █ █ █ █ █
+    // █ ███ ███ ███ ██
+    //
+    // const PATTERN_WIDTH: usize = 4;
+    // const PATTERN_HEIGHT: usize = 4;
+    // const PATTERN: [[bool; 4]; 4] = [
+    //     [true, true, true, false],
+    //     [true, false, true, false],
+    //     [true, false, true, true],
+    //     [false, false, false, false],
+    // ];
+
+    // ██ ███ ███ █
+    //  ███ ███ ███
+    //
+    // const PATTERN_WIDTH: usize = 4;
+    // const PATTERN_HEIGHT: usize = 3;
+    // const PATTERN: [[bool; PATTERN_WIDTH]; PATTERN_HEIGHT] = [
+    //     [true, true, false, true],
+    //     [false, true, true, true],
+    //     [false, false, false, false],
+    // ];
+
+    //  █  █  █  █
+    // █  █  █  █
+    //   █  █  █  █
+    // const PATTERN_WIDTH: usize = 3;
+    // const PATTERN_HEIGHT: usize = 3;
+    // const PATTERN: [[bool; PATTERN_WIDTH]; PATTERN_HEIGHT] = [
+    //     [false, true, false],
+    //     [true, false, false],
+    //     [false, false, true],
+    // ];
+
+    //  ██  ██  ██  ██
+    // ██  ██  ██  ██
+    // █  ██  ██  ██  █
+    //   ██  ██  ██  ██
+    const PATTERN_WIDTH: usize = 4;
+    const PATTERN_HEIGHT: usize = 4;
+    const PATTERN: [[bool; PATTERN_WIDTH]; PATTERN_HEIGHT] = [
+        [false, true, true, false],
+        [true, true, false, false],
+        [true, false, false, true],
+        [false, false, true, true],
+    ];
+
+    // ███ ███ ███ ███
+    // █   █   █   █
+    // █ ███ ███ ███ ██
+    //   █   █   █   █
+    // const PATTERN_WIDTH: usize = 4;
+    // const PATTERN_HEIGHT: usize = 4;
+    // const PATTERN: [[bool; PATTERN_WIDTH]; PATTERN_HEIGHT] = [
+    //     [true, true, true, false],
+    //     [true, false, false, false],
+    //     [true, false, true, true],
+    //     [false, false, true, false],
+    // ];
+
+    let pattern_offset = pixel.cwise_rem_euclid(Point(PATTERN_WIDTH as i64, PATTERN_HEIGHT as i64));
+    let alternative = PATTERN[pattern_offset.y as usize][pattern_offset.x as usize];
+    let alpha = if alternative {
+        Material::SLEEPING_ALT_ALPHA
+    } else {
+        Material::SLEEPING_ALPHA
+    };
+    Rgba8::from_rgb_a(rgb, alpha)
+}
+
 /// Convert Material to Rgba8 using effects for rule and solid areas
 pub fn material_effect(material_map: &MaterialMap, pixel: Point<i64>) -> Rgba8 {
     let material = material_map.get(pixel).unwrap();
@@ -128,6 +200,7 @@ pub fn material_effect(material_map: &MaterialMap, pixel: Point<i64>) -> Rgba8 {
             let rgb = Material::WILDCARD_RAINBOW_RGB[k as usize];
             Rgba8::from_rgb_a(rgb, Material::WILDCARD_ALPHA)
         }
+        MaterialClass::Sleeping => sleep_effect(pixel, material.rgb),
         _ => material.to_rgba(),
     }
 }

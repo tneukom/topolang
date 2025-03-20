@@ -111,6 +111,8 @@ impl Material {
     pub const WILDCARD: Self = Self::new(Self::WILDCARD_RAINBOW_RGB[0], MaterialClass::Wildcard);
 
     pub const SLEEPING_ALPHA: u8 = 131;
+    pub const SLEEPING_ALT_ALPHA: u8 = 201;
+    pub const SLEEPING_ALPHAS: [u8; 2] = [Self::SLEEPING_ALPHA, Self::SLEEPING_ALT_ALPHA];
 
     pub const UNDEF_COLOR: Rgba8 = Rgba8::new(0xFF, 0xFF, 0xFF, 0x00);
 
@@ -245,7 +247,7 @@ impl From<Rgba8> for Material {
             Self::new(rgb, MaterialClass::Solid)
         } else if a == Self::WILDCARD_ALPHA {
             Self::new(rgb, MaterialClass::Wildcard)
-        } else if a == Self::SLEEPING_ALPHA {
+        } else if Self::SLEEPING_ALPHAS.contains(&a) {
             Self::new(rgb, MaterialClass::Sleeping)
         } else {
             unimplemented!();
