@@ -342,12 +342,12 @@ mod test {
     fn load(path: impl AsRef<Path>) -> Topology {
         let rgba_field = RgbaField::load(path).unwrap();
         let material_map = MaterialMap::from(rgba_field).without(Material::RULE_BEFORE);
-        Topology::new(material_map)
+        Topology::new(&material_map)
     }
 
     #[inline(never)]
     pub fn extract_pattern(material_map: &mut MaterialMap) -> MaterialMap {
-        let topo = Topology::new(material_map.clone());
+        let topo = Topology::new(material_map);
 
         const PATTERN_FRAME_MATERIAL: Material = Material::normal(Rgba8::MAGENTA.rgb());
 

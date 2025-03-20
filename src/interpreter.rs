@@ -107,7 +107,7 @@ impl Compiler {
             .unwrap()
             .intot::<MaterialMap>()
             .without(Self::RULE_FRAME_MATERIAL);
-        let rule_frame = Topology::new(rule_frame_pixmap);
+        let rule_frame = Topology::new(&rule_frame_pixmap);
 
         // Side on the before border (inner border of the frame)
         let before_side = Pixel::new(7, 7).top_side().reversed();
@@ -138,17 +138,20 @@ impl Compiler {
         };
 
         let topology = world.topology();
+        let material_map = world.material_map();
 
         // Extract all matches and creates rules from them
         let mut rules: Vec<CompiledRule> = Vec::new();
 
         for phi in matches {
             // Extract before and after from rule
-            let phi_before_border = phi[self.before_border];
-            let before = topology.topology_right_of_border(&topology[phi_before_border]);
+            let phi_before_border = &topology[phi[self.before_border]];
+            let before_material_map = material_map.right_of_border(phi_before_border).shrink();
+            let before = Topology::new(&before_material_map);
 
-            let phi_after_border = phi[self.after_border];
-            let after = topology.topology_right_of_border(&topology[phi_after_border]);
+            let phi_after_border = &topology[phi[self.after_border]];
+            let after_material_map = material_map.right_of_border(phi_after_border).shrink();
+            let after = Topology::new(&after_material_map);
 
             // Collect regions that are part of the source for this Rule.
             let mut source: BTreeSet<StrongRegionKey> = BTreeSet::new();
@@ -161,15 +164,24 @@ impl Compiler {
                 source.insert(topology[phi_region_key].top_left_interior_pixel());
             }
 
-            let before = before.filter_by_material(Material::is_not_rule);
-            let after = after.filter_by_material(Material::is_not_rule);
+            // Remove rule areas from before and after material maps.
+            let before_material_map = before_material_map
+                .filter(|_, material| !material.is_rule())
+                .shrink();
+            let before = Topology::new(&before_material_map);
+
+            let after_material_map = after_material_map
+                .filter(|_, material| !material.is_rule())
+                .shrink();
 
             // Find translation from after to before
-            let before_bounds = before.not_none_bounding_rect();
-            let after_bounds = after.not_none_bounding_rect();
+            let before_bounds = before_material_map.bounding_rect();
+            let after_bounds = after_material_map.bounding_rect();
             assert_eq!(before_bounds.size(), after_bounds.size());
 
-            let after = after.translated(before_bounds.low() - after_bounds.low());
+            let offset = before_bounds.low() - after_bounds.low();
+            let after_material_map = after_material_map.translated(offset);
+            let after = Topology::new(&after_material_map);
 
             let rule = Rule::new(before, after)?;
             let compiled_rule = CompiledRule { rule, source };

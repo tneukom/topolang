@@ -394,8 +394,6 @@ pub struct FillRegion {
 
 #[derive(Debug, Clone)]
 pub struct Topology {
-    pub material_map: MaterialMap,
-
     pub region_map: Pixmap<RegionKey>,
 
     // TODO: Make Vec<Region>
@@ -412,14 +410,9 @@ impl Topology {
         self.bounding_rect
     }
 
-    /// Bounding rect of all pixels that are not None
-    pub fn not_none_bounding_rect(&self) -> Rect<i64> {
-        self.material_map.not_none_bounding_rect()
-    }
-
     #[inline(never)]
-    pub fn new(material_map: MaterialMap) -> Self {
-        let (region_map, region_bounding_rects) = pixmap_regions(&material_map);
+    pub fn new(material_map: &MaterialMap) -> Self {
+        let (region_map, region_bounding_rects) = pixmap_regions(material_map);
         let n_regions = region_bounding_rects.len();
 
         let mut regions: BTreeMap<usize, Region> = BTreeMap::new();
@@ -473,15 +466,10 @@ impl Topology {
 
         Self {
             bounding_rect: material_map.bounding_rect(),
-            material_map,
             region_map,
             regions,
             seam_indices,
         }
-    }
-
-    pub fn translated(&self, offset: Point<i64>) -> Self {
-        Self::new(self.material_map.clone().translated(offset))
     }
 
     pub fn iter_borders(&self) -> impl Iterator<Item = &Border> + Clone {
@@ -546,8 +534,14 @@ impl Topology {
         seam_index.region_key
     }
 
+    pub fn material_at(&self, pixel: Point<i64>) -> Option<Material> {
+        let region_key = self.region_map.get(pixel)?;
+        let region = &self.regions[&region_key];
+        Some(region.material)
+    }
+
     pub fn material_left_of(&self, seam: Seam) -> Material {
-        self.material_map.get(seam.start.left_pixel).unwrap()
+        self.material_at(seam.start.left_pixel).unwrap()
     }
 
     /// Not every seam has a region on the right, it can be empty space
@@ -559,7 +553,7 @@ impl Topology {
     }
 
     pub fn material_right_of(&self, seam: Seam) -> Option<Material> {
-        self.material_map.get(seam.start.right_pixel())
+        self.material_at(seam.start.right_pixel())
     }
 
     pub fn seam_materials(&self, seam: Seam) -> SeamMaterials {
@@ -628,17 +622,6 @@ impl Topology {
         todo!()
     }
 
-    /// Keys of resulting Regions are unchanged
-    /// Undefined behaviour if border is not part of self.
-    #[inline(never)]
-    pub fn topology_right_of_border(&self, border: &Border) -> Self {
-        Self::new(self.material_map.right_of_border(border))
-    }
-
-    pub fn filter_by_material(&self, mut pred: impl FnMut(Material) -> bool) -> Self {
-        Self::new(self.material_map.filter(|_, material| pred(material)))
-    }
-
     /// Blit the given region to the material_map with the given material.
     pub fn fill_region(
         &self,
@@ -654,11 +637,11 @@ impl Topology {
     /// Try to set the material of `region_key` to `material`, returns true if successful.
     pub fn try_set_region_material(&mut self, region_key: RegionKey, material: Material) -> bool {
         // Try to update the topology to the changed material map
-        let cat_set = self[region_key]
+        let can_set = self[region_key]
             .iter_seams()
             .all(|seam| self.material_right_of(seam) != Some(material));
 
-        if !cat_set {
+        if !can_set {
             return false;
         }
 
@@ -696,7 +679,7 @@ impl Topology {
     pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Topology> {
         let rgba_field = RgbaField::load(path)?;
         let material_map = MaterialMap::from(rgba_field);
-        Ok(Topology::new(material_map))
+        Ok(Topology::new(&material_map))
     }
 }
 
@@ -746,12 +729,6 @@ impl Display for Topology {
         }
 
         Ok(())
-    }
-}
-
-impl From<MaterialMap> for Topology {
-    fn from(material_map: MaterialMap) -> Self {
-        Self::new(material_map)
     }
 }
 

@@ -6,13 +6,7 @@ use crate::{
     history::{History, SnapshotCause},
     material::Material,
     material_effects::material_map_effects,
-    math::{
-        arrow::Arrow,
-        pixel::Pixel,
-        point::Point,
-        rect::{Rect, RectBounds},
-        rgba8::Rgba8,
-    },
+    math::{arrow::Arrow, pixel::Pixel, point::Point, rect::Rect, rgba8::Rgba8},
     pixmap::{MaterialMap, Pixmap},
     world::World,
 };
@@ -149,9 +143,7 @@ pub struct MovingSelection {
 impl Selecting {
     pub fn rect(&self) -> Rect<i64> {
         // end can be smaller than start, so we take the bounds of both points
-        [self.world_start.as_i64(), self.world_stop.as_i64()]
-            .bounds()
-            .inc_high()
+        Rect::index_bounds([self.world_start.as_i64(), self.world_stop.as_i64()])
     }
 }
 

@@ -27,7 +27,7 @@ impl Rule {
         //   after.region_map in parallel.
         let all_equal = dom
             .iter_region_interior(region_key)
-            .map(|pixel| codom.material_map.get(pixel).unwrap())
+            .map(|pixel| codom.material_at(pixel).unwrap())
             .all_equal();
         if !all_equal {
             anyhow::bail!("Invalid rule, substitution region not constant.")
@@ -60,8 +60,7 @@ impl Rule {
         for (region_key, before_region) in &self.before.regions {
             let after_material = self
                 .after
-                .material_map
-                .get(before_region.top_left_interior_pixel())
+                .material_at(before_region.top_left_interior_pixel())
                 .unwrap();
             if before_region.material == after_material {
                 continue;
@@ -102,19 +101,20 @@ pub fn stabilize(world: &mut World, rules: &Vec<Rule>) -> usize {
 #[cfg(test)]
 mod test {
     use crate::{
-        field::RgbaField, material::Material, pixmap::MaterialMap, rule::Rule,
-        solver::plan::SearchPlan, topology::Topology, world::World,
+        field::RgbaField, pixmap::MaterialMap, rule::Rule, solver::plan::SearchPlan,
+        topology::Topology, world::World,
     };
 
     fn assert_rule_application(folder: &str, expected_application_count: usize) {
         let folder = format!("test_resources/rules/{folder}");
 
-        let before_material_map = MaterialMap::load(format!("{folder}/before.png")).unwrap();
-        let before = Topology::new(before_material_map);
-        let before = before.filter_by_material(Material::is_not_rule);
+        let before_material_map = MaterialMap::load(format!("{folder}/before.png"))
+            .unwrap()
+            .filter(|_, material| !material.is_rule());
+        let before = Topology::new(&before_material_map);
 
         let after_material_map = MaterialMap::load(format!("{folder}/after.png")).unwrap();
-        let after = Topology::new(after_material_map);
+        let after = Topology::new(&after_material_map);
 
         let rule = Rule::new(before, after).unwrap();
 

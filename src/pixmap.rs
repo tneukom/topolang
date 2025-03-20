@@ -1,11 +1,7 @@
 use crate::{
     field::{Field, FieldIndex, MaterialField, RgbaField},
     material::Material,
-    math::{
-        point::Point,
-        rect::{Rect, RectBounds},
-        rgba8::Rgba8,
-    },
+    math::{point::Point, rect::Rect, rgba8::Rgba8},
     regions::{area_right_of_boundary, area_right_of_boundary_bounds},
     topology::Border,
 };
@@ -41,10 +37,10 @@ impl<T: Copy> Pixmap<T> {
         }
     }
 
-    /// Bounding rect of all pixels that are not None
-    pub fn not_none_bounding_rect(&self) -> Rect<i64> {
-        // Upper bound is exclusive
-        RectBounds::iter_bounds(self.keys()).inc_high()
+    pub fn shrink(self) -> Self {
+        let shrink_bounds = Rect::index_bounds(self.keys());
+        let field = self.field.sub(shrink_bounds);
+        Self { field }
     }
 
     /// Iterate over all (pixel, &value)

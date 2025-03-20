@@ -414,6 +414,7 @@ impl EguiApp {
         segmented_enum_choice(ui, &mut self.run_mode);
 
         if self.run_mode != RunMode::Paused && run_mode_before == RunMode::Paused {
+            println!("Compiling");
             self.compile();
         }
 

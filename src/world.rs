@@ -24,7 +24,7 @@ impl CachedTopology {
         }
     }
 
-    pub fn from(material_map: MaterialMap) -> Self {
+    pub fn from(material_map: &MaterialMap) -> Self {
         let topology = Topology::new(material_map);
         Self {
             topology: OnceCell::from(topology),
@@ -32,8 +32,7 @@ impl CachedTopology {
     }
 
     pub fn get_or_init(&self, material_map: &MaterialMap) -> &Topology {
-        self.topology
-            .get_or_init(|| Topology::new(material_map.clone()))
+        self.topology.get_or_init(|| Topology::new(material_map))
     }
 
     pub fn get(&self) -> Option<&Topology> {
@@ -90,7 +89,7 @@ pub struct World {
 
 impl World {
     pub fn from_material_map(material_map: MaterialMap) -> Self {
-        let topology = CachedTopology::from(material_map.clone());
+        let topology = CachedTopology::from(&material_map);
         let rgba_field = CachedRgbaField::new(material_map.bounding_rect());
         Self {
             material_map,

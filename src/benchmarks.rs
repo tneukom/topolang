@@ -101,7 +101,7 @@ pub fn benchmark_topology_new() {
     for _ in 0..100 {
         use std::time::Instant;
         let now = Instant::now();
-        Topology::new(material_map.clone());
+        Topology::new(&material_map);
         println!("elapsed = {:.3?}", now.elapsed());
     }
 }

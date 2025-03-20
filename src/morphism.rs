@@ -426,11 +426,8 @@ pub fn induced_corner_map(seam_phi: &BTreeMap<Seam, Seam>) -> Option<BTreeMap<Co
 #[cfg(test)]
 pub(crate) mod test {
     use crate::{
-        field::RgbaField,
         morphism::Morphism,
-        pixmap::MaterialMap,
         topology::{Seam, Topology},
-        utils::IntoT,
     };
     use anyhow::anyhow;
     use itertools::Itertools;
@@ -470,10 +467,7 @@ pub(crate) mod test {
         let filenames = ["2a.png", "2b.png", "3a.png", "3b.png", "3c.png", "4a.png"];
         for filename in filenames {
             let path = format!("test_resources/topology/{filename}");
-            let topology = RgbaField::load(&path)
-                .unwrap()
-                .intot::<MaterialMap>()
-                .into();
+            let topology = Topology::load(&path).unwrap();
             let seam_phi = trivial_seam_automorphism(&topology);
             let phi = Morphism::induced_from_seam_map(&topology, &topology, seam_phi).unwrap();
             assert!(phi.is_total(&topology));

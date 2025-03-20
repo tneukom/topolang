@@ -146,10 +146,6 @@ impl Material {
         self.class == MaterialClass::Rule
     }
 
-    pub fn is_not_rule(self) -> bool {
-        !self.is_rule()
-    }
-
     pub fn is_wildcard(self) -> bool {
         self.class == MaterialClass::Wildcard
     }

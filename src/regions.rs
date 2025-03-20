@@ -1,4 +1,3 @@
-use crate::math::rect::RectBounds;
 /// Unionfind crates
 /// https://crates.io/crates/union-find
 /// https://crates.io/crates/disjoint-sets
@@ -295,7 +294,7 @@ pub fn area_left_of_boundary(boundary: impl Iterator<Item = Side>) -> Vec<Pixel>
 
 /// Bounding rectangle of the area left of boundary, see `area_left_of_boundary`.
 pub fn area_left_of_boundary_bounds(boundary: impl Iterator<Item = Side>) -> Rect<i64> {
-    RectBounds::iter_bounds(boundary.map(|side| side.left_pixel)).inc_high()
+    Rect::index_bounds(boundary.map(|side| side.left_pixel))
 }
 
 /// See `area_left_of_boundary`
