@@ -63,6 +63,42 @@ pub fn main_benchmark_pixmap_regions() {
         .unwrap();
 }
 
+/// Run a scene by repeatedly stabilizing and waking up sleeping components.
+pub fn benchmark_run() {
+    let folder = "test_resources/benchmark";
+    let material_map = MaterialMap::load(format!("{folder}/hex_wave.png")).unwrap();
+    let mut world = World::from(material_map);
+
+    let compiler = Compiler::new();
+    let rules = compiler.compile(&world).unwrap();
+
+    for (i_rule, rule) in rules.rules.iter().enumerate() {
+        // Print regions in pattern
+        for (region_key, region) in &rule.rule.before.regions {
+            println!(
+                "Region {}: color = {:?}",
+                region_key,
+                region.material.to_rgba().hex()
+            );
+        }
+
+        let plan = &rule.rule.search_plan;
+        println!("=== Plan {i_rule} ===");
+        plan.print();
+    }
+
+    let now = Instant::now();
+    loop {
+        let n_applications = rules.stabilize(&mut world, 1024);
+        if n_applications == 0 {
+            break;
+        }
+        rules.wake_up(&mut world);
+        println!("Evolved n_applications = {n_applications}");
+    }
+    println!("elapsed = {:.3?}", now.elapsed());
+}
+
 pub fn main_benchmark() {
     let folder = "test_resources/benchmark";
     let original_world = RgbaField::load(format!("{folder}/gates4.png"))
@@ -93,8 +129,8 @@ pub fn main_benchmark() {
 }
 
 pub fn benchmark_topology_new() {
-    let folder = "resources/saves";
-    let material_map = RgbaField::load(format!("{folder}/turing.png"))
+    let folder = "resources/benchmarks";
+    let material_map = RgbaField::load(format!("{folder}/hex_wave.png"))
         .unwrap()
         .intot::<MaterialMap>();
 

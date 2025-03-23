@@ -424,15 +424,15 @@ impl EguiApp {
 
         if self.run_mode == RunMode::Walk {
             if let Some(compiled_rules) = &self.compiled_rules {
-                let is_stable = compiled_rules.stabilize(&mut self.view.world, 1);
-                if is_stable {
+                let n_applications = compiled_rules.stabilize(&mut self.view.world, 1);
+                if n_applications < 1 {
                     compiled_rules.wake_up(&mut self.view.world);
                 }
             }
         } else if self.run_mode == RunMode::Run {
             if let Some(compiled_rules) = &self.compiled_rules {
-                let is_stable = compiled_rules.stabilize(&mut self.view.world, 32);
-                if is_stable {
+                let n_applications = compiled_rules.stabilize(&mut self.view.world, 32);
+                if n_applications < 32 {
                     compiled_rules.wake_up(&mut self.view.world);
                 }
             }

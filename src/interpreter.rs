@@ -19,16 +19,16 @@ use crate::{
 pub struct CompiledRule {
     /// All regions in the Rule frame, before and after. These elements should be hidden during Rule
     /// execution. Contains an arbitrary pixel of each region.
-    source: BTreeSet<StrongRegionKey>,
+    pub source: BTreeSet<StrongRegionKey>,
 
-    source_bounds: Rect<i64>,
+    pub source_bounds: Rect<i64>,
 
-    rule: Rule,
+    pub rule: Rule,
 }
 
 pub struct CompiledRules {
-    rules: Vec<CompiledRule>,
-    source_region_keys: BTreeSet<StrongRegionKey>,
+    pub rules: Vec<CompiledRule>,
+    pub source_region_keys: BTreeSet<StrongRegionKey>,
 }
 
 impl CompiledRules {
@@ -62,15 +62,16 @@ impl CompiledRules {
 
     /// Returns true if the world is stable, meaning any rule either cannot be applied or an
     /// application has no effect.
+    /// Returns max_steps if stabilization was not finished.
     #[inline(never)]
-    pub fn stabilize(&self, world: &mut World, max_steps: usize) -> bool {
-        for _ in 0..max_steps {
+    pub fn stabilize(&self, world: &mut World, max_steps: usize) -> usize {
+        for i in 0..max_steps {
             let applied = self.step(world);
             if !applied {
-                return true;
+                return i;
             }
         }
-        false
+        max_steps
     }
 
     /// Wake up all sleeping regions (replace them
