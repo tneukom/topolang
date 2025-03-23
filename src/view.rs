@@ -343,7 +343,7 @@ impl View {
                 }
                 SelectingKind::Wand => {
                     let pixel: Pixel = input.world_mouse.floor().as_i64();
-                    let Some(region_key) = self.world.topology().region_at(pixel) else {
+                    let Some(region_key) = self.world.topology().region_key_at(pixel) else {
                         return UiState::Idle;
                     };
 
@@ -449,7 +449,7 @@ impl View {
             EditMode::Fill => {
                 if input.left_mouse_down {
                     let pixel: Pixel = input.world_mouse.floor().as_i64();
-                    if let Some(region_key) = self.world.topology().region_at(pixel) {
+                    if let Some(region_key) = self.world.topology().region_key_at(pixel) {
                         self.world.fill_region(region_key, settings.brush.material);
                         self.add_snapshot(SnapshotCause::Fill);
                     }

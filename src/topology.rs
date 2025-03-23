@@ -309,6 +309,10 @@ impl Region {
         self.boundary.top_left_interior_pixel()
     }
 
+    pub fn strong_key(&self) -> StrongRegionKey {
+        self.top_left_interior_pixel()
+    }
+
     pub fn bounds(&self) -> Rect<i64> {
         self.boundary.interior_bounds
     }
@@ -602,8 +606,13 @@ impl Topology {
             .iter_where_value(region.bounds(), region_key)
     }
 
-    pub fn region_at(&self, pixel: Pixel) -> Option<RegionKey> {
+    pub fn region_key_at(&self, pixel: Pixel) -> Option<RegionKey> {
         self.region_map.get(pixel)
+    }
+
+    pub fn region_at(&self, pixel: Pixel) -> Option<&Region> {
+        let region_key = self.region_key_at(pixel)?;
+        Some(&self.regions[&region_key])
     }
 
     pub fn border_containing_side(&self, side: &Side) -> Option<(BorderKey, &Border)> {

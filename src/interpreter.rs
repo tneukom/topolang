@@ -3,7 +3,11 @@ use std::collections::BTreeSet;
 use crate::{
     field::RgbaField,
     material::Material,
-    math::{pixel::Pixel, rgba8::Rgba8},
+    math::{
+        pixel::Pixel,
+        rect::{Rect, RectBounds},
+        rgba8::Rgba8,
+    },
     pixmap::MaterialMap,
     rule::Rule,
     solver::plan::SearchPlan,
@@ -16,6 +20,8 @@ pub struct CompiledRule {
     /// All regions in the Rule frame, before and after. These elements should be hidden during Rule
     /// execution. Contains an arbitrary pixel of each region.
     source: BTreeSet<StrongRegionKey>,
+
+    source_bounds: Rect<i64>,
 
     rule: Rule,
 }
@@ -156,13 +162,19 @@ impl Compiler {
             // Collect regions that are part of the source for this Rule.
             let mut source: BTreeSet<StrongRegionKey> = BTreeSet::new();
             // Before and after regions
-            source.extend(before.regions.values().map(Region::top_left_interior_pixel));
-            source.extend(after.regions.values().map(Region::top_left_interior_pixel));
+            source.extend(before.regions.values().map(Region::strong_key));
+            source.extend(after.regions.values().map(Region::strong_key));
             // Rule frame regions
             for &region_key in self.rule_frame.iter_region_keys() {
                 let phi_region_key = phi[region_key];
-                source.insert(topology[phi_region_key].top_left_interior_pixel());
+                source.insert(topology[phi_region_key].strong_key());
             }
+
+            let source_bounds = Rect::iter_bounds(
+                source
+                    .iter()
+                    .map(|&key| topology.region_at(key).unwrap().bounds()),
+            );
 
             // Remove rule areas from before and after material maps.
             let before_material_map = before_material_map
@@ -184,9 +196,16 @@ impl Compiler {
             let after = Topology::new(&after_material_map);
 
             let rule = Rule::new(before, after)?;
-            let compiled_rule = CompiledRule { rule, source };
+            let compiled_rule = CompiledRule {
+                rule,
+                source,
+                source_bounds,
+            };
             rules.push(compiled_rule);
         }
+
+        // Sort rules by y coordinates of bounding box
+        rules.sort_by_key(|rule| rule.source_bounds.top());
 
         let source_region_keys: BTreeSet<_> = rules
             .iter()
