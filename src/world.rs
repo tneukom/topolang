@@ -191,6 +191,7 @@ impl World {
             selection.put(pixel, self.material_map.set(pixel, Material::TRANSPARENT));
         }
 
+        self.rgba_field.expire_rgba_rect(bounds);
         self.topology = CachedTopology::empty();
         Selection::new(selection)
     }
