@@ -5,7 +5,7 @@ use crate::{
         element::Element,
         propagations::{morphism_propagations, AnyPropagation, Propagation},
     },
-    topology::{BorderKey, RegionKey, Seam, StrongRegionKey, Topology},
+    topology::{BorderKey, RegionKey, Seam, StrongRegionKey, Topology, TopologyStatistics},
 };
 use ahash::HashSet;
 use std::collections::BTreeSet;
@@ -61,6 +61,127 @@ impl Guess {
     }
 }
 
+pub trait GuessChooser {
+    /// Return a free seam on a border that is assigned, if possible
+    fn choose_seam(
+        &self,
+        free: &HashSet<Element>,
+        assigned: &HashSet<Element>,
+        dom: &Topology,
+    ) -> Option<Guess> {
+        for free_variable in free {
+            if let &Element::Seam(seam) = free_variable {
+                if !dom.contains_seam(seam.atom_reversed()) {
+                    // We only guess `seam` if `seam.reverse()` is also in `dom`.
+                    continue;
+                }
+
+                let border_key = dom.seam_border(seam);
+                if assigned.contains(&border_key.into()) {
+                    return Some(Guess::Seam(border_key, seam));
+                }
+            }
+        }
+
+        None
+    }
+
+    fn choose_border(
+        &self,
+        free: &HashSet<Element>,
+        assigned: &HashSet<Element>,
+        _dom: &Topology,
+    ) -> Option<Guess> {
+        // Return a free broder of a region that is assigned, if possible
+        for free_variable in free {
+            if let &Element::Border(border_key) = free_variable {
+                if assigned.contains(&border_key.region_key.into()) {
+                    return Some(Guess::InteriorBorder(border_key));
+                }
+            }
+        }
+
+        None
+    }
+
+    // Return a free region, if possible
+    fn choose_region(
+        &self,
+        free: &HashSet<Element>,
+        _assigned: &HashSet<Element>,
+        _dom: &Topology,
+    ) -> Option<Guess> {
+        // TODO: Return a free solid region, if possible
+
+        for free_variable in free {
+            if let &Element::Region(region_key) = free_variable {
+                return Some(Guess::Region(region_key));
+            }
+        }
+
+        None
+    }
+
+    /// Choose a free variable to guess we guess seams if possible, then borders, then regions.
+    fn choose(
+        &self,
+        free: &HashSet<Element>,
+        assigned: &HashSet<Element>,
+        dom: &Topology,
+    ) -> Option<Guess> {
+        if let Some(guess) = self.choose_seam(free, assigned, dom) {
+            return Some(guess);
+        }
+
+        if let Some(guess) = self.choose_border(free, assigned, dom) {
+            return Some(guess);
+        }
+
+        self.choose_region(free, assigned, dom)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SimpleGuessChooser {}
+
+impl GuessChooser for SimpleGuessChooser {}
+
+pub struct GuessChooserUsingStatistics {
+    statistics: TopologyStatistics,
+}
+
+impl GuessChooserUsingStatistics {
+    pub fn new(statistics: TopologyStatistics) -> Self {
+        Self { statistics }
+    }
+}
+
+impl GuessChooser for GuessChooserUsingStatistics {
+    // Return a free region, if possible
+    fn choose_region(
+        &self,
+        free_vars: &HashSet<Element>,
+        _assigned_vars: &HashSet<Element>,
+        dom: &Topology,
+    ) -> Option<Guess> {
+        let free_region_vars = free_vars.iter().filter_map(|free_var| match free_var {
+            &Element::Region(region_key) => Some(region_key),
+            _ => None,
+        });
+
+        let lowest_material_count = free_region_vars.min_by_key(|region_key| {
+            let region = &dom.regions[region_key];
+            self.statistics
+                .material_counts
+                .get(&region.material)
+                .copied()
+                .unwrap_or(0)
+        })?;
+
+        Some(Guess::Region(lowest_material_count))
+    }
+}
+
 #[derive(Debug)]
 pub struct SearchStep {
     guess: Guess,
@@ -73,48 +194,6 @@ pub struct SearchPlan {
 }
 
 impl SearchPlan {
-    /// Choose a free variable to guess we guess seams if possible, then borders, then regions.
-    pub fn choose_guess(
-        free_variables: &HashSet<Element>,
-        assigned_variables: &HashSet<Element>,
-        dom: &Topology,
-    ) -> Option<Guess> {
-        // Return a free seam on a border that is assigned, if possible
-        for free_variable in free_variables {
-            if let &Element::Seam(seam) = free_variable {
-                if !dom.contains_seam(seam.atom_reversed()) {
-                    // We only guess `seam` if `seam.reverse()` is also in `dom`.
-                    continue;
-                }
-
-                let border_key = dom.seam_border(seam);
-                if assigned_variables.contains(&border_key.into()) {
-                    return Some(Guess::Seam(border_key, seam));
-                }
-            }
-        }
-
-        // Return a free broder of a region that is assigned, if possible
-        for free_variable in free_variables {
-            if let &Element::Border(border_key) = free_variable {
-                if assigned_variables.contains(&border_key.region_key.into()) {
-                    return Some(Guess::InteriorBorder(border_key));
-                }
-            }
-        }
-
-        // TODO: Return a free solid region, if possible
-
-        // Return a free region, if possible
-        for free_variable in free_variables {
-            if let &Element::Region(region_key) = free_variable {
-                return Some(Guess::Region(region_key));
-            }
-        }
-
-        None
-    }
-
     pub fn variables(dom: &Topology) -> HashSet<Element> {
         let mut variables = HashSet::default();
 
@@ -139,7 +218,7 @@ impl SearchPlan {
     }
 
     /// Make a plan to find solutions
-    pub fn for_morphism(dom: &Topology) -> Self {
+    pub fn for_morphism(dom: &Topology, guess_chooser: &impl GuessChooser) -> Self {
         let mut available_constraints = morphism_constraints(dom);
         let available_propagations = morphism_propagations(dom);
         // for propagation in &propagations {
@@ -154,7 +233,9 @@ impl SearchPlan {
 
         while !free_variables.is_empty() {
             // Pick one of the free variables and guess its image
-            let guess = Self::choose_guess(&free_variables, &assigned_variables, dom).unwrap();
+            let guess = guess_chooser
+                .choose(&free_variables, &assigned_variables, dom)
+                .unwrap();
             // println!("guess: {guess:?}");
             free_variables.remove(&guess.variable());
             assigned_variables.insert(guess.variable());
@@ -333,8 +414,12 @@ impl SearchPlan {
 #[cfg(test)]
 mod test {
     use crate::{
-        field::RgbaField, material::Material, math::rgba8::Rgba8, pixmap::MaterialMap,
-        solver::plan::SearchPlan, topology::Topology,
+        field::RgbaField,
+        material::Material,
+        math::rgba8::Rgba8,
+        pixmap::MaterialMap,
+        solver::plan::{SearchPlan, SimpleGuessChooser},
+        topology::Topology,
     };
     use itertools::Itertools;
     use std::path::Path;
@@ -401,7 +486,8 @@ mod test {
         let dom = load(format!("{folder}/{dom_filename}"));
         let codom = load(format!("{folder}/{codom_filename}"));
 
-        let plan = SearchPlan::for_morphism(&dom);
+        let guess_chooser = SimpleGuessChooser::default();
+        let plan = SearchPlan::for_morphism(&dom, &guess_chooser);
         // plan.print();
 
         let solutions = plan.solutions(&codom);

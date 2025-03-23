@@ -10,7 +10,7 @@ use crate::{
     },
     pixmap::MaterialMap,
     rule::Rule,
-    solver::plan::SearchPlan,
+    solver::plan::{GuessChooserUsingStatistics, SearchPlan, SimpleGuessChooser},
     topology::{BorderKey, FillRegion, Region, StrongRegionKey, Topology},
     utils::IntoT,
     world::World,
@@ -140,7 +140,8 @@ impl Compiler {
     pub fn compile(&self, world: &World) -> anyhow::Result<CompiledRules> {
         // Find all matches for rule_frame in world
         let matches = {
-            let search_plan = SearchPlan::for_morphism(&self.rule_frame);
+            let guess_chooser = SimpleGuessChooser::default();
+            let search_plan = SearchPlan::for_morphism(&self.rule_frame, &guess_chooser);
             search_plan.solutions(world.topology())
         };
 
@@ -149,6 +150,8 @@ impl Compiler {
 
         // Extract all matches and creates rules from them
         let mut rules: Vec<CompiledRule> = Vec::new();
+        let world_statistics = world.topology().statistics();
+        let guess_chooser = GuessChooserUsingStatistics::new(world_statistics);
 
         for phi in matches {
             // Extract before and after from rule
@@ -196,7 +199,7 @@ impl Compiler {
             let after_material_map = after_material_map.translated(offset);
             let after = Topology::new(&after_material_map);
 
-            let rule = Rule::new(before, after)?;
+            let rule = Rule::new(before, after, &guess_chooser)?;
             let compiled_rule = CompiledRule {
                 rule,
                 source,

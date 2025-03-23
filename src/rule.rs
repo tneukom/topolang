@@ -1,6 +1,6 @@
 use crate::{
     morphism::Morphism,
-    solver::plan::SearchPlan,
+    solver::plan::{GuessChooser, SearchPlan},
     topology::{FillRegion, RegionKey, Topology},
     world::World,
 };
@@ -37,13 +37,17 @@ impl Rule {
     }
 
     #[inline(never)]
-    pub fn new(before: Topology, after: Topology) -> anyhow::Result<Self> {
+    pub fn new(
+        before: Topology,
+        after: Topology,
+        guess_chooser: &impl GuessChooser,
+    ) -> anyhow::Result<Self> {
         // Make sure after region map is constant on each region in `before` and `holes`.
         for &region_key in before.regions.keys() {
             Self::assert_phi_region_constant(&before, &after, region_key)?
         }
 
-        let search_plan = SearchPlan::for_morphism(&before);
+        let search_plan = SearchPlan::for_morphism(&before, guess_chooser);
 
         Ok(Rule {
             before,
@@ -101,8 +105,12 @@ pub fn stabilize(world: &mut World, rules: &Vec<Rule>) -> usize {
 #[cfg(test)]
 mod test {
     use crate::{
-        field::RgbaField, pixmap::MaterialMap, rule::Rule, solver::plan::SearchPlan,
-        topology::Topology, world::World,
+        field::RgbaField,
+        pixmap::MaterialMap,
+        rule::Rule,
+        solver::plan::{SearchPlan, SimpleGuessChooser},
+        topology::Topology,
+        world::World,
     };
 
     fn assert_rule_application(folder: &str, expected_application_count: usize) {
@@ -116,14 +124,16 @@ mod test {
         let after_material_map = MaterialMap::load(format!("{folder}/after.png")).unwrap();
         let after = Topology::new(&after_material_map);
 
-        let rule = Rule::new(before, after).unwrap();
+        let guess_chooser = SimpleGuessChooser::default();
+        let rule = Rule::new(before, after, &guess_chooser).unwrap();
 
         let world_material_map = MaterialMap::load(format!("{folder}/world.png")).unwrap();
         let mut world = World::from_material_map(world_material_map);
 
         let mut application_count: usize = 0;
 
-        let search_plan = SearchPlan::for_morphism(&rule.before);
+        let guess_chooser = SimpleGuessChooser::default();
+        let search_plan = SearchPlan::for_morphism(&rule.before, &guess_chooser);
 
         while let Some(phi) = search_plan.solutions(world.topology()).first() {
             let changed = rule.substitute(&phi, &mut world);

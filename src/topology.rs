@@ -11,6 +11,7 @@ use crate::{
     regions::{pixmap_regions, region_boundaries, split_boundary_into_cycles},
     utils::{UndirectedEdge, UndirectedGraph},
 };
+use ahash::HashMap;
 use itertools::Itertools;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
@@ -391,6 +392,11 @@ pub struct FillRegion {
     pub material: Material,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct TopologyStatistics {
+    pub material_counts: HashMap<Material, usize>,
+}
+
 // pub struct Change {
 //     pub time: u64,
 //     pub bounds: AreaBounds,
@@ -689,6 +695,17 @@ impl Topology {
         let rgba_field = RgbaField::load(path)?;
         let material_map = MaterialMap::from(rgba_field);
         Ok(Topology::new(&material_map))
+    }
+
+    pub fn statistics(&self) -> TopologyStatistics {
+        let mut statistics = TopologyStatistics::default();
+        for region in self.regions.values() {
+            *statistics
+                .material_counts
+                .entry(region.material)
+                .or_default() += 1;
+        }
+        statistics
     }
 }
 
