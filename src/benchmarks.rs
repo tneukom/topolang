@@ -118,7 +118,7 @@ pub fn main_benchmark() {
         let mut steps = 0usize;
         while steps < 100 {
             steps += 1;
-            let changed = compiled_rules.step(&mut world);
+            let changed = compiled_rules.apply(&mut world);
             if !changed {
                 break;
             }

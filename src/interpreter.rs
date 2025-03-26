@@ -16,6 +16,19 @@ use crate::{
     world::World,
 };
 
+pub struct Ticked {
+    pub n_applications: usize,
+    pub stabilized: bool,
+    pub n_woken_up: usize,
+}
+
+impl Ticked {
+    /// A rule was applied or a region was woken up.
+    pub fn changed(&self) -> bool {
+        self.n_applications > 0 || self.n_woken_up > 0
+    }
+}
+
 pub struct CompiledRule {
     /// All regions in the Rule frame, before and after. These elements should be hidden during Rule
     /// execution. Contains an arbitrary pixel of each region.
@@ -34,7 +47,7 @@ pub struct CompiledRules {
 impl CompiledRules {
     /// Returns if a Rule was applied
     #[inline(never)]
-    pub fn step(&self, world: &mut World) -> bool {
+    pub fn apply(&self, world: &mut World) -> bool {
         for CompiledRule { rule, .. } in &self.rules {
             let solutions = rule
                 .search_plan
@@ -60,22 +73,44 @@ impl CompiledRules {
         //     .unwrap();
     }
 
-    /// Returns true if the world is stable, meaning any rule either cannot be applied or an
-    /// application has no effect.
-    /// Returns max_steps if stabilization was not finished.
+    /// Apply rules (at most max_applications) and if world becomes stable under rules wake up
+    /// all sleeping regions.
     #[inline(never)]
-    pub fn stabilize(&self, world: &mut World, max_steps: usize) -> usize {
-        for i in 0..max_steps {
-            let applied = self.step(world);
+    pub fn tick(&self, world: &mut World, max_applications: usize) -> Ticked {
+        let n_applications = self.stabilize(world, max_applications);
+        if n_applications == max_applications {
+            return Ticked {
+                n_applications,
+                stabilized: false,
+                n_woken_up: 0,
+            };
+        }
+
+        let n_woken_up = self.wake_up(world);
+        Ticked {
+            n_applications,
+            stabilized: true,
+            n_woken_up,
+        }
+    }
+
+    /// Apply rules until world is stable or max_applications is reached. Returns the number of
+    /// times a rule was applied.
+    /// This means if returned value is smaller than max_applications world is stable, otherwise we
+    /// don't know if it is stable.
+    #[inline(never)]
+    pub fn stabilize(&self, world: &mut World, max_applications: usize) -> usize {
+        for i in 0..max_applications {
+            let applied = self.apply(world);
             if !applied {
                 return i;
             }
         }
-        max_steps
+        max_applications
     }
 
     /// Wake up all sleeping regions (replace them
-    pub fn wake_up(&self, world: &mut World) {
+    pub fn wake_up(&self, world: &mut World) -> usize {
         let topology = world.topology();
 
         let mut fill_regions = Vec::new();
@@ -95,6 +130,7 @@ impl CompiledRules {
         }
 
         world.fill_regions(&fill_regions);
+        fill_regions.len()
     }
 }
 
@@ -247,7 +283,7 @@ mod test {
 
         let mut steps = 0;
         loop {
-            let applied = rules.step(&mut world);
+            let applied = rules.apply(&mut world);
             if !applied {
                 break;
             }

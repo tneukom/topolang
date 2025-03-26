@@ -1,53 +1,38 @@
-use crate::{history::Snapshot, material::Material};
-use anyhow::Context;
+use crate::{
+    field::RgbaField, material_effects::material_map_effects, math::rgba8::Rgba8,
+    pixmap::MaterialMap,
+};
 use image::{
     codecs::gif::{GifEncoder, Repeat},
     ExtendedColorType,
 };
-use std::{fs::File, path::Path, rc::Rc};
+use std::{fs::File, path::Path};
 
 pub struct GifRecorder {
-    pub start: Option<Rc<Snapshot>>,
-    pub stop: Option<Rc<Snapshot>>,
+    pub frames: Vec<RgbaField>,
 }
 
 impl GifRecorder {
     pub fn new() -> Self {
-        Self {
-            start: None,
-            stop: None,
-        }
+        Self { frames: Vec::new() }
     }
 
-    /// Try to find a path from start to stop or from stop to start
-    fn history_path(&self) -> Option<Vec<&Rc<Snapshot>>> {
-        let start = self.start.as_ref()?;
-        let stop = self.stop.as_ref()?;
-        if let Some(path) = stop.path_to(start) {
-            return Some(path);
-        }
-        if let Some(path) = start.path_to(stop) {
-            return Some(path);
-        }
-        None
+    pub fn add_frame(&mut self, material_map: &MaterialMap) {
+        let mut rgba_field = RgbaField::filled(material_map.bounding_rect(), Rgba8::BLACK);
+        material_map_effects(material_map, &mut rgba_field);
+        self.frames.push(rgba_field);
     }
 
     pub fn export(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
-        let snapshot_path = self.history_path().context("No path")?;
-
         let file = File::create(path)?;
         let mut gif_encoder = GifEncoder::new_with_speed(file, 10);
         gif_encoder.set_repeat(Repeat::Infinite).unwrap();
 
-        for snapshot in snapshot_path {
-            // TODO: Offset world pixmap by bounds.low()
-            // TODO: Paint over white background to remove transparency or use apng instead
-            let image = snapshot.material_map().to_rgba_field(Material::TRANSPARENT);
-
+        for frame in &self.frames {
             gif_encoder.encode(
-                image.as_raw(),
-                image.width() as u32,
-                image.height() as u32,
+                frame.as_raw(),
+                frame.width() as u32,
+                frame.height() as u32,
                 ExtendedColorType::Rgba8,
             )?;
         }

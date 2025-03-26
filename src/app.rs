@@ -81,7 +81,7 @@ pub struct EguiApp {
     #[cfg(not(target_arch = "wasm32"))]
     file_chooser: FileChooser,
 
-    gif_recorder: GifRecorder,
+    gif_recorder: Option<GifRecorder>,
 
     channel_receiver: mpsc::Receiver<Vec<u8>>,
     channel_sender: mpsc::SyncSender<Vec<u8>>,
@@ -145,7 +145,7 @@ impl EguiApp {
             },
             compiler: Compiler::new(),
             compiled_rules: None,
-            gif_recorder: GifRecorder::new(),
+            gif_recorder: None,
             clipboard: None,
             channel_sender,
             channel_receiver,
@@ -351,21 +351,37 @@ impl EguiApp {
     }
 
     pub fn gif_ui(&mut self, ui: &mut egui::Ui) {
+        let n_frames = if let Some(gif_encoder) = &self.gif_recorder {
+            gif_encoder.frames.len()
+        } else {
+            0
+        };
+        ui.label(format!("Frames: {n_frames}"));
+
         ui.horizontal(|ui| {
-            if ui.button("Set Start").clicked() {
-                self.gif_recorder.start = Some(self.view.history.head.clone());
+            if ui.button("Start").clicked() {
+                self.gif_recorder = Some(GifRecorder::new());
             }
 
-            if ui.button("Set stop").clicked() {
-                self.gif_recorder.stop = Some(self.view.history.head.clone());
-            }
-
-            if ui.button("Export").clicked() {
-                if let Err(err) = self.gif_recorder.export("movie.gif") {
-                    warn!("Failed to export gif with {err}");
+            if ui.button("Stop").clicked() {
+                if let Some(gif_recorder) = &self.gif_recorder {
+                    if let Err(err) = gif_recorder.export("movie.gif") {
+                        warn!("Failed to export gif with {err}");
+                    }
                 }
+                self.gif_recorder = None;
+            }
+
+            if ui.button("Cancel").clicked() {
+                self.gif_recorder = None;
             }
         });
+    }
+
+    pub fn record_gif_frame(&mut self) {
+        if let Some(gif_recorder) = &mut self.gif_recorder {
+            gif_recorder.add_frame(self.view.world.material_map());
+        }
     }
 
     pub fn document_ui(&mut self, ui: &mut egui::Ui) {
@@ -424,16 +440,16 @@ impl EguiApp {
 
         if self.run_mode == RunMode::Walk {
             if let Some(compiled_rules) = &self.compiled_rules {
-                let n_applications = compiled_rules.stabilize(&mut self.view.world, 1);
-                if n_applications < 1 {
-                    compiled_rules.wake_up(&mut self.view.world);
+                let ticked = compiled_rules.tick(&mut self.view.world, 1);
+                if ticked.changed() {
+                    self.record_gif_frame();
                 }
             }
         } else if self.run_mode == RunMode::Run {
             if let Some(compiled_rules) = &self.compiled_rules {
-                let n_applications = compiled_rules.stabilize(&mut self.view.world, 32);
-                if n_applications < 32 {
-                    compiled_rules.wake_up(&mut self.view.world);
+                let ticked = compiled_rules.tick(&mut self.view.world, 256);
+                if ticked.changed() {
+                    self.record_gif_frame();
                 }
             }
         }
@@ -444,12 +460,16 @@ impl EguiApp {
         {
             self.compile();
             if let Some(compiled_rules) = &self.compiled_rules {
-                let applied = compiled_rules.step(&mut self.view.world);
+                let applied = compiled_rules.apply(&mut self.view.world);
                 if applied {
                     self.view.add_snapshot(SnapshotCause::Step);
+                    self.record_gif_frame();
                 } else {
-                    compiled_rules.wake_up(&mut self.view.world);
-                    self.view.add_snapshot(SnapshotCause::Wakeup);
+                    let n_woken_up = compiled_rules.wake_up(&mut self.view.world);
+                    if n_woken_up > 0 {
+                        self.record_gif_frame();
+                        self.view.add_snapshot(SnapshotCause::Wakeup);
+                    }
                 }
             }
         }
@@ -472,27 +492,13 @@ impl EguiApp {
             .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
             .show(ui, |ui| {
                 for snapshot in path.into_iter() {
-                    ui.horizontal(|ui| {
-                        let mut btn = egui::Button::new(snapshot.cause().as_str());
-                        if Rc::ptr_eq(snapshot, &history.head) {
-                            btn = btn.fill(Pico8Palette::ORANGE);
-                        }
-                        if btn.ui(ui).clicked() {
-                            history.head = snapshot.clone();
-                        }
-
-                        // Add gif start/stop labels after button
-                        if let Some(gif_start) = &self.gif_recorder.start {
-                            if Rc::ptr_eq(gif_start, snapshot) {
-                                ui.label("Gif start");
-                            }
-                        };
-                        if let Some(gif_stop) = &self.gif_recorder.stop {
-                            if Rc::ptr_eq(gif_stop, snapshot) {
-                                ui.label("Gif stop");
-                            }
-                        };
-                    });
+                    let mut btn = egui::Button::new(snapshot.cause().as_str());
+                    if Rc::ptr_eq(snapshot, &history.head) {
+                        btn = btn.fill(Pico8Palette::ORANGE);
+                    }
+                    if btn.ui(ui).clicked() {
+                        history.head = snapshot.clone();
+                    }
                 }
             });
 
