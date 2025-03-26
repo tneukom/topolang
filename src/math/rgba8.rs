@@ -54,6 +54,15 @@ impl Rgba8 {
         ]
     }
 
+    pub fn to_f32(self) -> [f32; 4] {
+        [
+            self.r as f32 / 255.0,
+            self.g as f32 / 255.0,
+            self.b as f32 / 255.0,
+            self.a as f32 / 255.0,
+        ]
+    }
+
     // Parse hex rgba color with # at first position.
     pub fn from_hex(hex: &str) -> Option<Rgba8> {
         let hex = hex.trim_start_matches('#');

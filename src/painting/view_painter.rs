@@ -3,6 +3,7 @@ use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
     field::RgbaField,
+    material_effects::{CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
     math::rect::Rect,
     painting::{
         checkerboard_painter::CheckerboardPainter, line_painter::LinePainter,
@@ -103,8 +104,15 @@ impl ViewPainter {
 
         // Checkerboard pattern in background
         let world_bounds = read_world_rgba_field.bounds().cwise_as();
-        self.checkerboard_painter
-            .draw(gl, world_bounds, 16.0, &draw.frames, &draw.camera);
+        self.checkerboard_painter.draw(
+            gl,
+            world_bounds,
+            16.0,
+            CHECKERBOARD_EVEN_RGBA,
+            CHECKERBOARD_ODD_RGBA,
+            &draw.frames,
+            &draw.camera,
+        );
 
         self.world_painter
             .draw(gl, &read_world_rgba_field, world_to_device);

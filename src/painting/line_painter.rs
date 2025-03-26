@@ -75,7 +75,7 @@ impl LinePainter {
 
         // Draw call
         gl.enable(glow::BLEND);
-        gl.blend_func(glow::ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+        gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
         gl.blend_equation(glow::FUNC_ADD);
 
         self.vertex_array.bind(gl);

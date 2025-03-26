@@ -48,7 +48,8 @@ https://en.wikipedia.org/wiki/SRGB
 
 ### Conclusion
 
-- GL_FRAMEBUFFER_SRGB is not supported on WebGl
+- GL_FRAMEBUFFER_SRGB is not supported on WebGl, at least there's no mention of
+  it under https://registry.khronos.org/webgl/specs/latest/2.0/
 - Is the Webgl canvas framebuffer always srgb?
 - Passing sRGB as output in the pixel shader seems to work on desktop and web.
 

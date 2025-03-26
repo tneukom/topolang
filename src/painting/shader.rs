@@ -243,6 +243,7 @@ impl Drop for Shader {
     }
 }
 
+/// There's no impl for Rgba8 because it would be unclear if there is any color space conversion.
 pub trait AssignUniform {
     unsafe fn assign_uniform(gl: &glow::Context, location: &glow::UniformLocation, value: Self);
 }
@@ -253,11 +254,9 @@ impl AssignUniform for Point<f64> {
     }
 }
 
-/// This assumes the Rgba8 is in sRGB color space and converts it to linear RGB f32 values
-/// before sending it to the shader.
-impl AssignUniform for Rgba8 {
+impl AssignUniform for [f32; 4] {
     unsafe fn assign_uniform(gl: &glow::Context, location: &glow::UniformLocation, value: Self) {
-        gl.uniform_4_f32_slice(Some(location), &value.to_linear())
+        gl.uniform_4_f32_slice(Some(location), &value);
     }
 }
 

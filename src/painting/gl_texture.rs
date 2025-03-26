@@ -59,8 +59,8 @@ impl GlTexture {
         gl.tex_image_2d(
             glow::TEXTURE_2D,
             0,
-            // glow::SRGB8_ALPHA8 as i32, see notes/srgb.md
-            glow::RGBA8 as i32,
+            glow::SRGB8_ALPHA8 as i32, // internal_format, see notes/srgb.md
+            // glow::RGBA8 as i32, // internal_format
             bitmap.width() as i32,
             bitmap.height() as i32,
             0,

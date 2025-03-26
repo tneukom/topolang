@@ -4,7 +4,7 @@ use super::shader::Shader;
 use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
-    math::{matrix3::Matrix3, rect::Rect},
+    math::{matrix3::Matrix3, rect::Rect, rgba8::Rgba8},
     painting::{gl_buffer::GlVertexArrayObject, rect_vertices::RectVertices},
 };
 
@@ -39,10 +39,13 @@ impl CheckerboardPainter {
         gl: &glow::Context,
         rect: Rect<f64>,
         size: f64,
+        even_rgba: Rgba8,
+        odd_rgba: Rgba8,
         frames: &CoordinateFrames,
         camera: &Camera,
     ) {
         gl.disable(glow::BLEND);
+        gl.disable(glow::FRAMEBUFFER_SRGB);
 
         self.vertices.update(gl, rect);
         self.vao.bind(gl);
@@ -56,6 +59,9 @@ impl CheckerboardPainter {
         let mat_world_to_device = Matrix3::from(world_to_device);
         self.shader
             .uniform(gl, "world_to_device", &mat_world_to_device);
+        // Uniform assignment converts from SRGB to linear RGB
+        self.shader.uniform(gl, "even_srgba", even_rgba.to_f32());
+        self.shader.uniform(gl, "odd_srgba", odd_rgba.to_f32());
 
         // Draw 2 triangles
         gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);

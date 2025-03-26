@@ -214,6 +214,9 @@ pub fn material_map_effects(material_map: &MaterialMap, rgba_field: &mut RgbaFie
     }
 }
 
+pub const CHECKERBOARD_EVEN_RGBA: Rgba8 = Rgba8::new(0xB2, 0xB2, 0xB2, 0xFF);
+pub const CHECKERBOARD_ODD_RGBA: Rgba8 = Rgba8::new(0x99, 0x99, 0x99, 0xFF);
+
 #[cfg(test)]
 mod test {
     use crate::{
