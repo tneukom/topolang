@@ -38,6 +38,8 @@ impl Rgb<u8> {
             (self.b as f32) / 255.0,
         )
     }
+
+    pub const ZERO: Self = Rgb(0, 0, 0);
 }
 
 impl Rgb<f32> {

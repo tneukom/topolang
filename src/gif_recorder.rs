@@ -1,5 +1,7 @@
 use crate::{
-    field::RgbaField, material_effects::material_map_effects, math::rgba8::Rgba8,
+    field::RgbaField,
+    material_effects::{material_map_effects, CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
+    math::rgba8::Rgba8,
     pixmap::MaterialMap,
 };
 use image::{
@@ -23,12 +25,24 @@ impl GifRecorder {
         self.frames.push(rgba_field);
     }
 
-    pub fn export(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+    pub fn export(mut self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         let file = File::create(path)?;
         let mut gif_encoder = GifEncoder::new_with_speed(file, 10);
         gif_encoder.set_repeat(Repeat::Infinite).unwrap();
 
-        for frame in &self.frames {
+        for mut frame in self.frames {
+            // Alpha blend with checkerboard background
+            for (pixel, color) in frame.enumerate_mut() {
+                let checkerboard_sign = (pixel.x / 16 + pixel.y / 16) % 2 == 0;
+                let checkerboard_rgba = if checkerboard_sign {
+                    CHECKERBOARD_EVEN_RGBA
+                } else {
+                    CHECKERBOARD_ODD_RGBA
+                };
+                let composite_rgb = color.blend_rgb(checkerboard_rgba.rgb());
+                *color = Rgba8::from_rgb_a(composite_rgb, 0xFF);
+            }
+
             gif_encoder.encode(
                 frame.as_raw(),
                 frame.width() as u32,

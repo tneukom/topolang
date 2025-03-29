@@ -368,12 +368,11 @@ impl EguiApp {
             }
 
             if ui.button("Stop").clicked() {
-                if let Some(gif_recorder) = &self.gif_recorder {
+                if let Some(gif_recorder) = self.gif_recorder.take() {
                     if let Err(err) = gif_recorder.export("movie.gif") {
                         warn!("Failed to export gif with {err}");
                     }
                 }
-                self.gif_recorder = None;
             }
 
             if ui.button("Cancel").clicked() {
