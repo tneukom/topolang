@@ -1,7 +1,10 @@
 use crate::{
     field::RgbaField,
     material::{Material, MaterialClass},
-    math::{point::Point, rgba8::Rgba8},
+    math::{
+        point::Point,
+        rgba8::{Rgb8, Rgba8},
+    },
     pixmap::MaterialMap,
 };
 
@@ -108,7 +111,7 @@ pub fn rule_effect(material_map: &MaterialMap, pixel: Point<i64>, material: Mate
     Rgba8::from_rgb_a(material.rgb, alpha)
 }
 
-pub fn sleep_effect(pixel: Point<i64>, rgb: [u8; 3]) -> Rgba8 {
+pub fn sleep_effect(pixel: Point<i64>, rgb: Rgb8) -> Rgba8 {
     // ███ ███ ███ ███
     // █ █ █ █ █ █ █ █
     // █ ███ ███ ███ ██

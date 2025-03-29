@@ -1,4 +1,7 @@
-use crate::{math::rgba8::Rgba8, utils::ReflectEnum};
+use crate::{
+    math::rgba8::{Rgb, Rgb8, Rgba, Rgba8},
+    utils::ReflectEnum,
+};
 use std::ops::{Range, RangeInclusive};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -44,12 +47,12 @@ impl ReflectEnum for MaterialClass {
 // TODO: TRANSPARENT | SOLID should be possible, unclear how to represent as Rgba8 or on screen
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Material {
-    pub rgb: [u8; 3],
+    pub rgb: Rgb8,
     pub class: MaterialClass,
 }
 
 impl Material {
-    pub const fn new(rgb: [u8; 3], class: MaterialClass) -> Self {
+    pub const fn new(rgb: Rgb8, class: MaterialClass) -> Self {
         Self { rgb, class }
     }
 
@@ -85,25 +88,25 @@ impl Material {
     ];
 
     /// #360C29
-    pub const RULE_BEFORE_RGB: [u8; 3] = [0x36, 0x0C, 0x29];
+    pub const RULE_BEFORE_RGB: Rgb8 = Rgb(0x36, 0x0C, 0x29);
 
     pub const RULE_BEFORE: Self = Self::new(Self::RULE_BEFORE_RGB, MaterialClass::Rule);
 
     /// #FF6E00
-    pub const RULE_AFTER_RGB: [u8; 3] = [0xFF, 0x6E, 0x00];
+    pub const RULE_AFTER_RGB: Rgb8 = Rgb(0xFF, 0x6E, 0x00);
 
     pub const RULE_AFTER: Self = Self::new(Self::RULE_AFTER_RGB, MaterialClass::Rule);
 
     // Wildcard material
     pub const WILDCARD_ALPHA: u8 = 230;
 
-    pub const WILDCARD_RAINBOW_RGB: [[u8; 3]; 6] = [
-        [0xFF, 0x00, 0x00],
-        [0xFF, 0x99, 0x00],
-        [0xFF, 0xFF, 0x00],
-        [0x33, 0xFF, 0x00],
-        [0x00, 0x99, 0xFF],
-        [0x66, 0x33, 0xFF],
+    pub const WILDCARD_RAINBOW_RGB: [Rgb8; 6] = [
+        Rgb(0xFF, 0x00, 0x00),
+        Rgb(0xFF, 0x99, 0x00),
+        Rgb(0xFF, 0xFF, 0x00),
+        Rgb(0x33, 0xFF, 0x00),
+        Rgb(0x00, 0x99, 0xFF),
+        Rgb(0x66, 0x33, 0xFF),
     ];
 
     /// Use full rainbow instead of single color!
@@ -127,7 +130,7 @@ impl Material {
 
     pub const TRANSPARENT: Self = Self::new(Rgba8::TRANSPARENT.rgb(), MaterialClass::Transparent);
 
-    pub const fn normal(rgb: [u8; 3]) -> Self {
+    pub const fn normal(rgb: Rgb8) -> Self {
         Self {
             rgb,
             class: MaterialClass::Normal,
@@ -181,17 +184,17 @@ impl Material {
     }
 
     pub fn solid_alt_rgba(self) -> Rgba8 {
-        let [r, g, b] = self.rgb;
+        let Rgb { r, g, b } = self.rgb;
 
         if r >= 128 || g >= 128 || b >= 128 {
             // darken color
             let alpha_offset = (r & 1) | (g & 1) << 1 | (b & 1) << 2;
             let alpha = Self::SOLID_DARKEN_ALPHA_RANGE.start + alpha_offset;
             assert!(Self::SOLID_DARKEN_ALPHA_RANGE.contains(&alpha));
-            let darkened_rgb = [r >> 1, g >> 1, b >> 1];
+            let darkened_rgb = Rgb(r >> 1, g >> 1, b >> 1);
             Rgba8::from_rgb_a(darkened_rgb, alpha)
         } else {
-            let lightened_rgb = [r << 1, g << 1, b << 1];
+            let lightened_rgb = Rgb(r << 1, g << 1, b << 1);
             Rgba8::from_rgb_a(lightened_rgb, Self::SOLID_LIGHTEN_ALPHA)
         }
     }
@@ -215,7 +218,7 @@ impl From<Rgba8> for Material {
     /// how the regions look by giving them a border effect.
     fn from(rgba: Rgba8) -> Self {
         let rgb = rgba.rgb();
-        let [r, g, b, a] = rgba.to_array();
+        let Rgba { r, g, b, a } = rgba;
 
         if a == Self::OPAQUE_ALPHA {
             Self::new(rgb, MaterialClass::Normal)
@@ -232,11 +235,10 @@ impl From<Rgba8> for Material {
             let r_lsb = alpha_offset & 1;
             let g_lsb = (alpha_offset >> 1) & 1;
             let b_lsb = (alpha_offset >> 2) & 1;
-            let rgb = [(r << 1) | r_lsb, (g << 1) | g_lsb, (b << 1) | b_lsb];
+            let rgb = Rgb((r << 1) | r_lsb, (g << 1) | g_lsb, (b << 1) | b_lsb);
             Self::new(rgb, MaterialClass::Solid)
         } else if a == Self::SOLID_LIGHTEN_ALPHA {
-            let rgb = [r >> 1, g >> 1, b >> 1];
-            Self::new(rgb, MaterialClass::Solid)
+            Self::new(Rgb(r >> 1, g >> 1, b >> 1), MaterialClass::Solid)
         } else if a == Self::SOLID_MAIN_ALPHA {
             Self::new(rgb, MaterialClass::Solid)
         } else if a == Self::LEGACY_SOLID_ALPHA {

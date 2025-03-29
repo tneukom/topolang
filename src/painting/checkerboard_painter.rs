@@ -60,8 +60,10 @@ impl CheckerboardPainter {
         self.shader
             .uniform(gl, "world_to_device", &mat_world_to_device);
         // Uniform assignment converts from SRGB to linear RGB
-        self.shader.uniform(gl, "even_srgba", even_rgba.to_f32());
-        self.shader.uniform(gl, "odd_srgba", odd_rgba.to_f32());
+        self.shader
+            .uniform(gl, "even_srgba", even_rgba.to_f32().to_array());
+        self.shader
+            .uniform(gl, "odd_srgba", odd_rgba.to_f32().to_array());
 
         // Draw 2 triangles
         gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);

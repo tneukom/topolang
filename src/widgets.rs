@@ -3,7 +3,11 @@ use crate::{
     field::RgbaField,
     material::{Material, MaterialClass},
     material_effects::material_map_effects,
-    math::{point::Point, rect::Rect, rgba8::Rgba8},
+    math::{
+        point::Point,
+        rect::Rect,
+        rgba8::{Rgb8, Rgba8},
+    },
     palettes::Palette,
     pixmap::MaterialMap,
     utils::ReflectEnum,
@@ -110,7 +114,7 @@ pub fn color_chooser(ui: &mut egui::Ui, color: &mut Rgba8) -> bool {
     palette_widget(ui, &palette, color)
 }
 
-pub fn rgb_chooser(ui: &mut egui::Ui, rgb: &mut [u8; 3]) -> bool {
+pub fn rgb_chooser(ui: &mut egui::Ui, rgb: &mut Rgb8) -> bool {
     let palette = palette_chooser(ui);
 
     // Palette itself

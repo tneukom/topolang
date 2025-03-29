@@ -1,4 +1,4 @@
-use crate::math::{matrix2::Matrix2, matrix3::Matrix3, point::Point, rgba8::Rgba8};
+use crate::math::{matrix2::Matrix2, matrix3::Matrix3, point::Point};
 use glow::{self, HasContext};
 use log::warn;
 use std::collections::HashMap;

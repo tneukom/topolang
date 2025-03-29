@@ -6,7 +6,11 @@ use crate::{
     history::SnapshotCause,
     interpreter::{CompiledRules, Compiler},
     material::Material,
-    math::{point::Point, rect::Rect, rgba8::Pico8Palette},
+    math::{
+        point::Point,
+        rect::Rect,
+        rgba8::{Pico8Palette, Rgba8},
+    },
     painting::view_painter::{DrawView, ViewPainter},
     pixmap::MaterialMap,
     utils::ReflectEnum,
@@ -494,7 +498,7 @@ impl EguiApp {
                 for snapshot in path.into_iter() {
                     let mut btn = egui::Button::new(snapshot.cause().as_str());
                     if Rc::ptr_eq(snapshot, &history.head) {
-                        btn = btn.fill(Pico8Palette::ORANGE);
+                        btn = btn.fill(Rgba8::from_rgb(Pico8Palette::ORANGE));
                     }
                     if btn.ui(ui).clicked() {
                         history.head = snapshot.clone();
