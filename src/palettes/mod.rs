@@ -99,6 +99,7 @@ impl Palette {
         static PALETTES: OnceLock<Vec<Palette>> = OnceLock::new();
         let palettes = PALETTES.get_or_init(|| {
             vec![
+                Palette::palette_r_place(),
                 Palette::palette_pico8(),
                 Palette::palette_windows16(),
                 // Palette::palette_na16(),
@@ -107,7 +108,6 @@ impl Palette {
                 // Palette::palette_superfuture25(),
                 Palette::palette_distinct20(),
                 // Palette::palette_pxls_space(),
-                Palette::palette_r_place(),
             ]
         });
         palettes.as_slice()
