@@ -100,7 +100,7 @@ pub fn draw_line_slope(arrow: Arrow<f64>, width: f64) -> impl Iterator<Item = Po
     slope_draw_thin_line(Arrow::new(a, b), size == 1)
         .into_iter()
         .flat_map(move |top_left| {
-            offset_rect.iter_half_open().filter_map(move |offset| {
+            offset_rect.iter_indices().filter_map(move |offset| {
                 // Pixel centers are at half ints
                 circular_brush(offset_center, 0.5 * width, offset).then_some(top_left + offset)
             })

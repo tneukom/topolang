@@ -14,6 +14,7 @@ use crate::{
 use ahash::{HashMap, HashMapExt};
 use itertools::Itertools;
 
+
 use crate::{
     math::{pixel::Pixel, rect::Rect},
     pixmap::Pixmap,
@@ -326,7 +327,7 @@ mod test {
 
     /// Contains interior and boundary sides
     pub fn iter_sides_in_rect(rect: Rect<i64>) -> impl Iterator<Item = Side> + Clone {
-        let pixel_iter = rect.iter_half_open();
+        let pixel_iter = rect.iter_indices();
         pixel_iter.flat_map(|pixel| pixel.sides_ccw().into_iter())
     }
 

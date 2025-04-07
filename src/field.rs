@@ -40,7 +40,7 @@ impl<T> Field<T> {
         // assert!(!bounds.is_empty());
 
         let mut elems = Vec::with_capacity(bounds.width() as usize * bounds.height() as usize);
-        elems.extend(bounds.iter_half_open().map(f));
+        elems.extend(bounds.iter_indices().map(f));
         Self::from_linear(bounds, elems)
     }
 
@@ -97,7 +97,7 @@ impl<T> Field<T> {
     }
 
     pub fn indices(&self) -> impl Iterator<Item = Point<i64>> + Clone {
-        self.bounds.iter_half_open()
+        self.bounds.iter_indices()
     }
 
     pub fn enumerate(&self) -> impl Iterator<Item = (Point<i64>, &T)> + Clone {

@@ -120,7 +120,7 @@ impl<T: Copy> Pixmap<T> {
     /// Set `self[pixel]` to `other[pixel]` if `other[pixel]` is Some.
     pub fn blit(&mut self, other: &Self) {
         let rect = self.bounding_rect().intersect(other.bounding_rect());
-        for pixel in rect.iter_half_open() {
+        for pixel in rect.iter_indices() {
             if let Some(value) = other.get(pixel) {
                 self.set(pixel, value);
             }
@@ -128,7 +128,7 @@ impl<T: Copy> Pixmap<T> {
     }
 
     pub fn fill_rect(&mut self, rect: Rect<i64>, fill: T) {
-        for pixel in rect.intersect(self.bounding_rect()).iter_half_open() {
+        for pixel in rect.intersect(self.bounding_rect()).iter_indices() {
             self.set(pixel, fill);
         }
     }
@@ -169,7 +169,7 @@ impl<T: Copy + Eq> Pixmap<T> {
     ) -> impl Iterator<Item = Point<i64>> + Clone + 'a {
         // TODO: Intersect `self.bounds` and `bounds`
         bounds
-            .iter_half_open()
+            .iter_indices()
             .filter(move |&pixel| self.get(pixel) == Some(value))
     }
 

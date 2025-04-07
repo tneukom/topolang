@@ -173,7 +173,7 @@ impl World {
     pub fn rect_selection(&mut self, rect: Rect<i64>) -> Selection {
         let rect = rect.intersect(self.material_map.bounding_rect());
         let mut selection = MaterialMap::nones(rect);
-        for pixel in rect.iter_half_open() {
+        for pixel in rect.iter_indices() {
             selection.put(pixel, self.material_map.set(pixel, Material::TRANSPARENT));
         }
 

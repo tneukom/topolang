@@ -377,3 +377,16 @@ where
             .map(|(y, x)| Point::new(x, y))
     }
 }
+
+macro_rules! impl_iter_indices {
+    ($t: ty) => {
+        impl Rect<$t> {
+            pub fn iter_indices(self) -> impl Iterator<Item = Point<$t>> + Clone {
+                self.iter_half_open()
+            }
+        }
+    };
+}
+
+impl_iter_indices!(usize);
+impl_iter_indices!(i64);
