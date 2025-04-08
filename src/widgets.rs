@@ -18,30 +18,33 @@ use std::{ffi::OsStr, fs, path::PathBuf};
 
 const COLOR_BUTTON_MARGIN: f32 = 2.0;
 
-#[cached(
-    key = "(Material, usize, usize)",
-    convert = r#"{ (material, width, height) }"#
-)]
-fn material_icon(
+fn material_map_egui_texture(
     ui: &mut egui::Ui,
-    material: Material,
-    width: usize,
-    height: usize,
+    material_map: &MaterialMap,
+    background: Rgba8,
 ) -> egui::TextureHandle {
-    let bounds = Rect::low_size(Point(0, 0), Point(width as i64, height as i64));
-    let material_map = MaterialMap::filled(bounds, material);
-
-    let mut rgba_field = RgbaField::filled(bounds, Rgba8::BLACK);
+    let mut rgba_field = RgbaField::filled(material_map.bounding_rect(), background);
     material_map_effects(&material_map, &mut rgba_field);
 
-    let image = egui::ColorImage::from_rgba_unmultiplied([width, height], rgba_field.as_raw());
+    let image = egui::ColorImage::from_rgba_unmultiplied(
+        [rgba_field.width() as usize, rgba_field.height() as usize],
+        rgba_field.as_raw(),
+    );
     ui.ctx()
         .load_texture("icon_texture", image, Default::default())
 }
 
+#[cached(key = "(Material, i64)", convert = r#"{ (material, icon_size) }"#)]
+fn material_icon(ui: &mut egui::Ui, material: Material, icon_size: i64) -> egui::TextureHandle {
+    let bounds = Rect::low_size(Point(0, 0), Point(icon_size, icon_size));
+    let material_map = MaterialMap::filled(bounds, material);
+
+    material_map_egui_texture(ui, &material_map, Rgba8::BLACK)
+}
+
 /// Warning: A new egui texture is created for each material, and is cached forever.
 pub fn material_button(ui: &mut egui::Ui, material: Material, selected: bool) -> egui::Response {
-    let icon = material_icon(ui, material, 28, 28);
+    let icon = material_icon(ui, material, 28);
 
     let sized_texture = egui::load::SizedTexture::from(&icon);
     let button = egui::widgets::ImageButton::new(sized_texture).selected(selected);
@@ -179,11 +182,55 @@ pub fn material_chooser(ui: &mut egui::Ui, material: &mut Material) {
     });
 }
 
+#[cached(
+    key = "(Brush, i64, i64)",
+    convert = r#"{ (brush, icon_size, upscale) }"#
+)]
+fn brush_icon(
+    ui: &mut egui::Ui,
+    brush: Brush,
+    icon_size: i64,
+    upscale: i64,
+) -> egui::TextureHandle {
+    // Center at 0 to make upscaling the dot easier
+    let bounds = Rect::low_size(Point::ZERO, Point(icon_size, icon_size));
+    let mut material_map = MaterialMap::nones(bounds);
+
+    let center = bounds.as_f64().center();
+    let dot = brush.dot(center).integer_upscale(upscale);
+
+    // Translate dot to center
+    let offset = bounds.as_f64().center() - dot.bounding_rect().as_f64().center();
+    let dot = dot.translated(offset.as_i64());
+
+    material_map.blit(&dot);
+
+    material_map_egui_texture(ui, &material_map, Rgba8::TRANSPARENT)
+}
+
+pub fn brush_size_chooser(ui: &mut egui::Ui, size: &mut i64) {
+    ui.horizontal(|ui| {
+        for choice in 1..=6 {
+            let brush = Brush {
+                material: Material::BLACK,
+                size: choice,
+            };
+            let icon = brush_icon(ui, brush, 28, 4);
+
+            let sized_texture = egui::load::SizedTexture::from(&icon);
+            let button = egui::widgets::ImageButton::new(sized_texture).selected(*size == choice);
+            if ui.add(button).clicked() {
+                *size = choice;
+            }
+        }
+    });
+}
+
 pub fn brush_chooser(ui: &mut egui::Ui, brush: &mut Brush) {
     material_chooser(ui, &mut brush.material);
 
     // Brush shape
-    ui.add(egui::Slider::new(&mut brush.width, 1..=6).text("Radius"));
+    brush_size_chooser(ui, &mut brush.size);
     ui.separator();
 }
 

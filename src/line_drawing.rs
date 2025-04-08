@@ -87,9 +87,9 @@ pub fn circular_brush(center: Point<f64>, radius: f64, pixel: Point<i64>) -> boo
     r < radius
 }
 
-pub fn draw_line_slope(arrow: Arrow<f64>, width: f64) -> impl Iterator<Item = Point<i64>> {
-    let size = width.ceil() as i64;
+pub fn draw_line_slope(arrow: Arrow<f64>, size: i64) -> impl Iterator<Item = Point<i64>> {
     assert!(size > 0);
+
     let stamp_size = Point(size, size);
     let a = rectangle_with_center(arrow.a, stamp_size).low();
     let b = rectangle_with_center(arrow.b, stamp_size).low();
@@ -102,24 +102,10 @@ pub fn draw_line_slope(arrow: Arrow<f64>, width: f64) -> impl Iterator<Item = Po
         .flat_map(move |top_left| {
             offset_rect.iter_indices().filter_map(move |offset| {
                 // Pixel centers are at half ints
-                circular_brush(offset_center, 0.5 * width, offset).then_some(top_left + offset)
+                circular_brush(offset_center, 0.5 * size as f64, offset)
+                    .then_some(top_left + offset)
             })
         })
-}
-
-pub fn draw_line_distance_method(arrow: Arrow<f64>, radius: f64) -> Vec<Point<i64>> {
-    let bounds = arrow.bounds().padded(radius);
-    let pixel_bounds = Rect::low_high(bounds.low().floor().as_i64(), bounds.high().ceil().as_i64());
-
-    let mut result = Vec::new();
-    for pixel in pixel_bounds.iter_closed() {
-        let distance = arrow.distance(pixel.as_f64());
-        if distance < radius {
-            result.push(pixel);
-        }
-    }
-
-    result
 }
 
 #[cfg(test)]

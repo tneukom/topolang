@@ -1,12 +1,11 @@
+use crate::{
+    material::Material,
+    math::{point::Point, rect::Rect, rgba8::Rgba8},
+};
 use std::{
     io::Cursor,
     ops::{Index, IndexMut},
     path::Path,
-};
-
-use crate::{
-    material::Material,
-    math::{point::Point, rect::Rect, rgba8::Rgba8},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -217,6 +216,14 @@ impl<T: Clone> Field<T> {
 
     pub fn clipped(&self, bounds: Rect<i64>) -> Self {
         self.sub(bounds.intersect(self.bounds))
+    }
+
+    /// Scales by the given scale. The bounds rectangle is also simply multiplied by the scale.
+    pub fn integer_upscale(&self, scale: i64) -> Field<T> {
+        assert!(scale > 0);
+        Self::from_map(self.bounds * scale, |pixel| {
+            self[pixel.div_euclid(scale)].clone()
+        })
     }
 }
 

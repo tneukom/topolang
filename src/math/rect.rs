@@ -250,6 +250,24 @@ impl<T: Num> Rect<T> {
     }
 }
 
+impl<T: AsPrimitive<f64>> Rect<T> {
+    pub fn as_f64(self) -> Rect<f64> {
+        self.cwise_as()
+    }
+}
+
+impl<T: AsPrimitive<f32>> Rect<T> {
+    pub fn as_f32(self) -> Rect<f32> {
+        self.cwise_as()
+    }
+}
+
+impl<T: AsPrimitive<i64>> Rect<T> {
+    pub fn as_i64(self) -> Rect<i64> {
+        self.cwise_as()
+    }
+}
+
 /// Right hand Point add
 impl<T> Add<Point<T>> for Rect<T>
 where

@@ -158,6 +158,12 @@ impl<T: Copy> Pixmap<T> {
         }
         Self { field }
     }
+
+    pub fn integer_upscale(&self, scale: i64) -> Self {
+        Self {
+            field: self.field.integer_upscale(scale),
+        }
+    }
 }
 
 impl<T: Copy + Eq> Pixmap<T> {

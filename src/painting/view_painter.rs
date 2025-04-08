@@ -3,6 +3,7 @@ use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
     field::RgbaField,
+    material::Material,
     material_effects::{CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
     math::rect::Rect,
     painting::{
@@ -43,7 +44,11 @@ impl DrawView {
 
         let brush_preview = if view_settings.edit_mode == EditMode::Brush {
             let world_mouse = view.camera.view_to_world() * view_input.view_mouse;
-            Some(view_settings.brush.dot(world_mouse).into_rgba())
+            let field = view_settings
+                .brush
+                .dot(world_mouse)
+                .to_rgba_field(Material::TRANSPARENT);
+            Some(field)
         } else {
             None
         };

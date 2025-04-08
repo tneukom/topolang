@@ -14,7 +14,6 @@ use crate::{
 use ahash::{HashMap, HashMapExt};
 use itertools::Itertools;
 
-
 use crate::{
     math::{pixel::Pixel, rect::Rect},
     pixmap::Pixmap,

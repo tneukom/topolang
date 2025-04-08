@@ -60,10 +60,11 @@ impl<T: Num> Point<T> {
     }
 
     pub fn cwise_rem_euclid(self, rhs: Self) -> Self {
-        Point {
-            x: self.x.rem_euclid(&rhs.x),
-            y: self.y.rem_euclid(&rhs.y),
-        }
+        Point::new(self.x.rem_euclid(&rhs.x), self.y.rem_euclid(&rhs.y))
+    }
+
+    pub fn div_euclid(self, rhs: T) -> Self {
+        Self::new(self.x.div_euclid(&rhs), self.y.div_euclid(&rhs))
     }
 
     pub const E_X: Self = Point::new(T::ONE, T::ZERO);
