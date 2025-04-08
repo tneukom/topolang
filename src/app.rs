@@ -6,11 +6,7 @@ use crate::{
     history::SnapshotCause,
     interpreter::{CompiledRules, Compiler},
     material::Material,
-    math::{
-        point::Point,
-        rect::Rect,
-        rgba8::{Pico8Palette, Rgba8},
-    },
+    math::{point::Point, rect::Rect},
     painting::view_painter::{DrawView, ViewPainter},
     pixmap::MaterialMap,
     utils::ReflectEnum,
@@ -19,7 +15,6 @@ use crate::{
     world::World,
 };
 use data_encoding::BASE64;
-use egui::Widget;
 use glow::HasContext;
 use itertools::Itertools;
 use log::{info, warn};
@@ -478,10 +473,33 @@ impl EguiApp {
         }
     }
 
+    pub fn undo_redo_ui(&mut self, ui: &mut egui::Ui) {
+        let current_head = self.view.history.head.clone();
+        let history = &mut self.view.history;
+
+        // Undo, Redo buttons
+        ui.horizontal(|ui| {
+            if ui.button("⟲ Undo").clicked() {
+                history.undo();
+            }
+            if ui.button("⟳ Redo").clicked() {
+                history.redo();
+            }
+        });
+
+        // If head has changed, update world
+        if !Rc::ptr_eq(&history.head, &current_head) {
+            self.view.world = World::from_material_map(history.head.material_map().clone());
+            self.view.selection = history.head.selection().clone();
+        }
+    }
+
     /// If the user reverts to a snapshot in the history that snapshot is returned.
+    #[cfg(any())] // disabled
     pub fn history_ui(&mut self, ui: &mut egui::Ui) {
         let current_head = self.view.history.head.clone();
         let history = &mut self.view.history;
+
         // List of snapshots with cause
         let path = history.active.path_to(&history.root).unwrap();
 
@@ -505,21 +523,10 @@ impl EguiApp {
                 }
             });
 
-        // Undo, Redo buttons
-        ui.horizontal(|ui| {
-            if ui.button("⟲ Undo").clicked() {
-                history.undo();
-            }
-            if ui.button("⟳ Redo").clicked() {
-                history.redo();
-            }
-        });
-
         // If head has changed, update world
-        if !Rc::ptr_eq(&self.view.history.head, &current_head) {
-            self.view.world =
-                World::from_material_map(self.view.history.head.material_map().clone());
-            self.view.selection = self.view.history.head.selection().clone();
+        if !Rc::ptr_eq(&history.head, &current_head) {
+            self.view.world = World::from_material_map(history.head.material_map().clone());
+            self.view.selection = history.head.selection().clone();
         }
     }
 
@@ -528,15 +535,16 @@ impl EguiApp {
         ui.separator();
 
         self.copy_paste_ui(ui);
+        self.undo_redo_ui(ui);
         ui.separator();
 
         ui.label("Brush");
 
         brush_chooser(ui, &mut self.view_settings.brush);
 
-        ui.label("History");
-        self.history_ui(ui);
-        ui.separator();
+        // ui.label("History");
+        // self.history_ui(ui);
+        // ui.separator();
 
         ui.label("Run");
         self.run_ui(ui);

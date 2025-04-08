@@ -42,7 +42,7 @@ rfd = { version = "0.15.2", default-features = false, features = ["gtk3"] }
 # If neither `std` or `compile-time-rng` flags are enabled aHash will fall back on using the numeric value of
 # memory addresses as a source of randomness.
 # Meh good enough, otherwise it's a hassle with WASM
-ahash = { version ="0.8.11", default-features = false, features = ["std" ] }
+ahash = { version = "0.8.11", default-features = false, features = ["std"] }
 web-sys = "0.3.77"
 cached = "0.55.1"
 

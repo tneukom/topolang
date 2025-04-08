@@ -2,8 +2,7 @@ use super::grid_painter::GridPainter;
 use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
-    field::RgbaField
-    ,
+    field::RgbaField,
     material_effects::{material_map_effects, CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
     math::{rect::Rect, rgba8::Rgba8},
     painting::{
