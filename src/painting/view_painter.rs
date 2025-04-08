@@ -2,10 +2,10 @@ use super::grid_painter::GridPainter;
 use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
-    field::RgbaField,
-    material::Material,
-    material_effects::{CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
-    math::rect::Rect,
+    field::RgbaField
+    ,
+    material_effects::{material_map_effects, CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
+    math::{rect::Rect, rgba8::Rgba8},
     painting::{
         checkerboard_painter::CheckerboardPainter, line_painter::LinePainter,
         material_map_painter::RgbaFieldPainter,
@@ -44,10 +44,9 @@ impl DrawView {
 
         let brush_preview = if view_settings.edit_mode == EditMode::Brush {
             let world_mouse = view.camera.view_to_world() * view_input.view_mouse;
-            let field = view_settings
-                .brush
-                .dot(world_mouse)
-                .to_rgba_field(Material::TRANSPARENT);
+            let dot = view_settings.brush.dot(world_mouse);
+            let mut field = RgbaField::filled(dot.bounding_rect(), Rgba8::TRANSPARENT);
+            material_map_effects(&dot, &mut field);
             Some(field)
         } else {
             None
