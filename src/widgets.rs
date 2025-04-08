@@ -210,19 +210,24 @@ fn brush_icon(
 
 pub fn brush_size_chooser(ui: &mut egui::Ui, size: &mut i64) {
     ui.horizontal(|ui| {
-        for choice in 1..=6 {
-            let brush = Brush {
-                material: Material::BLACK,
-                size: choice,
-            };
-            let icon = brush_icon(ui, brush, 28, 4);
+        ui.scope(|ui| {
+            ui.style_mut().spacing.button_padding = egui::Vec2::new(1.0, 1.0);
 
-            let sized_texture = egui::load::SizedTexture::from(&icon);
-            let button = egui::widgets::ImageButton::new(sized_texture).selected(*size == choice);
-            if ui.add(button).clicked() {
-                *size = choice;
+            for choice in 1..=6 {
+                let brush = Brush {
+                    material: Material::BLACK,
+                    size: choice,
+                };
+                let icon = brush_icon(ui, brush, 28, 3);
+
+                let sized_texture = egui::load::SizedTexture::from(&icon);
+                let button =
+                    egui::widgets::ImageButton::new(sized_texture).selected(*size == choice);
+                if ui.add(button).clicked() {
+                    *size = choice;
+                }
             }
-        }
+        });
     });
 }
 

@@ -740,6 +740,8 @@ impl eframe::App for EguiApp {
             self.load_file(&content);
         }
 
+        ctx.style_mut(|style| style.spacing.button_padding = egui::Vec2::new(5.0, 5.0));
+
         // We cannot lock input while called clipboard_copy, clipboard_cut, ...
         // TODO: Only clone Paste, Copy, Cut events
         let events = ctx.input(|input| input.events.clone());
