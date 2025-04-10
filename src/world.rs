@@ -1,7 +1,7 @@
 use crate::{
     field::RgbaField,
     material::Material,
-    material_effects::material_map_effects,
+    material_effects::paint_material_map_effects,
     math::{rect::Rect, rgba8::Rgba8},
     pixmap::MaterialMap,
     topology::{FillRegion, RegionKey, Topology},
@@ -70,7 +70,7 @@ impl CachedRgbaField {
     fn fresh_rgba_field(&self, material_map: &MaterialMap) -> Arc<RwLock<RgbaField>> {
         if !self.expired_rgba_field.get().is_empty() {
             let mut write_rgba_field = self.rgba_field.write().unwrap();
-            material_map_effects(material_map, &mut write_rgba_field);
+            paint_material_map_effects(material_map, &mut write_rgba_field);
             self.expired_rgba_field.set(Rect::EMPTY);
         }
         self.rgba_field.clone()

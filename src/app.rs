@@ -6,7 +6,8 @@ use crate::{
     history::SnapshotCause,
     interpreter::{CompiledRules, Compiler},
     material::Material,
-    math::{point::Point, rect::Rect},
+    material_effects::material_map_effects,
+    math::{point::Point, rect::Rect, rgba8::Rgba8},
     painting::view_painter::{DrawView, ViewPainter},
     pixmap::MaterialMap,
     utils::ReflectEnum,
@@ -302,15 +303,7 @@ impl EguiApp {
                 .add_filter("png", &["png"])
                 .save_file()
             {
-                warn!("Saving to path {:?}", path.to_str());
-                let bitmap = self
-                    .view
-                    .world
-                    .material_map()
-                    .to_rgba_field(Material::TRANSPARENT);
-                if let Err(err) = bitmap.save(path) {
-                    warn!("Failed to save with error {err}");
-                }
+                self.save_to_path(path);
             }
         }
     }
@@ -327,24 +320,12 @@ impl EguiApp {
         let path = self.file_chooser.show(ui);
 
         if ui.button("Load").clicked() {
-            println!("Loading file {:?} in folder", &path);
             self.load_from_path(&path);
             ui.close_menu();
         }
 
         if ui.button("Save").clicked() {
-            println!("Saving edit scene to {}", self.file_name);
-
-            let bitmap = self
-                .view
-                .world
-                .material_map()
-                .to_rgba_field(Material::TRANSPARENT);
-            match bitmap.save(&path) {
-                Ok(_) => println!("Saved {path:?}"),
-                Err(err) => println!("Failed to save {path:?} with error {err}"),
-            }
-
+            self.save_to_path(&path);
             ui.close_menu();
         }
     }
@@ -613,6 +594,15 @@ impl EguiApp {
             }
         };
         self.load_file(&content);
+    }
+
+    fn save_to_path(&mut self, path: impl AsRef<Path>) {
+        warn!("Saving to path {:?}", path.as_ref().to_str());
+        let material_map = self.view.world.material_map();
+        let rgba_filed = material_map_effects(material_map, Rgba8::TRANSPARENT);
+        if let Err(err) = rgba_filed.save(path) {
+            warn!("Failed to save with error {err}");
+        }
     }
 
     fn central_panel(&mut self, ui: &mut egui::Ui) {

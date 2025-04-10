@@ -1,6 +1,9 @@
 use crate::{
     field::RgbaField,
-    material_effects::{material_map_effects, CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
+    material_effects::{
+        material_map_effects, CHECKERBOARD_EVEN_RGBA,
+        CHECKERBOARD_ODD_RGBA,
+    },
     math::rgba8::Rgba8,
     pixmap::MaterialMap,
 };
@@ -20,8 +23,7 @@ impl GifRecorder {
     }
 
     pub fn add_frame(&mut self, material_map: &MaterialMap) {
-        let mut rgba_field = RgbaField::filled(material_map.bounding_rect(), Rgba8::BLACK);
-        material_map_effects(material_map, &mut rgba_field);
+        let rgba_field = material_map_effects(material_map, Rgba8::TRANSPARENT);
         self.frames.push(rgba_field);
     }
 

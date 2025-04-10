@@ -1,6 +1,5 @@
 use crate::{
     brush::Brush,
-    field::RgbaField,
     material::{Material, MaterialClass},
     material_effects::material_map_effects,
     math::{
@@ -23,8 +22,7 @@ fn material_map_egui_texture(
     material_map: &MaterialMap,
     background: Rgba8,
 ) -> egui::TextureHandle {
-    let mut rgba_field = RgbaField::filled(material_map.bounding_rect(), background);
-    material_map_effects(&material_map, &mut rgba_field);
+    let rgba_field = material_map_effects(material_map, background);
 
     let image = egui::ColorImage::from_rgba_unmultiplied(
         [rgba_field.width() as usize, rgba_field.height() as usize],

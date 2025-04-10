@@ -208,7 +208,13 @@ pub fn material_effect(material_map: &MaterialMap, pixel: Point<i64>) -> Rgba8 {
     }
 }
 
-pub fn material_map_effects(material_map: &MaterialMap, rgba_field: &mut RgbaField) {
+pub fn material_map_effects(material_map: &MaterialMap, background: Rgba8) -> RgbaField {
+    let mut field = RgbaField::filled(material_map.bounding_rect(), background);
+    paint_material_map_effects(material_map, &mut field);
+    field
+}
+
+pub fn paint_material_map_effects(material_map: &MaterialMap, rgba_field: &mut RgbaField) {
     assert_eq!(material_map.bounding_rect(), rgba_field.bounds());
 
     for pixel in material_map.keys() {
@@ -222,18 +228,13 @@ pub const CHECKERBOARD_ODD_RGBA: Rgba8 = Rgba8::new(0x99, 0x99, 0x99, 0xFF);
 
 #[cfg(test)]
 mod test {
-    use crate::{
-        field::RgbaField, material_effects::material_map_effects, math::rgba8::Rgba8,
-        pixmap::MaterialMap,
-    };
+    use crate::{material_effects::material_map_effects, math::rgba8::Rgba8, pixmap::MaterialMap};
 
     #[test]
     fn test_apply_material_effects() {
-        let mut material_map =
-            MaterialMap::load("test_resources/material_effects/gates4.png").unwrap();
+        let material_map = MaterialMap::load("test_resources/material_effects/gates4.png").unwrap();
 
-        let mut rgba_field = RgbaField::filled(material_map.bounding_rect(), Rgba8::ZERO);
-        material_map_effects(&material_map, &mut rgba_field);
+        let rgba_field = material_map_effects(&material_map, Rgba8::ZERO);
 
         rgba_field
             .save("test_resources/material_effects/gates4_effects.png")

@@ -166,8 +166,7 @@ pub struct Selection {
 
 impl Selection {
     pub fn new(material_map: MaterialMap) -> Self {
-        let mut rgba_field = RgbaField::filled(material_map.bounding_rect(), Rgba8::TRANSPARENT);
-        material_map_effects(&material_map, &mut rgba_field);
+        let rgba_field = material_map_effects(&material_map, Rgba8::TRANSPARENT);
         Self {
             material_map,
             rgba_field: Arc::new(rgba_field),

@@ -3,7 +3,10 @@ use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
     field::RgbaField,
-    material_effects::{material_map_effects, CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
+    material_effects::{
+        material_map_effects, CHECKERBOARD_EVEN_RGBA,
+        CHECKERBOARD_ODD_RGBA,
+    },
     math::{rect::Rect, rgba8::Rgba8},
     painting::{
         checkerboard_painter::CheckerboardPainter, line_painter::LinePainter,
@@ -44,9 +47,8 @@ impl DrawView {
         let brush_preview = if view_settings.edit_mode == EditMode::Brush {
             let world_mouse = view.camera.view_to_world() * view_input.view_mouse;
             let dot = view_settings.brush.dot(world_mouse);
-            let mut field = RgbaField::filled(dot.bounding_rect(), Rgba8::TRANSPARENT);
-            material_map_effects(&dot, &mut field);
-            Some(field)
+            let rgba_field = material_map_effects(&dot, Rgba8::TRANSPARENT);
+            Some(rgba_field)
         } else {
             None
         };
