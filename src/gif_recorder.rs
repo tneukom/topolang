@@ -1,15 +1,12 @@
 use crate::{
     field::RgbaField,
-    material_effects::{
-        material_map_effects, CHECKERBOARD_EVEN_RGBA,
-        CHECKERBOARD_ODD_RGBA,
-    },
+    material_effects::{material_map_effects, CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
     math::rgba8::Rgba8,
     pixmap::MaterialMap,
 };
 use image::{
     codecs::gif::{GifEncoder, Repeat},
-    ExtendedColorType,
+    Delay, Frame, RgbaImage,
 };
 use std::{fs::File, path::Path};
 
@@ -27,10 +24,10 @@ impl GifRecorder {
         self.frames.push(rgba_field);
     }
 
-    pub fn export(mut self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+    pub fn export(self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         let file = File::create(path)?;
-        let mut gif_encoder = GifEncoder::new_with_speed(file, 10);
-        gif_encoder.set_repeat(Repeat::Infinite).unwrap();
+        let mut gif_encoder = GifEncoder::new(file);
+        gif_encoder.set_repeat(Repeat::Infinite)?;
 
         for mut frame in self.frames {
             // Alpha blend with checkerboard background
@@ -45,12 +42,14 @@ impl GifRecorder {
                 *color = Rgba8::from_rgb_a(composite_rgb, 0xFF);
             }
 
-            gif_encoder.encode(
-                frame.as_raw(),
-                frame.width() as u32,
-                frame.height() as u32,
-                ExtendedColorType::Rgba8,
-            )?;
+            // Convert Field<Rgba8> to Vec<u8> then to image::RgbaImage
+            let (width, height) = (frame.width(), frame.height());
+            let raw_frame: Vec<u8> = bytemuck::cast_vec(frame.into_vec());
+            let rgba_image = RgbaImage::from_raw(width as u32, height as u32, raw_frame).unwrap();
+
+            // Add frame to gif
+            let gif_frame = Frame::from_parts(rgba_image, 0, 0, Delay::from_numer_denom_ms(200, 1));
+            gif_encoder.encode_frame(gif_frame)?;
         }
 
         Ok(())

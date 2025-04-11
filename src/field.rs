@@ -193,6 +193,10 @@ impl<T> Field<T> {
         assert!(self.bounds.contains_rect(bounds));
         Field::from_map(bounds, |index| f(&self[index]))
     }
+
+    pub fn into_vec(self) -> Vec<T> {
+        self.elems
+    }
 }
 
 impl<T: Clone> Field<T> {
@@ -293,7 +297,7 @@ impl RgbaField {
     }
 
     pub fn as_raw(&self) -> &[u8] {
-        unsafe { self.as_slice().align_to::<u8>().1 }
+        bytemuck::cast_slice(self.as_slice())
     }
 
     pub fn into_material(self) -> MaterialField {
