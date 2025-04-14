@@ -1,5 +1,6 @@
 use crate::{
     brush::Brush,
+    field::RgbaField,
     material::{Material, MaterialClass},
     material_effects::material_map_effects,
     math::{
@@ -9,13 +10,24 @@ use crate::{
     },
     palettes::Palette,
     pixmap::MaterialMap,
+    rule::InputEvent,
     utils::ReflectEnum,
 };
 use cached::proc_macro::cached;
 use itertools::Itertools;
-use std::{ffi::OsStr, fs, path::PathBuf};
+use std::{ffi::OsStr, fs, path::PathBuf, sync::OnceLock};
 
 const COLOR_BUTTON_MARGIN: f32 = 2.0;
+
+fn rgba_field_egui_texture(ui: &mut egui::Ui, rgba_field: &RgbaField) -> egui::TextureHandle {
+    let image = egui::ColorImage::from_rgba_unmultiplied(
+        [rgba_field.width() as usize, rgba_field.height() as usize],
+        rgba_field.as_raw(),
+    );
+
+    ui.ctx()
+        .load_texture("icon_texture", image, Default::default())
+}
 
 fn material_map_egui_texture(
     ui: &mut egui::Ui,
@@ -23,13 +35,7 @@ fn material_map_egui_texture(
     background: Rgba8,
 ) -> egui::TextureHandle {
     let rgba_field = material_map_effects(material_map, background);
-
-    let image = egui::ColorImage::from_rgba_unmultiplied(
-        [rgba_field.width() as usize, rgba_field.height() as usize],
-        rgba_field.as_raw(),
-    );
-    ui.ctx()
-        .load_texture("icon_texture", image, Default::default())
+    rgba_field_egui_texture(ui, &rgba_field)
 }
 
 #[cached(key = "(Material, i64)", convert = r#"{ (material, icon_size) }"#)]
@@ -235,6 +241,53 @@ pub fn brush_chooser(ui: &mut egui::Ui, brush: &mut Brush) {
     // Brush shape
     brush_size_chooser(ui, &mut brush.size);
     ui.separator();
+}
+
+struct Prefab {
+    material_map: MaterialMap,
+    icon: egui::TextureHandle,
+}
+
+/// List of buttons with saved bitmaps that can be added to the world.
+pub fn prefab_picker(ui: &mut egui::Ui) -> Option<&'static MaterialMap> {
+    static PREFABS: OnceLock<Vec<Prefab>> = OnceLock::new();
+    let prefabs = PREFABS.get_or_init(|| {
+        let mut prefabs = Vec::new();
+        for input_event in InputEvent::ALL {
+            let png = input_event.symbol_png();
+            let rgba_field = RgbaField::load_from_memory(png).unwrap();
+            let material_map = MaterialMap::from(rgba_field)
+                .without(Material::WILDCARD)
+                .map(|material| material.as_normal());
+
+            let icon_rgba =
+                material_map_effects(&material_map, Rgba8::TRANSPARENT).integer_upscale(2);
+            let icon = rgba_field_egui_texture(ui, &icon_rgba);
+
+            let prefab = Prefab { material_map, icon };
+
+            prefabs.push(prefab);
+        }
+        prefabs
+    });
+
+    let mut picked = None;
+    ui.horizontal(|ui| {
+        ui.scope(|ui| {
+            ui.style_mut().spacing.button_padding =
+                egui::Vec2::new(COLOR_BUTTON_MARGIN, COLOR_BUTTON_MARGIN);
+
+            for prefab in prefabs {
+                let sized_texture = egui::load::SizedTexture::from(&prefab.icon);
+                let button = egui::widgets::ImageButton::new(sized_texture);
+                if ui.add(button).clicked() {
+                    picked = Some(&prefab.material_map)
+                }
+            }
+        });
+    });
+
+    picked
 }
 
 pub fn enum_combo<T: ReflectEnum + PartialEq + 'static>(

@@ -138,7 +138,7 @@ mod test {
         for &offset in &offsets {
             let arrow = Arrow::new(start, start + offset);
 
-            for line_pixel in draw_line_slope(arrow, 2.0) {
+            for line_pixel in draw_line_slope(arrow, 2) {
                 image[line_pixel] = Rgba8::RED;
             }
         }

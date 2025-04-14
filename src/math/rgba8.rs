@@ -40,6 +40,12 @@ impl Rgb<u8> {
     }
 
     pub const ZERO: Self = Rgb(0, 0, 0);
+    pub const RED: Self = Rgb(0xFF, 0x00, 0x00);
+    pub const BLUE: Self = Rgb(0x00, 0x00, 0xFF);
+    pub const GREEN: Self = Rgb(0x00, 0xFF, 0x00);
+    pub const CYAN: Self = Rgb(0x00, 0xFF, 0xFF);
+    pub const YELLOW: Self = Rgb(0xFF, 0xFF, 0x00);
+    pub const MAGENTA: Self = Rgb(0xFF, 0x00, 0xFF);
 }
 
 impl Rgb<f32> {

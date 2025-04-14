@@ -550,6 +550,13 @@ impl View {
         self.selection = Some(selection);
     }
 
+    /// Paste `material_map` at center of world.
+    pub fn paste(&mut self, material_map: MaterialMap) {
+        let world_center = self.world.bounding_rect().center();
+        let selection = Selection::new(material_map).with_center_at(world_center);
+        self.selection = Some(selection);
+    }
+
     pub fn resize(&mut self, bounds: Rect<i64>) {
         let mut resized = MaterialMap::filled(bounds, Material::TRANSPARENT);
         resized.blit(self.world.material_map());

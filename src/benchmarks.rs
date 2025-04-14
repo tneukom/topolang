@@ -74,7 +74,7 @@ pub fn benchmark_run() {
 
     for (i_rule, rule) in rules.rules.iter().enumerate() {
         // Print regions in pattern
-        for (region_key, region) in &rule.rule.before.regions {
+        for (region_key, region) in &rule.rule.before.topology.regions {
             println!(
                 "Region {}: color = {:?}",
                 region_key,
@@ -82,7 +82,7 @@ pub fn benchmark_run() {
             );
         }
 
-        let plan = &rule.rule.search_plan;
+        let plan = &rule.rule.before.search_plan;
         println!("=== Plan {i_rule} ===");
         plan.print();
     }

@@ -159,6 +159,12 @@ impl<T: Copy> Pixmap<T> {
         Self { field }
     }
 
+    pub fn fill_right_of_border(&mut self, border: &Border, value: T) {
+        for pixel in area_right_of_boundary(border.sides()) {
+            self.set(pixel, value);
+        }
+    }
+
     pub fn integer_upscale(&self, scale: i64) -> Self {
         Self {
             field: self.field.integer_upscale(scale),

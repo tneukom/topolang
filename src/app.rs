@@ -12,7 +12,7 @@ use crate::{
     pixmap::MaterialMap,
     utils::ReflectEnum,
     view::{EditMode, View, ViewInput, ViewSettings},
-    widgets::{brush_chooser, segmented_enum_choice, FileChooser},
+    widgets::{brush_chooser, prefab_picker, segmented_enum_choice, FileChooser},
     world::World,
 };
 use data_encoding::BASE64;
@@ -522,6 +522,11 @@ impl EguiApp {
         ui.label("Brush");
 
         brush_chooser(ui, &mut self.view_settings.brush);
+
+        if let Some(prefab) = prefab_picker(ui) {
+            self.view_settings.edit_mode = EditMode::SelectRect;
+            self.view.paste(prefab.clone());
+        }
 
         // ui.label("History");
         // self.history_ui(ui);

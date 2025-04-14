@@ -1,20 +1,89 @@
 use crate::{
+    math::point::Point,
     morphism::Morphism,
-    solver::plan::{GuessChooser, SearchPlan},
+    pixmap::MaterialMap,
+    solver::plan::SearchPlan,
     topology::{FillRegion, RegionKey, Topology},
     world::World,
 };
 use itertools::Itertools;
 
-pub struct Rule {
-    /// The pattern
-    pub before: Topology,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum InputEvent {
+    MouseLeftDown,
+    MouseLeftClick,
+    MouseRightDown,
+    MouseRightClick,
+    MouseOver,
+}
 
-    /// The substitution
-    pub after: Topology,
+impl InputEvent {
+    pub fn symbol_png(self) -> &'static [u8] {
+        match self {
+            Self::MouseLeftDown => include_bytes!("rule_images/mouse_left_down.png"),
+            Self::MouseLeftClick => include_bytes!("rule_images/mouse_left_click.png"),
+            Self::MouseRightDown => include_bytes!("rule_images/mouse_right_down.png"),
+            Self::MouseRightClick => include_bytes!("rule_images/mouse_right_click.png"),
+            Self::MouseOver => include_bytes!("rule_images/mouse_over.png"),
+        }
+    }
+
+    pub const ALL: [Self; 5] = [
+        Self::MouseLeftDown,
+        Self::MouseLeftClick,
+        Self::MouseRightDown,
+        Self::MouseRightClick,
+        Self::MouseOver,
+    ];
+}
+
+#[derive(Debug, Clone)]
+pub struct InputCondition {
+    pub event: InputEvent,
+    pub region_key: RegionKey,
+}
+
+pub struct RuleInput {
+    pub mouse_position: Point<i64>,
+    pub mouse_left_down: bool,
+    pub mouse_left_click: bool,
+    pub mouse_right_down: bool,
+    pub mouse_right_click: bool,
+}
+
+impl InputCondition {
+    pub fn is_satisfied(&self, phi: &Morphism, codom: &Topology, input: &RuleInput) -> bool {
+        // The given region contains the mouse cursor
+        let phi_region_key = phi[self.region_key];
+        let contains_mouse = codom.region_key_at(input.mouse_position) == Some(phi_region_key);
+
+        match self.event {
+            InputEvent::MouseLeftDown => contains_mouse && input.mouse_left_down,
+            InputEvent::MouseLeftClick => contains_mouse && input.mouse_left_click,
+            InputEvent::MouseRightDown => contains_mouse && input.mouse_right_down,
+            InputEvent::MouseRightClick => contains_mouse && input.mouse_right_click,
+            InputEvent::MouseOver => contains_mouse,
+        }
+    }
+}
+
+pub struct Pattern {
+    pub material_map: MaterialMap,
+
+    /// The pattern
+    pub topology: Topology,
 
     /// Plan for finding morphisms
     pub search_plan: SearchPlan,
+
+    pub input_conditions: Vec<InputCondition>,
+}
+
+pub struct Rule {
+    pub before: Pattern,
+
+    /// The substitution
+    pub after: Topology,
 }
 
 impl Rule {
@@ -37,23 +106,13 @@ impl Rule {
     }
 
     #[inline(never)]
-    pub fn new(
-        before: Topology,
-        after: Topology,
-        guess_chooser: &impl GuessChooser,
-    ) -> anyhow::Result<Self> {
+    pub fn new(before: Pattern, after: Topology) -> anyhow::Result<Self> {
         // Make sure after region map is constant on each region in `before` and `holes`.
-        for &region_key in before.regions.keys() {
-            Self::assert_phi_region_constant(&before, &after, region_key)?
+        for &region_key in before.topology.regions.keys() {
+            Self::assert_phi_region_constant(&before.topology, &after, region_key)?
         }
 
-        let search_plan = SearchPlan::for_morphism(&before, guess_chooser);
-
-        Ok(Rule {
-            before,
-            after,
-            search_plan,
-        })
+        Ok(Rule { before, after })
     }
 
     /// Given a match for the pattern `self.before` and the world, apply the substitution determined
@@ -61,7 +120,7 @@ impl Rule {
     /// Returns true if there were any changes to the world
     pub fn substitute(&self, phi: &Morphism, world: &mut World) -> bool {
         let mut fill_regions = Vec::new();
-        for (region_key, before_region) in &self.before.regions {
+        for (region_key, before_region) in &self.before.topology.regions {
             let after_material = self
                 .after
                 .material_at(before_region.top_left_interior_pixel())
@@ -89,7 +148,7 @@ pub fn stabilize(world: &mut World, rules: &Vec<Rule>) -> usize {
     loop {
         let mut applied = false;
         for rule in rules {
-            if let Some(phi) = rule.search_plan.first_solution(world.topology()) {
+            if let Some(phi) = rule.before.search_plan.first_solution(world.topology()) {
                 rule.substitute(&phi, world);
                 steps += 1;
                 applied = true;
@@ -107,7 +166,7 @@ mod test {
     use crate::{
         field::RgbaField,
         pixmap::MaterialMap,
-        rule::Rule,
+        rule::{Pattern, Rule},
         solver::plan::{SearchPlan, SimpleGuessChooser},
         topology::Topology,
         world::World,
@@ -125,17 +184,21 @@ mod test {
         let after = Topology::new(&after_material_map);
 
         let guess_chooser = SimpleGuessChooser::default();
-        let rule = Rule::new(before, after, &guess_chooser).unwrap();
+        let search_plan = SearchPlan::for_morphism(&before, &guess_chooser);
+        let pattern = Pattern {
+            material_map: before_material_map,
+            topology: before,
+            search_plan,
+            input_conditions: Vec::new(),
+        };
+        let rule = Rule::new(pattern, after).unwrap();
 
         let world_material_map = MaterialMap::load(format!("{folder}/world.png")).unwrap();
         let mut world = World::from_material_map(world_material_map);
 
         let mut application_count: usize = 0;
 
-        let guess_chooser = SimpleGuessChooser::default();
-        let search_plan = SearchPlan::for_morphism(&rule.before, &guess_chooser);
-
-        while let Some(phi) = search_plan.solutions(world.topology()).first() {
+        while let Some(phi) = rule.before.search_plan.solutions(world.topology()).first() {
             let changed = rule.substitute(&phi, &mut world);
             if !changed {
                 break;

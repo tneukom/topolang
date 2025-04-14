@@ -1,20 +1,20 @@
-use std::collections::BTreeSet;
-
 use crate::{
     field::RgbaField,
     material::Material,
     math::{
         pixel::Pixel,
+        point::Point,
         rect::{Rect, RectBounds},
         rgba8::Rgba8,
     },
     pixmap::MaterialMap,
-    rule::Rule,
-    solver::plan::{GuessChooserUsingStatistics, SearchPlan, SimpleGuessChooser},
-    topology::{BorderKey, FillRegion, Region, StrongRegionKey, Topology},
-    utils::IntoT,
+    rule::{InputCondition, InputEvent, Pattern, Rule},
+    solver::plan::{GuessChooser, GuessChooserUsingStatistics, SearchPlan, SimpleGuessChooser},
+    topology::{BorderKey, FillRegion, Region, RegionKey, StrongRegionKey, Topology},
     world::World,
 };
+use ahash::HashMap;
+use std::collections::BTreeSet;
 
 pub struct Ticked {
     pub n_applications: usize,
@@ -50,6 +50,7 @@ impl CompiledRules {
     pub fn apply(&self, world: &mut World) -> bool {
         for CompiledRule { rule, .. } in &self.rules {
             let solutions = rule
+                .before
                 .search_plan
                 .solutions_excluding(world.topology(), &self.source_region_keys);
 
@@ -134,10 +135,81 @@ impl CompiledRules {
     }
 }
 
+/// ┌────────────────┐
+/// │Wildcard padding│
+/// │   ┌────────┐   │
+/// │   │Symbol  │   │
+/// │   │        │   │
+/// │   └────────┘   │
+/// └────────────────┘
+pub struct Symbol {
+    pattern: Pattern,
+    padding_region_key: RegionKey,
+    padding_inner_border_key: BorderKey,
+}
+
+impl Symbol {
+    pub fn load(png_bytes: &[u8]) -> Self {
+        let material_field = RgbaField::load_from_memory(png_bytes)
+            .unwrap()
+            .into_material();
+        let material_map = MaterialMap::from(material_field);
+
+        // Compile material map into pattern
+        let topology = Topology::new(&material_map);
+        let guess_chooser = SimpleGuessChooser::default();
+        let search_plan = SearchPlan::for_morphism(&topology, &guess_chooser);
+
+        let padding_region_key = topology.region_key_at(Point(0, 0)).unwrap();
+        let padding_region = &topology[padding_region_key];
+
+        // Outer border and one inner border
+        assert_eq!(padding_region.boundary.borders.len(), 2);
+        let padding_inner_border_key = BorderKey::new(padding_region_key, 1);
+
+        let pattern = Pattern {
+            material_map,
+            topology,
+            search_plan,
+            input_conditions: Vec::new(),
+        };
+
+        Self {
+            pattern,
+            padding_region_key,
+            padding_inner_border_key,
+        }
+    }
+
+    /// Extract
+    pub fn extract_tagged(
+        &self,
+        topology: &Topology,
+        material_map: &mut MaterialMap,
+    ) -> Vec<RegionKey> {
+        let mut tagged = Vec::new();
+
+        for phi in self.pattern.search_plan.solutions(topology) {
+            // Remove right side of padding_inner_border, the actual symbol
+            let phi_padding_region_key = phi[self.padding_region_key];
+            let phi_padding_inner_border_key = phi[self.padding_inner_border_key];
+
+            let padding_material = topology[phi_padding_region_key].material;
+            let padding_inner_border = &topology[phi_padding_inner_border_key];
+            material_map.fill_right_of_border(padding_inner_border, padding_material);
+
+            tagged.push(phi_padding_region_key);
+        }
+
+        tagged
+    }
+}
+
 pub struct Compiler {
     rule_frame: Topology,
     before_border: BorderKey,
     after_border: BorderKey,
+    input_event_symbols: HashMap<InputEvent, Symbol>,
 }
 
 impl Compiler {
@@ -146,11 +218,11 @@ impl Compiler {
 
     pub fn new() -> Self {
         // Load rule_frame pattern from file
-        let rule_frame_pixmap = RgbaField::load_from_memory(include_bytes!("rule_frame.png"))
-            .unwrap()
-            .intot::<MaterialMap>()
-            .without(Self::RULE_FRAME_MATERIAL);
-        let rule_frame = Topology::new(&rule_frame_pixmap);
+        let rule_frame_rgba_field =
+            RgbaField::load_from_memory(include_bytes!("rule_images/rule_frame.png")).unwrap();
+        let rule_frame_material_map =
+            MaterialMap::from(rule_frame_rgba_field).without(Self::RULE_FRAME_MATERIAL);
+        let rule_frame = Topology::new(&rule_frame_material_map);
 
         // Side on the before border (inner border of the frame)
         let before_side = Pixel::new(7, 7).top_side().reversed();
@@ -165,11 +237,53 @@ impl Compiler {
             .expect("After border not found.")
             .0;
 
+        let input_event_symbols: HashMap<_, _> = InputEvent::ALL
+            .into_iter()
+            .map(|event| (event, Symbol::load(event.symbol_png())))
+            .collect();
+
         Self {
             rule_frame,
             before_border,
             after_border,
+            input_event_symbols,
         }
+    }
+
+    pub fn compile_pattern(
+        &self,
+        mut material_map: MaterialMap,
+        guess_chooser: &impl GuessChooser,
+    ) -> anyhow::Result<Pattern> {
+        let topology = Topology::new(&material_map);
+
+        // Extract symbols from pattern and add InputCondition for each tagged area.
+        let mut extracted_symbols = Vec::new();
+        for (&event, symbol) in &self.input_event_symbols {
+            for tagged_region_key in symbol.extract_tagged(&topology, &mut material_map) {
+                let tagged_strong_region_key = topology[tagged_region_key].strong_key();
+                extracted_symbols.push((event, tagged_strong_region_key));
+            }
+        }
+
+        // Update `before` Topology after extracting symbols
+        let topology = Topology::new(&material_map);
+
+        let input_conditions = extracted_symbols
+            .into_iter()
+            .map(|(event, strong_region_key)| InputCondition {
+                event,
+                region_key: topology.region_key_at(strong_region_key).unwrap(),
+            })
+            .collect();
+
+        let search_plan = SearchPlan::for_morphism(&topology, guess_chooser);
+        Ok(Pattern {
+            material_map,
+            topology,
+            search_plan,
+            input_conditions,
+        })
     }
 
     #[inline(never)]
@@ -189,6 +303,7 @@ impl Compiler {
         let world_statistics = world.topology().statistics();
         let guess_chooser = GuessChooserUsingStatistics::new(world_statistics);
 
+        // Compile each found rule
         for phi in matches {
             // Extract before and after from rule
             let phi_before_border = &topology[phi[self.before_border]];
@@ -220,7 +335,6 @@ impl Compiler {
             let before_material_map = before_material_map
                 .filter(|_, material| !material.is_rule())
                 .shrink();
-            let before = Topology::new(&before_material_map);
 
             let after_material_map = after_material_map
                 .filter(|_, material| !material.is_rule())
@@ -235,7 +349,9 @@ impl Compiler {
             let after_material_map = after_material_map.translated(offset);
             let after = Topology::new(&after_material_map);
 
-            let rule = Rule::new(before, after, &guess_chooser)?;
+            let pattern = self.compile_pattern(before_material_map, &guess_chooser)?;
+
+            let rule = Rule::new(pattern, after)?;
             let compiled_rule = CompiledRule {
                 rule,
                 source,
@@ -263,8 +379,18 @@ impl Compiler {
 #[cfg(test)]
 mod test {
     use crate::{
-        field::RgbaField, interpreter::Compiler, pixmap::MaterialMap, utils::IntoT, world::World,
+        field::RgbaField,
+        interpreter::Compiler,
+        material::Material,
+        math::rgba8::Rgb,
+        pixmap::MaterialMap,
+        rule::InputEvent,
+        solver::plan::SimpleGuessChooser,
+        utils::{IntoT, KeyValueItertools},
+        world::World,
     };
+    use ahash::HashMap;
+    use itertools::Itertools;
 
     #[test]
     fn init() {
@@ -357,5 +483,75 @@ mod test {
     #[test]
     fn circles() {
         assert_execute_world("circles", 3);
+    }
+
+    /// Extract symbols from regions.
+    #[test]
+    fn tagged_regions() {
+        let folder = format!("test_resources/compiler/symbols");
+        let compiler = Compiler::new();
+
+        let material_map = MaterialMap::load(format!("{folder}/a.png")).unwrap();
+        let guess_chooser = SimpleGuessChooser::default();
+        let pattern = compiler
+            .compile_pattern(material_map, &guess_chooser)
+            .unwrap();
+
+        let expected = MaterialMap::load(format!("{folder}/a_result.png")).unwrap();
+        assert_eq!(pattern.material_map, expected);
+
+        // pattern
+        //     .material_map
+        //     .save(format!("{folder}/a_result.png"))
+        //     .unwrap();
+
+        let event_to_region: HashMap<_, _> = pattern
+            .input_conditions
+            .iter()
+            .map(|cond| (cond.event, cond.region_key))
+            .collect();
+
+        let region_by_color = |color| {
+            pattern
+                .topology
+                .regions
+                .iter()
+                .filter_key_by_value(|region| region.material == Material::normal(color))
+                .copied()
+                .exactly_one()
+                .ok()
+                .unwrap()
+        };
+
+        let expected_event_to_region: HashMap<_, _> = [
+            (
+                InputEvent::MouseLeftDown,
+                region_by_color(Rgb(0x36, 0x90, 0xEA)),
+            ),
+            (
+                InputEvent::MouseOver,
+                region_by_color(Rgb(0x6A, 0x5C, 0xFF)),
+            ),
+            (
+                InputEvent::MouseRightDown,
+                region_by_color(Rgb(0x00, 0xFF, 0x00)),
+            ),
+            (
+                InputEvent::MouseLeftClick,
+                region_by_color(Rgb(0x6D, 0x48, 0x2F)),
+            ),
+            (
+                InputEvent::MouseRightClick,
+                region_by_color(Rgb(0x80, 0x80, 0x00)),
+            ),
+        ]
+        .into_iter()
+        .collect();
+
+        assert_eq!(expected_event_to_region, event_to_region);
+
+        // for input_condition in &pattern.input_conditions {
+        //     println!("{input_condition:?}");
+        // }
     }
 }

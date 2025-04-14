@@ -3,10 +3,7 @@ use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
     field::RgbaField,
-    material_effects::{
-        material_map_effects, CHECKERBOARD_EVEN_RGBA,
-        CHECKERBOARD_ODD_RGBA,
-    },
+    material_effects::{material_map_effects, CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
     math::{rect::Rect, rgba8::Rgba8},
     painting::{
         checkerboard_painter::CheckerboardPainter, line_painter::LinePainter,
