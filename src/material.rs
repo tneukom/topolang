@@ -65,8 +65,12 @@ impl Material {
 
     pub const SOLID_MAIN_ALPHA: u8 = 254;
     pub const SOLID_LIGHTEN_ALPHA: u8 = 253;
+
+    /// 245..253
     pub const SOLID_DARKEN_ALPHA_RANGE: Range<u8> =
         (Self::SOLID_LIGHTEN_ALPHA - 8)..Self::SOLID_LIGHTEN_ALPHA;
+
+    /// 245..254
     pub const SOLID_ALPHA_RANGE: RangeInclusive<u8> =
         Self::SOLID_DARKEN_ALPHA_RANGE.start..=Self::SOLID_MAIN_ALPHA;
 
@@ -89,12 +93,10 @@ impl Material {
 
     /// #360C29
     pub const RULE_BEFORE_RGB: Rgb8 = Rgb(0x36, 0x0C, 0x29);
-
     pub const RULE_BEFORE: Self = Self::new(Self::RULE_BEFORE_RGB, MaterialClass::Rule);
 
     /// #FF6E00
     pub const RULE_AFTER_RGB: Rgb8 = Rgb(0xFF, 0x6E, 0x00);
-
     pub const RULE_AFTER: Self = Self::new(Self::RULE_AFTER_RGB, MaterialClass::Rule);
 
     // Wildcard material
@@ -109,8 +111,7 @@ impl Material {
         Rgb(0x66, 0x33, 0xFF),
     ];
 
-    /// Use full rainbow instead of single color!
-    #[deprecated]
+    /// Wildcard Material should always be this
     pub const WILDCARD: Self = Self::new(Self::WILDCARD_RAINBOW_RGB[0], MaterialClass::Wildcard);
 
     pub const SLEEPING_ALPHA: u8 = 131;
@@ -247,7 +248,7 @@ impl From<Rgba8> for Material {
         } else if a == Self::LEGACY_SOLID_ALPHA {
             Self::new(rgb, MaterialClass::Solid)
         } else if a == Self::WILDCARD_ALPHA {
-            Self::new(rgb, MaterialClass::Wildcard)
+            Self::WILDCARD
         } else if Self::SLEEPING_ALPHAS.contains(&a) {
             Self::new(rgb, MaterialClass::Sleeping)
         } else {
