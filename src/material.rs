@@ -174,6 +174,9 @@ impl Material {
     pub fn matches(self, other: Self) -> bool {
         if self.is_wildcard() {
             other != Self::TRANSPARENT
+        } else if self.is_solid() {
+            self.rgb == other.rgb
+                && [MaterialClass::Solid, MaterialClass::Normal].contains(&other.class)
         } else {
             self == other
         }
