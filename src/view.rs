@@ -19,7 +19,6 @@ pub struct ViewInput {
     pub view_mouse: Point<f64>,
 
     pub world_mouse: Point<f64>,
-    pub world_snapped: Point<f64>,
 
     pub left_mouse_down: bool,
     pub middle_mouse_down: bool,
@@ -39,9 +38,7 @@ impl ViewInput {
         },
 
         view_mouse: Point::ZERO,
-
         world_mouse: Point::ZERO,
-        world_snapped: Point::ZERO,
 
         left_mouse_down: false,
         middle_mouse_down: false,
@@ -99,6 +96,9 @@ impl EditMode {
 pub struct ViewSettings {
     pub edit_mode: EditMode,
     pub brush: Brush,
+
+    /// No editing allowed
+    pub locked: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -481,12 +481,14 @@ impl View {
         } else if input.mouse_wheel > 0.0 {
             self.camera = self.camera.zoom_out_at_view_point(input.view_mouse).round();
         }
-        input.world_mouse = self.camera.view_to_world() * input.view_mouse;
-        input.world_snapped = self.nearest_grid_vertex(input.world_mouse);
     }
 
     pub fn handle_input(&mut self, input: &mut ViewInput, settings: &mut ViewSettings) {
         self.handle_camera_input(input);
+
+        if settings.locked {
+            return;
+        }
 
         if input.escape_pressed {
             self.cancel_selection();

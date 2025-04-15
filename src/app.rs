@@ -10,6 +10,7 @@ use crate::{
     math::{point::Point, rect::Rect, rgba8::Rgba8},
     painting::view_painter::{DrawView, ViewPainter},
     pixmap::MaterialMap,
+    rule::CanvasInput,
     utils::ReflectEnum,
     view::{EditMode, View, ViewInput, ViewSettings},
     widgets::{brush_chooser, prefab_picker, segmented_enum_choice, FileChooser},
@@ -68,6 +69,7 @@ pub struct EguiApp {
     view: View,
 
     view_input: ViewInput,
+    canvas_input: CanvasInput,
 
     new_size: Point<i64>,
     file_name: String,
@@ -120,6 +122,7 @@ impl EguiApp {
         let gl = cc.gl.clone().unwrap();
 
         let view_settings = ViewSettings {
+            locked: false,
             edit_mode: EditMode::Brush,
             brush: Brush::default(),
         };
@@ -136,6 +139,7 @@ impl EguiApp {
             file_name: "".to_string(),
             run_mode: RunMode::Paused,
             view_input: ViewInput::EMPTY,
+            canvas_input: CanvasInput::default(),
             #[cfg(not(target_arch = "wasm32"))]
             file_chooser: {
                 let saves_path = PathBuf::from("resources/saves")
@@ -165,12 +169,6 @@ impl EguiApp {
     }
 
     pub fn view_ui(&mut self, ui: &mut egui::Ui) {
-        // Mouse world position
-        // ui.label(format!(
-        //     "snapped mouse: {:?}",
-        //     self.view_input.world_snapped
-        // ));
-
         // Edit mode choices
         ui.horizontal(|ui| {
             for mode in EditMode::ALL {
@@ -419,14 +417,14 @@ impl EguiApp {
 
         if self.run_mode == RunMode::Walk {
             if let Some(compiled_rules) = &self.compiled_rules {
-                let ticked = compiled_rules.tick(&mut self.view.world, 1);
+                let ticked = compiled_rules.tick(&mut self.view.world, &self.canvas_input, 1);
                 if ticked.changed() {
                     self.record_gif_frame();
                 }
             }
         } else if self.run_mode == RunMode::Run {
             if let Some(compiled_rules) = &self.compiled_rules {
-                let ticked = compiled_rules.tick(&mut self.view.world, 256);
+                let ticked = compiled_rules.tick(&mut self.view.world, &self.canvas_input, 256);
                 if ticked.changed() {
                     self.record_gif_frame();
                 }
@@ -439,7 +437,7 @@ impl EguiApp {
         {
             self.compile();
             if let Some(compiled_rules) = &self.compiled_rules {
-                let applied = compiled_rules.apply(&mut self.view.world);
+                let applied = compiled_rules.apply(&mut self.view.world, &self.canvas_input);
                 if applied {
                     self.view.add_snapshot(SnapshotCause::Step);
                     self.record_gif_frame();
@@ -639,25 +637,37 @@ impl EguiApp {
             let wants_keyboard = ui.ctx().wants_keyboard_input();
             let hovered = response.hovered();
 
+            let mouse = &input.pointer;
+
+            let world_mouse = self.view.camera.view_to_world() * view_mouse;
+            let left_mouse_down = hovered && mouse.button_down(egui::PointerButton::Primary);
+            let right_mouse_down = hovered && mouse.button_down(egui::PointerButton::Secondary);
+            let middle_mouse_down = hovered && mouse.button_down(egui::PointerButton::Middle);
+            let left_mouse_click = hovered && mouse.button_clicked(egui::PointerButton::Primary);
+            let right_mouse_click = hovered && mouse.button_clicked(egui::PointerButton::Secondary);
+
             // TODO: wants_keyboard is false when cursor is in textbox and escape is pressed, so a
             //   selection is cancelled. It should not be cancelled!
             self.view_input = ViewInput {
                 frames,
                 view_mouse,
-
-                world_mouse: Point::ZERO,
-                world_snapped: Point::ZERO,
-
-                left_mouse_down: hovered && input.pointer.button_down(egui::PointerButton::Primary),
-                middle_mouse_down: hovered
-                    && input.pointer.button_down(egui::PointerButton::Middle),
-
+                world_mouse,
+                left_mouse_down,
+                middle_mouse_down,
                 escape_pressed: !wants_keyboard && input.key_pressed(egui::Key::Escape),
                 ctrl_down: !wants_keyboard && input.modifiers.ctrl,
                 delete_pressed: !wants_keyboard && input.key_pressed(egui::Key::Delete),
 
                 mouse_wheel: scroll_delta,
             };
+
+            self.canvas_input = CanvasInput {
+                mouse_position: world_mouse.floor().as_i64(),
+                left_mouse_down: left_mouse_down,
+                right_mouse_down: right_mouse_down,
+                left_mouse_click: left_mouse_click,
+                right_mouse_click: right_mouse_click,
+            }
         }
 
         // Reset camera requested, for example from loading World in Self::new
@@ -791,6 +801,7 @@ impl eframe::App for EguiApp {
             self.central_panel(ui);
         });
 
+        self.view_settings.locked = [RunMode::Walk, RunMode::Run].contains(&self.run_mode);
         self.view
             .handle_input(&mut self.view_input, &mut self.view_settings);
 

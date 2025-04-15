@@ -8,7 +8,7 @@ use crate::{
         rgba8::Rgba8,
     },
     pixmap::MaterialMap,
-    rule::{InputCondition, InputEvent, Pattern, Rule},
+    rule::{CanvasInput, InputCondition, InputEvent, Pattern, Rule},
     solver::plan::{GuessChooser, GuessChooserUsingStatistics, SearchPlan, SimpleGuessChooser},
     topology::{BorderKey, FillRegion, Region, RegionKey, StrongRegionKey, Topology},
     world::World,
@@ -47,7 +47,7 @@ pub struct CompiledRules {
 impl CompiledRules {
     /// Returns if a Rule was applied
     #[inline(never)]
-    pub fn apply(&self, world: &mut World) -> bool {
+    pub fn apply(&self, world: &mut World, input: &CanvasInput) -> bool {
         for CompiledRule { rule, .. } in &self.rules {
             let solutions = rule
                 .before
@@ -55,6 +55,14 @@ impl CompiledRules {
                 .solutions_excluding(world.topology(), &self.source_region_keys);
 
             for phi in solutions {
+                // Check if input conditions are satisfied
+                if !rule
+                    .before
+                    .input_conditions_satisfied(&phi, world.topology(), input)
+                {
+                    continue;
+                }
+
                 let modified = rule.substitute(&phi, world);
                 if modified {
                     return true;
@@ -77,8 +85,8 @@ impl CompiledRules {
     /// Apply rules (at most max_applications) and if world becomes stable under rules wake up
     /// all sleeping regions.
     #[inline(never)]
-    pub fn tick(&self, world: &mut World, max_applications: usize) -> Ticked {
-        let n_applications = self.stabilize(world, max_applications);
+    pub fn tick(&self, world: &mut World, input: &CanvasInput, max_applications: usize) -> Ticked {
+        let n_applications = self.stabilize(world, input, max_applications);
         if n_applications == max_applications {
             return Ticked {
                 n_applications,
@@ -100,9 +108,14 @@ impl CompiledRules {
     /// This means if returned value is smaller than max_applications world is stable, otherwise we
     /// don't know if it is stable.
     #[inline(never)]
-    pub fn stabilize(&self, world: &mut World, max_applications: usize) -> usize {
+    pub fn stabilize(
+        &self,
+        world: &mut World,
+        input: &CanvasInput,
+        max_applications: usize,
+    ) -> usize {
         for i in 0..max_applications {
-            let applied = self.apply(world);
+            let applied = self.apply(world, input);
             if !applied {
                 return i;
             }
@@ -384,7 +397,7 @@ mod test {
         material::Material,
         math::rgba8::Rgb,
         pixmap::MaterialMap,
-        rule::InputEvent,
+        rule::{CanvasInput, InputEvent},
         solver::plan::SimpleGuessChooser,
         utils::{IntoT, KeyValueItertools},
         world::World,
@@ -409,7 +422,7 @@ mod test {
 
         let mut steps = 0;
         loop {
-            let applied = rules.apply(&mut world);
+            let applied = rules.apply(&mut world, &CanvasInput::default());
             if !applied {
                 break;
             }

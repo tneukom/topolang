@@ -4,6 +4,7 @@ use crate::{
     math::rgba8::Rgba8,
     pixmap::{MaterialMap, RgbaMap},
     regions::{field_regions_fast, pixmap_regions, CompactLabels},
+    rule::CanvasInput,
     topology::Topology,
     utils::IntoT,
     world::World,
@@ -89,7 +90,7 @@ pub fn benchmark_run() {
 
     let now = Instant::now();
     loop {
-        let n_applications = rules.stabilize(&mut world, 1024);
+        let n_applications = rules.stabilize(&mut world, &CanvasInput::default(), 1024);
         if n_applications == 0 {
             break;
         }
@@ -118,7 +119,7 @@ pub fn main_benchmark() {
         let mut steps = 0usize;
         while steps < 100 {
             steps += 1;
-            let changed = compiled_rules.apply(&mut world);
+            let changed = compiled_rules.apply(&mut world, &CanvasInput::default());
             if !changed {
                 break;
             }

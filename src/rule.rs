@@ -43,25 +43,26 @@ pub struct InputCondition {
     pub region_key: RegionKey,
 }
 
-pub struct RuleInput {
+#[derive(Debug, Clone, Default)]
+pub struct CanvasInput {
     pub mouse_position: Point<i64>,
-    pub mouse_left_down: bool,
-    pub mouse_left_click: bool,
-    pub mouse_right_down: bool,
-    pub mouse_right_click: bool,
+    pub left_mouse_down: bool,
+    pub left_mouse_click: bool,
+    pub right_mouse_down: bool,
+    pub right_mouse_click: bool,
 }
 
 impl InputCondition {
-    pub fn is_satisfied(&self, phi: &Morphism, codom: &Topology, input: &RuleInput) -> bool {
+    pub fn is_satisfied(&self, phi: &Morphism, codom: &Topology, input: &CanvasInput) -> bool {
         // The given region contains the mouse cursor
         let phi_region_key = phi[self.region_key];
         let contains_mouse = codom.region_key_at(input.mouse_position) == Some(phi_region_key);
 
         match self.event {
-            InputEvent::MouseLeftDown => contains_mouse && input.mouse_left_down,
-            InputEvent::MouseLeftClick => contains_mouse && input.mouse_left_click,
-            InputEvent::MouseRightDown => contains_mouse && input.mouse_right_down,
-            InputEvent::MouseRightClick => contains_mouse && input.mouse_right_click,
+            InputEvent::MouseLeftDown => contains_mouse && input.left_mouse_down,
+            InputEvent::MouseLeftClick => contains_mouse && input.left_mouse_click,
+            InputEvent::MouseRightDown => contains_mouse && input.right_mouse_down,
+            InputEvent::MouseRightClick => contains_mouse && input.right_mouse_click,
             InputEvent::MouseOver => contains_mouse,
         }
     }
@@ -77,6 +78,19 @@ pub struct Pattern {
     pub search_plan: SearchPlan,
 
     pub input_conditions: Vec<InputCondition>,
+}
+
+impl Pattern {
+    pub fn input_conditions_satisfied(
+        &self,
+        phi: &Morphism,
+        codom: &Topology,
+        input: &CanvasInput,
+    ) -> bool {
+        self.input_conditions
+            .iter()
+            .all(|cond| cond.is_satisfied(&phi, codom, input))
+    }
 }
 
 pub struct Rule {

@@ -7,7 +7,7 @@ use std::{
     ops::{Add, Div, Mul, Neg, Rem, Sub},
 };
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct Point<T> {
     pub x: T,
     pub y: T,
