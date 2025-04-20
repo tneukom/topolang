@@ -482,6 +482,10 @@ impl Topology {
         }
     }
 
+    pub fn iter_regions(&self) -> impl Iterator<Item = (RegionKey, &Region)> + Clone {
+        self.regions.iter().map(|(&key, region)| (key, region))
+    }
+
     pub fn iter_borders(&self) -> impl Iterator<Item = &Border> + Clone {
         self.regions
             .values()
@@ -706,6 +710,14 @@ impl Topology {
                 .or_default() += 1;
         }
         statistics
+    }
+
+    pub fn regions_by_material(
+        &self,
+        material: Material,
+    ) -> impl Iterator<Item = (RegionKey, &Region)> {
+        self.iter_regions()
+            .filter(move |(_, region)| region.material == material)
     }
 }
 

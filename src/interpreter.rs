@@ -2,7 +2,6 @@ use crate::{
     field::RgbaField,
     material::Material,
     math::{
-        pixel::Pixel,
         point::Point,
         rect::{Rect, RectBounds},
         rgba8::Rgba8,
@@ -14,6 +13,7 @@ use crate::{
     world::World,
 };
 use ahash::HashMap;
+use itertools::Itertools;
 use std::collections::BTreeSet;
 
 pub struct Ticked {
@@ -54,7 +54,11 @@ impl CompiledRules {
                 .search_plan
                 .solutions_excluding(world.topology(), &self.source_region_keys);
 
+            println!("Found {} solutions for rule", solutions.len());
+
             for phi in solutions {
+                println!("{phi:?}");
+
                 // Check if input conditions are satisfied
                 if !rule
                     .before
@@ -220,8 +224,8 @@ impl Symbol {
 
 pub struct Compiler {
     rule_frame: Topology,
-    before_border: BorderKey,
-    after_border: BorderKey,
+    before_border_key: BorderKey,
+    after_border_key: BorderKey,
     input_event_symbols: HashMap<InputEvent, Symbol>,
 }
 
@@ -237,28 +241,29 @@ impl Compiler {
             MaterialMap::from(rule_frame_rgba_field).without(Self::RULE_FRAME_MATERIAL);
         let rule_frame = Topology::new(&rule_frame_material_map);
 
-        // Side on the before border (inner border of the frame)
-        let before_side = Pixel::new(7, 7).top_side().reversed();
-        let before_border = rule_frame
-            .border_containing_side(&before_side)
-            .expect("Before border not found.")
-            .0;
-
-        let after_side = Pixel::new(43, 8).top_side().reversed();
-        let after_border = rule_frame
-            .border_containing_side(&after_side)
-            .expect("After border not found.")
-            .0;
-
         let input_event_symbols: HashMap<_, _> = InputEvent::ALL
             .into_iter()
             .map(|event| (event, Symbol::load(event.symbol_png())))
             .collect();
 
+        let (before_frame_key, _) = rule_frame
+            .regions_by_material(Material::RULE_BEFORE)
+            .exactly_one()
+            .ok()
+            .unwrap();
+        let before_border_key = BorderKey::new(before_frame_key, 0);
+
+        let (after_frame_key, _) = rule_frame
+            .regions_by_material(Material::RULE_AFTER)
+            .exactly_one()
+            .ok()
+            .unwrap();
+        let after_border_key = BorderKey::new(after_frame_key, 0);
+
         Self {
             rule_frame,
-            before_border,
-            after_border,
+            before_border_key,
+            after_border_key,
             input_event_symbols,
         }
     }
@@ -318,13 +323,20 @@ impl Compiler {
 
         // Compile each found rule
         for phi in matches {
-            // Extract before and after from rule
-            let phi_before_border = &topology[phi[self.before_border]];
-            let before_material_map = material_map.right_of_border(phi_before_border).shrink();
+            // Extract everything inside the before and after regions of the rule
+
+            let phi_before_border = &topology[phi[self.before_border_key]];
+            let before_material_map = material_map
+                .left_of_border(phi_before_border)
+                .filter(|_, material| !material.is_rule())
+                .shrink();
             let before = Topology::new(&before_material_map);
 
-            let phi_after_border = &topology[phi[self.after_border]];
-            let after_material_map = material_map.right_of_border(phi_after_border).shrink();
+            let phi_after_border = &topology[phi[self.after_border_key]];
+            let after_material_map = material_map
+                .left_of_border(phi_after_border)
+                .filter(|_, material| !material.is_rule())
+                .shrink();
             let after = Topology::new(&after_material_map);
 
             // Collect regions that are part of the source for this Rule.
@@ -343,15 +355,6 @@ impl Compiler {
                     .iter()
                     .map(|&key| topology.region_at(key).unwrap().bounds()),
             );
-
-            // Remove rule areas from before and after material maps.
-            let before_material_map = before_material_map
-                .filter(|_, material| !material.is_rule())
-                .shrink();
-
-            let after_material_map = after_material_map
-                .filter(|_, material| !material.is_rule())
-                .shrink();
 
             // Find translation from after to before
             let before_bounds = before_material_map.bounding_rect();
@@ -399,7 +402,7 @@ mod test {
         pixmap::MaterialMap,
         rule::{CanvasInput, InputEvent},
         solver::plan::SimpleGuessChooser,
-        utils::{IntoT, KeyValueItertools},
+        utils::IntoT,
         world::World,
     };
     use ahash::HashMap;
@@ -527,13 +530,11 @@ mod test {
         let region_by_color = |color| {
             pattern
                 .topology
-                .regions
-                .iter()
-                .filter_key_by_value(|region| region.material == Material::normal(color))
-                .copied()
+                .regions_by_material(Material::normal(color))
                 .exactly_one()
                 .ok()
                 .unwrap()
+                .0
         };
 
         let expected_event_to_region: HashMap<_, _> = [

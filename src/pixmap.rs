@@ -1,8 +1,11 @@
 use crate::{
     field::{Field, FieldIndex, MaterialField, RgbaField},
     material::Material,
-    math::{point::Point, rect::Rect, rgba8::Rgba8},
-    regions::{area_right_of_boundary, area_right_of_boundary_bounds},
+    math::{pixel::Side, point::Point, rect::Rect, rgba8::Rgba8},
+    regions::{
+        area_left_of_boundary, area_left_of_boundary_bounds, area_right_of_boundary
+        ,
+    },
     topology::Border,
 };
 use ahash::HashMap;
@@ -149,14 +152,26 @@ impl<T: Copy> Pixmap<T> {
         }
     }
 
-    /// Returns sub pixmap with the keys right of the given border.
-    pub fn right_of_border(&self, border: &Border) -> Self {
-        let bounds = area_right_of_boundary_bounds(border.sides());
+    pub fn left_of_boundary(&self, sides: impl Iterator<Item = Side> + Clone) -> Self {
+        let bounds = area_left_of_boundary_bounds(sides.clone());
         let mut field = Field::filled(bounds, None);
-        for pixel in area_right_of_boundary(border.sides()) {
+        for pixel in area_left_of_boundary(sides) {
             field.set(pixel, self.field[pixel].clone());
         }
         Self { field }
+    }
+
+    pub fn right_of_boundary(&self, sides: impl Iterator<Item = Side> + Clone) -> Self {
+        self.left_of_boundary(sides.map(Side::reversed))
+    }
+
+    pub fn left_of_border(&self, border: &Border) -> Self {
+        self.left_of_boundary(border.sides())
+    }
+
+    /// Returns sub pixmap with the keys right of the given border.
+    pub fn right_of_border(&self, border: &Border) -> Self {
+        self.right_of_boundary(border.sides())
     }
 
     pub fn fill_right_of_border(&mut self, border: &Border, value: T) {

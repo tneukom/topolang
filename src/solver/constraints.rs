@@ -331,8 +331,12 @@ pub fn morphism_constraints(dom: &Topology) -> Vec<AnyConstraint> {
         let constraint = PreservesMaterial::new(region_key, region.material);
         constraints.push(AnyConstraint::PreservesMaterial(constraint));
 
-        let constraint = PreservesBorderCount::new(region_key, region.boundary.borders.len());
-        constraints.push(AnyConstraint::PreservesBorderCount(constraint));
+        // A bit hacky: rule frame can contain any number of interior regions, would be better
+        // to explicitly say which regions can have any number of interior regions.
+        if !region.material.is_rule() {
+            let constraint = PreservesBorderCount::new(region_key, region.boundary.borders.len());
+            constraints.push(AnyConstraint::PreservesBorderCount(constraint));
+        }
 
         if region.material.is_solid() {
             let constraint = PreservesSolid::new(dom, region_key);
