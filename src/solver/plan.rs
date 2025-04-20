@@ -650,4 +650,11 @@ mod test {
         assert_solve("wildcard_c/pattern.png", "wildcard_c/miss_1.png", 0);
         assert_solve("wildcard_c/pattern.png", "wildcard_c/miss_2.png", 0);
     }
+
+    #[test]
+    fn disjoint() {
+        assert_solve("disjoint/pattern.png", "disjoint/match_1.png", 1);
+        assert_solve("disjoint/pattern.png", "disjoint/match_2.png", 2);
+        assert_solve("disjoint/pattern.png", "disjoint/match_3.png", 4);
+    }
 }

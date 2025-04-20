@@ -297,4 +297,9 @@ mod test {
     fn wildcard_2() {
         assert_rule_application("wildcard_2", 1)
     }
+
+    #[test]
+    fn disjoint() {
+        assert_rule_application("disjoint", 1)
+    }
 }
