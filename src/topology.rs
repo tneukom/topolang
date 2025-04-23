@@ -503,16 +503,16 @@ impl Topology {
         })
     }
 
-    pub fn iter_seams(&self) -> impl Iterator<Item = Seam> + Clone + '_ {
+    pub fn iter_seams(&self) -> impl Iterator<Item = Seam> + Clone + use<'_> {
         self.iter_borders().flat_map(|border| border.atomic_seams())
     }
 
-    pub fn iter_seam_indices(&self) -> impl Iterator<Item = &SeamIndex> + Clone {
-        self.seam_indices.values()
+    pub fn iter_seam_indices(&self) -> impl Iterator<Item = SeamIndex> + Clone + use<'_> {
+        self.seam_indices.values().copied()
     }
 
-    pub fn iter_region_keys<'a>(&'a self) -> impl Iterator<Item = &'a RegionKey> + Clone + 'a {
-        self.regions.keys()
+    pub fn iter_region_keys<'a>(&'a self) -> impl Iterator<Item = RegionKey> + Clone + 'a {
+        self.regions.keys().copied()
     }
 
     pub fn iter_region_values<'a>(&'a self) -> impl Iterator<Item = &'a Region> + Clone + 'a {

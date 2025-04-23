@@ -8,7 +8,9 @@ use crate::{
     },
     pixmap::MaterialMap,
     rule::{CanvasInput, InputCondition, InputEvent, Pattern, Rule},
-    solver::plan::{GuessChooser, GuessChooserUsingStatistics, SearchPlan, SimpleGuessChooser},
+    solver::plan::{
+        GuessChooser, GuessChooserUsingStatistics, SearchPlan, SearchStrategy, SimpleGuessChooser,
+    },
     topology::{BorderKey, FillRegion, Region, RegionKey, StrongRegionKey, Topology},
     world::World,
 };
@@ -51,7 +53,8 @@ impl CompiledRules {
         for CompiledRule { rule, .. } in &self.rules {
             let solutions = rule
                 .before
-                .search_plan
+                .search_strategy
+                .main_plan
                 .solutions_excluding(world.topology(), &self.source_region_keys);
 
             println!("Found {} solutions for rule", solutions.len());
@@ -175,7 +178,7 @@ impl Symbol {
         // Compile material map into pattern
         let topology = Topology::new(&material_map);
         let guess_chooser = SimpleGuessChooser::default();
-        let search_plan = SearchPlan::for_morphism(&topology, &guess_chooser);
+        let search_strategy = SearchStrategy::for_morphism(&topology, &guess_chooser);
 
         let padding_region_key = topology.region_key_at(Point(0, 0)).unwrap();
         let padding_region = &topology[padding_region_key];
@@ -187,7 +190,7 @@ impl Symbol {
         let pattern = Pattern {
             material_map,
             topology,
-            search_plan,
+            search_strategy,
             input_conditions: Vec::new(),
         };
 
@@ -206,7 +209,7 @@ impl Symbol {
     ) -> Vec<RegionKey> {
         let mut tagged = Vec::new();
 
-        for phi in self.pattern.search_plan.solutions(topology) {
+        for phi in self.pattern.search_strategy.main_plan.solutions(topology) {
             // Remove right side of padding_inner_border, the actual symbol
             let phi_padding_region_key = phi[self.padding_region_key];
             let phi_padding_inner_border_key = phi[self.padding_inner_border_key];
@@ -295,11 +298,12 @@ impl Compiler {
             })
             .collect();
 
-        let search_plan = SearchPlan::for_morphism(&topology, guess_chooser);
+        let search_strategy = SearchStrategy::for_morphism(&topology, guess_chooser);
+
         Ok(Pattern {
             material_map,
             topology,
-            search_plan,
+            search_strategy,
             input_conditions,
         })
     }
@@ -309,7 +313,7 @@ impl Compiler {
         // Find all matches for rule_frame in world
         let matches = {
             let guess_chooser = SimpleGuessChooser::default();
-            let search_plan = SearchPlan::for_morphism(&self.rule_frame, &guess_chooser);
+            let search_plan = SearchPlan::for_morphism(&self.rule_frame, &guess_chooser, None);
             search_plan.solutions(world.topology())
         };
 
@@ -345,7 +349,7 @@ impl Compiler {
             source.extend(before.regions.values().map(Region::strong_key));
             source.extend(after.regions.values().map(Region::strong_key));
             // Rule frame regions
-            for &region_key in self.rule_frame.iter_region_keys() {
+            for region_key in self.rule_frame.iter_region_keys() {
                 let phi_region_key = phi[region_key];
                 source.insert(topology[phi_region_key].strong_key());
             }

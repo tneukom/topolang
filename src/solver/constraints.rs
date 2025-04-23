@@ -345,8 +345,8 @@ pub fn morphism_constraints(dom: &Topology) -> Vec<AnyConstraint> {
     }
 
     // Make sure region mapping is injective
-    for &region_a_key in dom.iter_region_keys() {
-        for &region_b_key in dom.iter_region_keys() {
+    for region_a_key in dom.iter_region_keys() {
+        for region_b_key in dom.iter_region_keys() {
             if region_a_key < region_b_key {
                 let constraint = DistinctRegions::new(region_a_key, region_b_key);
                 constraints.push(AnyConstraint::DistinctRegions(constraint));

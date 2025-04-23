@@ -1,4 +1,5 @@
 use crate::{
+    material::Material,
     morphism::Morphism,
     solver::{
         constraints::{morphism_constraints, AnyConstraint, Constraint},
@@ -182,6 +183,13 @@ impl GuessChooser for GuessChooserUsingStatistics {
     }
 }
 
+pub struct GuessChooserBeginningWith<After: GuessChooser> {
+    first_region: RegionKey,
+    after: After,
+}
+
+impl<After: GuessChooser> GuessChooser for GuessChooserBeginningWith<After> {}
+
 #[derive(Debug)]
 pub struct SearchStep {
     guess: Guess,
@@ -217,8 +225,13 @@ impl SearchPlan {
         variables
     }
 
-    /// Make a plan to find solutions
-    pub fn for_morphism(dom: &Topology, guess_chooser: &impl GuessChooser) -> Self {
+    /// Make a plan to find solutions. Using `first` one can fix the guess that the plan should
+    /// start with, otherwise `guess_chooser` is used to find the initial guess.
+    pub fn for_morphism(
+        dom: &Topology,
+        guess_chooser: &impl GuessChooser,
+        first: Option<Guess>,
+    ) -> Self {
         let mut available_constraints = morphism_constraints(dom);
         let available_propagations = morphism_propagations(dom);
         // for propagation in &propagations {
@@ -232,11 +245,15 @@ impl SearchPlan {
         let mut steps = Vec::new();
 
         while !free_variables.is_empty() {
-            // Pick one of the free variables and guess its image
-            let guess = guess_chooser
-                .choose(&free_variables, &assigned_variables, dom)
-                .unwrap();
-            // println!("guess: {guess:?}");
+            // TODO: Use let-chain when stable
+            let guess = if assigned_variables.is_empty() && first.is_some() {
+                first.unwrap()
+            } else {
+                guess_chooser
+                    .choose(&free_variables, &assigned_variables, dom)
+                    .unwrap()
+            };
+
             free_variables.remove(&guess.variable());
             assigned_variables.insert(guess.variable());
 
@@ -294,6 +311,13 @@ impl SearchPlan {
 
         Self { steps }
     }
+
+    // pub fn for_morphism(
+    //     dom: &Topology,
+    //     guess_chooser: &impl GuessChooser,
+    //     first: Option<Guess>,) -> Vec<(Material, Self)> {
+    //
+    // }
 
     #[inline(never)]
     pub fn search_step(
@@ -411,6 +435,50 @@ impl SearchPlan {
     }
 }
 
+pub struct SearchStrategy {
+    pub plans: Vec<(Material, SearchPlan)>,
+    pub main_plan: SearchPlan,
+}
+
+impl SearchStrategy {
+    pub fn for_morphism(dom: &Topology, guess_chooser: &impl GuessChooser) -> Self {
+        let mut plans = Vec::new();
+        for region_key in dom.iter_region_keys() {
+            let material = dom[region_key].material;
+            let first_guess = Guess::Region(region_key);
+            let plan = SearchPlan::for_morphism(dom, guess_chooser, Some(first_guess));
+            plans.push((material, plan));
+        }
+
+        let main_plan = SearchPlan::for_morphism(dom, guess_chooser, None);
+
+        Self { plans, main_plan }
+    }
+
+    #[inline(never)]
+    pub fn solutions(&self, codom: &Topology) -> Vec<Morphism> {
+        self.main_plan.solutions(codom)
+    }
+
+    /// Find all solutions `phi` where the image of `phi` contains `region_key`.
+    #[inline(never)]
+    pub fn solutions_containing(&self, codom: &Topology, region_key: RegionKey) -> Vec<Morphism> {
+        let region = &codom[region_key];
+
+        let mut solutions = Vec::new();
+        for pair in &self.plans {
+            let (first_material, plan) = pair;
+            if first_material.matches(region.material) {
+                plan.search(codom, |phi| {
+                    solutions.push(phi.clone());
+                })
+            }
+        }
+
+        solutions
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::{
@@ -487,7 +555,7 @@ mod test {
         let codom = load(format!("{folder}/{codom_filename}"));
 
         let guess_chooser = SimpleGuessChooser::default();
-        let plan = SearchPlan::for_morphism(&dom, &guess_chooser);
+        let plan = SearchPlan::for_morphism(&dom, &guess_chooser, None);
         // plan.print();
 
         let solutions = plan.solutions(&codom);

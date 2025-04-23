@@ -2,7 +2,7 @@ use crate::{
     math::point::Point,
     morphism::Morphism,
     pixmap::MaterialMap,
-    solver::plan::SearchPlan,
+    solver::plan::SearchStrategy,
     topology::{FillRegion, RegionKey, Topology},
     world::World,
 };
@@ -74,8 +74,7 @@ pub struct Pattern {
     /// The pattern
     pub topology: Topology,
 
-    /// Plan for finding morphisms
-    pub search_plan: SearchPlan,
+    pub search_strategy: SearchStrategy,
 
     pub input_conditions: Vec<InputCondition>,
 }
@@ -162,7 +161,12 @@ pub fn stabilize(world: &mut World, rules: &Vec<Rule>) -> usize {
     loop {
         let mut applied = false;
         for rule in rules {
-            if let Some(phi) = rule.before.search_plan.first_solution(world.topology()) {
+            if let Some(phi) = rule
+                .before
+                .search_strategy
+                .main_plan
+                .first_solution(world.topology())
+            {
                 rule.substitute(&phi, world);
                 steps += 1;
                 applied = true;
@@ -181,7 +185,7 @@ mod test {
         field::RgbaField,
         pixmap::MaterialMap,
         rule::{Pattern, Rule},
-        solver::plan::{SearchPlan, SimpleGuessChooser},
+        solver::plan::{SearchStrategy, SimpleGuessChooser},
         topology::Topology,
         world::World,
     };
@@ -198,11 +202,11 @@ mod test {
         let after = Topology::new(&after_material_map);
 
         let guess_chooser = SimpleGuessChooser::default();
-        let search_plan = SearchPlan::for_morphism(&before, &guess_chooser);
+        let search_strategy = SearchStrategy::for_morphism(&before, &guess_chooser);
         let pattern = Pattern {
             material_map: before_material_map,
             topology: before,
-            search_plan,
+            search_strategy,
             input_conditions: Vec::new(),
         };
         let rule = Rule::new(pattern, after).unwrap();
@@ -212,7 +216,12 @@ mod test {
 
         let mut application_count: usize = 0;
 
-        while let Some(phi) = rule.before.search_plan.solutions(world.topology()).first() {
+        while let Some(phi) = rule
+            .before
+            .search_strategy
+            .solutions(world.topology())
+            .first()
+        {
             let changed = rule.substitute(&phi, &mut world);
             if !changed {
                 break;

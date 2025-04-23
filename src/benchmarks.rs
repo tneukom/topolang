@@ -83,7 +83,7 @@ pub fn benchmark_run() {
             );
         }
 
-        let plan = &rule.rule.before.search_plan;
+        let plan = &rule.rule.before.search_strategy.main_plan;
         println!("=== Plan {i_rule} ===");
         plan.print();
     }

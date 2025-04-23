@@ -2,10 +2,7 @@ use crate::{
     field::{Field, FieldIndex, MaterialField, RgbaField},
     material::Material,
     math::{pixel::Side, point::Point, rect::Rect, rgba8::Rgba8},
-    regions::{
-        area_left_of_boundary, area_left_of_boundary_bounds, area_right_of_boundary
-        ,
-    },
+    regions::{area_left_of_boundary, area_left_of_boundary_bounds, area_right_of_boundary},
     topology::Border,
 };
 use ahash::HashMap;
