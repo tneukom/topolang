@@ -399,8 +399,8 @@ impl Compiler {
 #[cfg(test)]
 mod test {
     use crate::{
+        compiler::Compiler,
         field::RgbaField,
-        interpreter::Compiler,
         material::Material,
         math::rgba8::Rgb,
         pixmap::MaterialMap,

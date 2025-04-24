@@ -1,6 +1,6 @@
 use crate::{
+    compiler::Compiler,
     field::{Field, RgbaField},
-    interpreter::Compiler,
     math::rgba8::Rgba8,
     pixmap::{MaterialMap, RgbaMap},
     regions::{field_regions_fast, pixmap_regions, CompactLabels},
