@@ -20,6 +20,7 @@ use std::{
     hash::{Hash, Hasher},
     ops::{Index, IndexMut},
     path::Path,
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -296,6 +297,8 @@ pub struct Region {
     pub boundary: Boundary,
 
     pub material: Material,
+
+    pub modified_time: usize,
 }
 
 impl Region {
@@ -413,6 +416,8 @@ pub struct Topology {
     pub seam_indices: BTreeMap<Side, SeamIndex>,
 
     bounding_rect: Rect<i64>,
+
+    modifications: BTreeMap<usize, RegionKey>,
 }
 
 impl Topology {
@@ -426,10 +431,11 @@ impl Topology {
         let n_regions = region_bounding_rects.len();
 
         let mut regions: BTreeMap<usize, Region> = BTreeMap::new();
+        let mut modifications: BTreeMap<usize, RegionKey> = BTreeMap::new();
 
         let region_boundaries = region_boundaries(&region_map, n_regions);
 
-        for (region_id, (pre_boundary, region_bounding_rect)) in region_boundaries
+        for (region_key, (pre_boundary, region_bounding_rect)) in region_boundaries
             .into_iter()
             .zip(region_bounding_rects)
             .enumerate()
@@ -458,8 +464,11 @@ impl Topology {
                     .get(boundary.top_left_interior_pixel())
                     .unwrap(),
                 boundary: boundary,
+                modified_time: global_counter(),
             };
-            regions.insert(region_id, region);
+
+            modifications.insert(region.modified_time, region_key);
+            regions.insert(region_key, region);
         }
 
         // Build seam indices from regions
@@ -479,6 +488,7 @@ impl Topology {
             region_map,
             regions,
             seam_indices,
+            modifications: modifications,
         }
     }
 
@@ -655,8 +665,13 @@ impl Topology {
 
     /// Try to set the material of `region_key` to `material`, returns true if successful.
     pub fn try_set_region_material(&mut self, region_key: RegionKey, material: Material) -> bool {
+        let region = &self.regions.get(&region_key).unwrap();
+        if region.material == material {
+            return true;
+        }
+
         // Try to update the topology to the changed material map
-        let can_set = self[region_key]
+        let can_set = region
             .iter_seams()
             .all(|seam| self.material_right_of(seam) != Some(material));
 
@@ -664,7 +679,12 @@ impl Topology {
             return false;
         }
 
-        self[region_key].material = material;
+        let region = self.regions.get_mut(&region_key).unwrap();
+        self.modifications.remove(&region.modified_time);
+        region.modified_time = global_counter();
+        region.material = material;
+        self.modifications.insert(region.modified_time, region_key);
+
         true
     }
 
@@ -768,6 +788,11 @@ impl Display for Topology {
 
         Ok(())
     }
+}
+
+pub fn global_counter() -> usize {
+    static MTIME: AtomicUsize = AtomicUsize::new(0);
+    MTIME.fetch_add(1, Ordering::Relaxed)
 }
 
 #[cfg(test)]
