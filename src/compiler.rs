@@ -7,30 +7,18 @@ use crate::{
         rgba8::Rgba8,
     },
     pixmap::MaterialMap,
-    rule::{CanvasInput, InputCondition, InputEvent, Pattern, Rule},
+    rule::{InputCondition, InputEvent, Pattern, Rule},
     solver::plan::{
         GuessChooser, GuessChooserUsingStatistics, SearchPlan, SearchStrategy, SimpleGuessChooser,
     },
-    topology::{BorderKey, FillRegion, Region, RegionKey, StrongRegionKey, Topology},
+    topology::{BorderKey, Region, RegionKey, StrongRegionKey, Topology},
     world::World,
 };
 use ahash::HashMap;
 use itertools::Itertools;
 use std::collections::BTreeSet;
 
-pub struct Ticked {
-    pub n_applications: usize,
-    pub stabilized: bool,
-    pub n_woken_up: usize,
-}
-
-impl Ticked {
-    /// A rule was applied or a region was woken up.
-    pub fn changed(&self) -> bool {
-        self.n_applications > 0 || self.n_woken_up > 0
-    }
-}
-
+#[derive(Debug, Clone)]
 pub struct CompiledRule {
     /// All regions in the Rule frame, before and after. These elements should be hidden during Rule
     /// execution. Contains an arbitrary pixel of each region.
@@ -41,118 +29,10 @@ pub struct CompiledRule {
     pub rule: Rule,
 }
 
+#[derive(Debug, Clone)]
 pub struct CompiledRules {
     pub rules: Vec<CompiledRule>,
     pub source_region_keys: BTreeSet<StrongRegionKey>,
-}
-
-impl CompiledRules {
-    /// Returns if a Rule was applied
-    #[inline(never)]
-    pub fn apply(&self, world: &mut World, input: &CanvasInput) -> bool {
-        for CompiledRule { rule, .. } in &self.rules {
-            let solutions = rule
-                .before
-                .search_strategy
-                .main_plan
-                .solutions_excluding(world.topology(), &self.source_region_keys);
-
-            println!("Found {} solutions for rule", solutions.len());
-
-            for phi in solutions {
-                println!("{phi:?}");
-
-                // Check if input conditions are satisfied
-                if !rule
-                    .before
-                    .input_conditions_satisfied(&phi, world.topology(), input)
-                {
-                    continue;
-                }
-
-                let modified = rule.substitute(&phi, world);
-                if modified {
-                    return true;
-                }
-            }
-        }
-
-        false
-
-        // Save hidden regions to bitmap
-        // world
-        //     .clone()
-        //     .sub_topology(hidden)
-        //     .to_pixmap()
-        //     .to_bitmap_with_size(world_bitmap.size())
-        //     .save(format!("{folder}/hidden.png"))
-        //     .unwrap();
-    }
-
-    /// Apply rules (at most max_applications) and if world becomes stable under rules wake up
-    /// all sleeping regions.
-    #[inline(never)]
-    pub fn tick(&self, world: &mut World, input: &CanvasInput, max_applications: usize) -> Ticked {
-        let n_applications = self.stabilize(world, input, max_applications);
-        if n_applications == max_applications {
-            return Ticked {
-                n_applications,
-                stabilized: false,
-                n_woken_up: 0,
-            };
-        }
-
-        let n_woken_up = self.wake_up(world);
-        Ticked {
-            n_applications,
-            stabilized: true,
-            n_woken_up,
-        }
-    }
-
-    /// Apply rules until world is stable or max_applications is reached. Returns the number of
-    /// times a rule was applied.
-    /// This means if returned value is smaller than max_applications world is stable, otherwise we
-    /// don't know if it is stable.
-    #[inline(never)]
-    pub fn stabilize(
-        &self,
-        world: &mut World,
-        input: &CanvasInput,
-        max_applications: usize,
-    ) -> usize {
-        for i in 0..max_applications {
-            let applied = self.apply(world, input);
-            if !applied {
-                return i;
-            }
-        }
-        max_applications
-    }
-
-    /// Wake up all sleeping regions (replace them
-    pub fn wake_up(&self, world: &mut World) -> usize {
-        let topology = world.topology();
-
-        let mut fill_regions = Vec::new();
-        for (&region_key, region) in &topology.regions {
-            if region.material.is_sleeping() {
-                let strong_region_key = region.top_left_interior_pixel();
-                if self.source_region_keys.contains(&strong_region_key) {
-                    continue;
-                }
-
-                let fill_region = FillRegion {
-                    region_key,
-                    material: region.material.as_normal(),
-                };
-                fill_regions.push(fill_region);
-            }
-        }
-
-        world.fill_regions(&fill_regions);
-        fill_regions.len()
-    }
 }
 
 /// ┌────────────────┐
@@ -399,15 +279,8 @@ impl Compiler {
 #[cfg(test)]
 mod test {
     use crate::{
-        compiler::Compiler,
-        field::RgbaField,
-        material::Material,
-        math::rgba8::Rgb,
-        pixmap::MaterialMap,
-        rule::{CanvasInput, InputEvent},
-        solver::plan::SimpleGuessChooser,
-        utils::IntoT,
-        world::World,
+        compiler::Compiler, material::Material, math::rgba8::Rgb, pixmap::MaterialMap,
+        rule::InputEvent, solver::plan::SimpleGuessChooser,
     };
     use ahash::HashMap;
     use itertools::Itertools;
@@ -415,94 +288,6 @@ mod test {
     #[test]
     fn init() {
         let _compiler = Compiler::new();
-    }
-
-    fn assert_execute_world(name: &str, expected_steps: usize) {
-        let folder = format!("test_resources/compiler/{name}/");
-        let mut world = RgbaField::load(format!("{folder}/world.png"))
-            .unwrap()
-            .intot::<MaterialMap>()
-            .intot::<World>();
-
-        let compiler = Compiler::new();
-        let rules = compiler.compile(&mut world).unwrap();
-
-        let mut steps = 0;
-        loop {
-            let applied = rules.apply(&mut world, &CanvasInput::default());
-            if !applied {
-                break;
-            }
-            steps += 1;
-
-            // Save world to image for debugging!
-            // world
-            //     .material_map()
-            //     .to_field(Material::VOID)
-            //     .into_rgba()
-            //     .save(format!("{folder}/run_{name}_{steps}.png"))
-            //     .unwrap();
-
-            assert!(steps <= expected_steps);
-        }
-
-        // let steps = stabilize(&mut world, &rules);
-        // println!("Number of steps: {steps}");
-        assert_eq!(steps, expected_steps);
-
-        let result_pixmap = world.material_map();
-
-        let expected_pixmap = RgbaField::load(format!("{folder}/world_expected.png"))
-            .unwrap()
-            .into();
-        assert_eq!(result_pixmap, &expected_pixmap);
-    }
-
-    #[test]
-    fn basic_1() {
-        assert_execute_world("basic_1", 1);
-    }
-
-    #[test]
-    fn a() {
-        assert_execute_world("a", 3);
-    }
-
-    #[test]
-    fn b() {
-        assert_execute_world("b", 7);
-    }
-
-    #[test]
-    fn c() {
-        assert_execute_world("c", 2);
-    }
-
-    /// Failure case: Rule was applied to its own source.
-    #[test]
-    fn fail_rule_applied_to_its_source() {
-        assert_execute_world("fail_rule_applied_to_its_source", 1);
-    }
-
-    /// Failure case: Rule was applied to its own source.
-    #[test]
-    fn fail_noop() {
-        assert_execute_world("fail_noop", 0);
-    }
-
-    #[test]
-    fn gate() {
-        assert_execute_world("gate", 3);
-    }
-
-    #[test]
-    fn hole() {
-        assert_execute_world("hole", 2);
-    }
-
-    #[test]
-    fn circles() {
-        assert_execute_world("circles", 3);
     }
 
     /// Extract symbols from regions.

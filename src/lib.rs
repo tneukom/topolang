@@ -33,6 +33,7 @@ pub(crate) mod widgets;
 pub(crate) mod world;
 
 // pub(crate) mod material_effects;
+pub(crate) mod interpreter;
 pub(crate) mod material_effects;
 pub(crate) mod solver;
 

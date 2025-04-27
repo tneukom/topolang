@@ -5,6 +5,7 @@ use crate::{
     field::RgbaField,
     gif_recorder::GifRecorder,
     history::SnapshotCause,
+    interpreter::{Interpreter, InterpreterError, Ticked},
     material::Material,
     material_effects::material_map_effects,
     math::{point::Point, rect::Rect, rgba8::Rgba8},
@@ -75,7 +76,7 @@ pub struct EguiApp {
     file_name: String,
     // current_folder: PathBuf,
     compiler: Compiler,
-    compiled_rules: Option<CompiledRules>,
+    interpreter: Option<Interpreter>,
     run_mode: RunMode,
 
     // stabilize: bool,
@@ -148,7 +149,7 @@ impl EguiApp {
                 FileChooser::new(saves_path)
             },
             compiler: Compiler::new(),
-            compiled_rules: None,
+            interpreter: None,
             gif_recorder: None,
             clipboard: None,
             channel_sender,
@@ -393,12 +394,18 @@ impl EguiApp {
     }
 
     pub fn compile(&mut self) {
+        info!("Compiling");
         let compiled_rules = self.compiler.compile(&self.view.world);
-        if let Err(err) = &compiled_rules {
-            println!("Failed to compile with error {err}");
+        match compiled_rules {
+            Ok(compiled_rules) => {
+                self.interpreter = Some(Interpreter::new(compiled_rules));
+                info!("Compiling successful");
+            }
+            Err(err) => {
+                warn!("Failed to compile with error {err}");
+                self.interpreter = None;
+            }
         }
-
-        self.compiled_rules = compiled_rules.ok();
     }
 
     pub fn run_ui(&mut self, ui: &mut egui::Ui) {
@@ -407,7 +414,6 @@ impl EguiApp {
         segmented_enum_choice(ui, &mut self.run_mode);
 
         if self.run_mode != RunMode::Paused && run_mode_before == RunMode::Paused {
-            println!("Compiling");
             self.compile();
         }
 
@@ -416,17 +422,25 @@ impl EguiApp {
         }
 
         if self.run_mode == RunMode::Walk {
-            if let Some(compiled_rules) = &self.compiled_rules {
-                let ticked = compiled_rules.tick(&mut self.view.world, &self.canvas_input, 1);
-                if ticked.changed() {
-                    self.record_gif_frame();
-                }
-            }
+            todo!("Fix");
+            // if let Some(interpreter) = &mut self.interpreter {
+            //     if let Ok(ticked) = interpreter.tick(&mut self.view.world, &self.canvas_input, 1) {
+            //         if ticked.changed() {
+            //             self.record_gif_frame();
+            //         }
+            //     } else {
+            //         println!("Max modifications reached!");
+            //     }
+            // }
         } else if self.run_mode == RunMode::Run {
-            if let Some(compiled_rules) = &self.compiled_rules {
-                let ticked = compiled_rules.tick(&mut self.view.world, &self.canvas_input, 256);
-                if ticked.changed() {
-                    self.record_gif_frame();
+            if let Some(interpreter) = &mut self.interpreter {
+                if let Ok(ticked) = interpreter.tick(&mut self.view.world, &self.canvas_input, 256)
+                {
+                    if ticked.changed() {
+                        self.record_gif_frame();
+                    }
+                } else {
+                    println!("Max modifications reached!");
                 }
             }
         }
@@ -436,16 +450,18 @@ impl EguiApp {
             .clicked()
         {
             self.compile();
-            if let Some(compiled_rules) = &self.compiled_rules {
-                let applied = compiled_rules.apply(&mut self.view.world, &self.canvas_input);
-                if applied {
-                    self.view.add_snapshot(SnapshotCause::Step);
-                    self.record_gif_frame();
-                } else {
-                    let n_woken_up = compiled_rules.wake_up(&mut self.view.world);
-                    if n_woken_up > 0 {
+            if let Some(interpreter) = &mut self.interpreter {
+                let ticked = interpreter.tick(&mut self.view.world, &self.canvas_input, 1);
+                match ticked {
+                    Ok(ticked) => {
+                        if ticked.n_woken_up > 0 {
+                            self.record_gif_frame();
+                            self.view.add_snapshot(SnapshotCause::Wakeup);
+                        }
+                    }
+                    Err(_) => {
+                        self.view.add_snapshot(SnapshotCause::Step);
                         self.record_gif_frame();
-                        self.view.add_snapshot(SnapshotCause::Wakeup);
                     }
                 }
             }

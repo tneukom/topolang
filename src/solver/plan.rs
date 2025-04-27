@@ -190,13 +190,54 @@ pub struct GuessChooserBeginningWith<After: GuessChooser> {
 
 impl<After: GuessChooser> GuessChooser for GuessChooserBeginningWith<After> {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SearchStep {
     guess: Guess,
     propagations: Vec<AnyPropagation>,
     constraints: Vec<AnyConstraint>,
 }
 
+pub enum SearchError {
+    PropagationFailed,
+    ConstraintConflict,
+}
+
+impl SearchStep {
+    pub fn propagate(&self, phi: &mut Morphism, codom: &Topology) -> Result<(), SearchError> {
+        for propagation in &self.propagations {
+            let derived = propagation.derives();
+            match propagation.derive(phi, codom) {
+                Ok(phi_derived) => {
+                    // println!(
+                    //     "Propagated by {} {:?} -> {:?}",
+                    //     propagation.name(),
+                    //     derived,
+                    //     phi_derived
+                    // );
+                    phi.insert(derived, phi_derived);
+                }
+                Err(_err) => {
+                    // println!("Propagation {propagation:?} failed");
+                    return Err(SearchError::PropagationFailed);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn check_constraints(&self, phi: &Morphism, codom: &Topology) -> Result<(), SearchError> {
+        for constraint in &self.constraints {
+            if !constraint.is_satisfied(phi, codom) {
+                return Err(SearchError::ConstraintConflict);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SearchPlan {
     steps: Vec<SearchStep>,
 }
@@ -337,30 +378,12 @@ impl SearchPlan {
         let step = &self.steps[i_step];
 
         step.guess.guess(phi, codom, |phi| {
-            for propagation in &step.propagations {
-                let derived = propagation.derives();
-                match propagation.derive(phi, codom) {
-                    Ok(phi_derived) => {
-                        // println!(
-                        //     "Propagated by {} {:?} -> {:?}",
-                        //     propagation.name(),
-                        //     derived,
-                        //     phi_derived
-                        // );
-                        phi.insert(derived, phi_derived);
-                    }
-                    Err(_err) => {
-                        // println!("Propagation {propagation:?} failed");
-                        return;
-                    }
-                }
+            if step.propagate(phi, codom).is_err() {
+                return;
             }
 
-            for constraint in &step.constraints {
-                if !constraint.is_satisfied(phi, codom) {
-                    // println!("Constraint {constraint:?} failed");
-                    return;
-                }
+            if step.check_constraints(phi, codom).is_err() {
+                return;
             }
 
             self.search_step(i_step + 1, phi, codom, found);
@@ -371,6 +394,33 @@ impl SearchPlan {
     pub fn search(&self, codom: &Topology, mut found: impl FnMut(&Morphism)) {
         let mut phi = Morphism::new();
         self.search_step(0, &mut phi, codom, &mut found);
+    }
+
+    #[inline(never)]
+    pub fn search_with_first_guessed(
+        &self,
+        codom: &Topology,
+        phi_region_key: RegionKey,
+        mut found: impl FnMut(&Morphism),
+    ) {
+        let first_step = self.steps.first().unwrap();
+
+        // Create Morphism with first guess assigned
+        let mut phi = Morphism::new();
+        let Guess::Region(region_key) = first_step.guess else {
+            panic!("First guess must be region");
+        };
+        phi.region_map.insert(region_key, phi_region_key);
+
+        if first_step.propagate(&mut phi, codom).is_err() {
+            return;
+        }
+
+        if first_step.check_constraints(&phi, codom).is_err() {
+            return;
+        }
+
+        self.search_step(1, &mut phi, codom, &mut found);
     }
 
     #[inline(never)]
@@ -435,6 +485,7 @@ impl SearchPlan {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct SearchStrategy {
     pub plans: Vec<(Material, SearchPlan)>,
     pub main_plan: SearchPlan,
@@ -455,24 +506,37 @@ impl SearchStrategy {
         Self { plans, main_plan }
     }
 
+    /// Find all solutions `phi` where the image of `phi` contains `region_key` but does not
+    /// contain any element in `excluded`.
     #[inline(never)]
-    pub fn solutions(&self, codom: &Topology) -> Vec<Morphism> {
-        self.main_plan.solutions(codom)
-    }
-
-    /// Find all solutions `phi` where the image of `phi` contains `region_key`.
-    #[inline(never)]
-    pub fn solutions_containing(&self, codom: &Topology, region_key: RegionKey) -> Vec<Morphism> {
-        let region = &codom[region_key];
-
+    pub fn solutions(
+        &self,
+        codom: &Topology,
+        contained: Option<RegionKey>,
+        excluded: &BTreeSet<StrongRegionKey>,
+    ) -> Vec<Morphism> {
         let mut solutions = Vec::new();
-        for pair in &self.plans {
-            let (first_material, plan) = pair;
-            if first_material.matches(region.material) {
-                plan.search(codom, |phi| {
-                    solutions.push(phi.clone());
-                })
+        // Without the explicit type annotation of the lambda fails to compile, weird. Maybe the
+        // lifetime it derives for phi is wrong.
+        let mut on_solution_found = |phi: &Morphism| {
+            if !SearchPlan::is_excluded(phi, codom, excluded) {
+                solutions.push(phi.clone());
             }
+        };
+
+        if let Some(contained) = contained {
+            let region = &codom[contained];
+            for pair in &self.plans {
+                let (first_material, plan) = pair;
+                if first_material.matches(region.material) {
+                    plan.search_with_first_guessed(codom, contained, &mut on_solution_found)
+                }
+            }
+        } else {
+            // self.main_plan.search(codom, |phi| {
+
+            // })
+            self.main_plan.search(codom, &mut on_solution_found)
         }
 
         solutions

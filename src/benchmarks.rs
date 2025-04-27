@@ -1,6 +1,7 @@
 use crate::{
     compiler::Compiler,
     field::{Field, RgbaField},
+    interpreter::Interpreter,
     math::rgba8::Rgba8,
     pixmap::{MaterialMap, RgbaMap},
     regions::{field_regions_fast, pixmap_regions, CompactLabels},
@@ -89,14 +90,8 @@ pub fn benchmark_run() {
     }
 
     let now = Instant::now();
-    loop {
-        let n_applications = rules.stabilize(&mut world, &CanvasInput::default(), 1024);
-        if n_applications == 0 {
-            break;
-        }
-        rules.wake_up(&mut world);
-        println!("Evolved n_applications = {n_applications}");
-    }
+    let mut interpreter = Interpreter::new(rules.clone());
+    interpreter.stabilize(&mut world, &CanvasInput::default(), 1024);
     println!("elapsed = {:.3?}", now.elapsed());
 }
 
@@ -114,18 +109,14 @@ pub fn main_benchmark() {
 
         let mut world = original_world.clone();
         let compiled_rules = compiler.compile(&world).unwrap();
+        let mut interpreter = Interpreter::new(compiled_rules);
 
         let now = Instant::now();
-        let mut steps = 0usize;
-        while steps < 100 {
-            steps += 1;
-            let changed = compiled_rules.apply(&mut world, &CanvasInput::default());
-            if !changed {
-                break;
-            }
-        }
+        interpreter
+            .stabilize(&mut world, &CanvasInput::default(), 100)
+            .ok();
 
-        println!("steps = {}, elapsed = {:.3?}", steps, now.elapsed());
+        println!("elapsed = {:.3?}", now.elapsed());
     }
 }
 

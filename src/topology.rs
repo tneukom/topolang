@@ -13,14 +13,18 @@ use crate::{
 };
 use ahash::HashMap;
 use itertools::Itertools;
+use log::info;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     fmt,
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
-    ops::{Index, IndexMut},
+    ops::{
+        Bound::{Excluded, Unbounded},
+        Index, IndexMut,
+    },
     path::Path,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicI64, Ordering},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -298,7 +302,7 @@ pub struct Region {
 
     pub material: Material,
 
-    pub modified_time: usize,
+    pub modified_time: ModificationTime,
 }
 
 impl Region {
@@ -417,12 +421,16 @@ pub struct Topology {
 
     bounding_rect: Rect<i64>,
 
-    modifications: BTreeMap<usize, RegionKey>,
+    modifications: BTreeMap<ModificationTime, RegionKey>,
 }
 
 impl Topology {
     pub fn bounding_rect(&self) -> Rect<i64> {
         self.bounding_rect
+    }
+
+    pub fn modifications(&self) -> &BTreeMap<ModificationTime, RegionKey> {
+        &self.modifications
     }
 
     #[inline(never)]
@@ -431,7 +439,7 @@ impl Topology {
         let n_regions = region_bounding_rects.len();
 
         let mut regions: BTreeMap<usize, Region> = BTreeMap::new();
-        let mut modifications: BTreeMap<usize, RegionKey> = BTreeMap::new();
+        let mut modifications: BTreeMap<ModificationTime, RegionKey> = BTreeMap::new();
 
         let region_boundaries = region_boundaries(&region_map, n_regions);
 
@@ -464,7 +472,7 @@ impl Topology {
                     .get(boundary.top_left_interior_pixel())
                     .unwrap(),
                 boundary: boundary,
-                modified_time: global_counter(),
+                modified_time: modification_time_counter(),
             };
 
             modifications.insert(region.modified_time, region_key);
@@ -488,7 +496,7 @@ impl Topology {
             region_map,
             regions,
             seam_indices,
-            modifications: modifications,
+            modifications,
         }
     }
 
@@ -681,9 +689,14 @@ impl Topology {
 
         let region = self.regions.get_mut(&region_key).unwrap();
         self.modifications.remove(&region.modified_time);
-        region.modified_time = global_counter();
+        let modified_time = modification_time_counter();
+        info!(
+            "increasing modified_time of Region {} from {} to {}",
+            region_key, region.modified_time, modified_time
+        );
+        region.modified_time = modified_time;
         region.material = material;
-        self.modifications.insert(region.modified_time, region_key);
+        self.modifications.insert(modified_time, region_key);
 
         true
     }
@@ -739,6 +752,22 @@ impl Topology {
         self.iter_regions()
             .filter(move |(_, region)| region.material == material)
     }
+
+    pub fn modifications_after(
+        &self,
+        mtime: ModificationTime,
+    ) -> impl Iterator<Item = (ModificationTime, RegionKey)> + use<'_> {
+        self.modifications
+            .range((Excluded(mtime), Unbounded))
+            .map(|(&mtime, &region_key)| (mtime, region_key))
+    }
+
+    pub fn first_modification_after(
+        &self,
+        mtime: ModificationTime,
+    ) -> Option<(ModificationTime, RegionKey)> {
+        self.modifications_after(mtime).next()
+    }
 }
 
 /// Warning: Slow
@@ -790,8 +819,10 @@ impl Display for Topology {
     }
 }
 
-pub fn global_counter() -> usize {
-    static MTIME: AtomicUsize = AtomicUsize::new(0);
+pub type ModificationTime = i64;
+
+pub fn modification_time_counter() -> ModificationTime {
+    static MTIME: AtomicI64 = AtomicI64::new(0);
     MTIME.fetch_add(1, Ordering::Relaxed)
 }
 

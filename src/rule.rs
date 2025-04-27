@@ -3,10 +3,11 @@ use crate::{
     morphism::Morphism,
     pixmap::MaterialMap,
     solver::plan::SearchStrategy,
-    topology::{FillRegion, RegionKey, Topology},
+    topology::{FillRegion, RegionKey, StrongRegionKey, Topology},
     world::World,
 };
 use itertools::Itertools;
+use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputEvent {
@@ -68,6 +69,7 @@ impl InputCondition {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Pattern {
     pub material_map: MaterialMap,
 
@@ -92,6 +94,14 @@ impl Pattern {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct RuleApplicationContext<'a> {
+    pub contained: Option<RegionKey>,
+    pub excluded: &'a BTreeSet<StrongRegionKey>,
+    pub input: &'a CanvasInput,
+}
+
+#[derive(Debug, Clone)]
 pub struct Rule {
     pub before: Pattern,
 
@@ -154,28 +164,33 @@ impl Rule {
         let modified = world.fill_regions(&fill_regions);
         modified
     }
-}
 
-pub fn stabilize(world: &mut World, rules: &Vec<Rule>) -> usize {
-    let mut steps: usize = 0;
-    loop {
-        let mut applied = false;
-        for rule in rules {
-            if let Some(phi) = rule
-                .before
+    /// Apply rule until `world` has changed or is stable under `rule`, only matches that contain
+    /// `contained` are considered.
+    /// Returns true if a modification was made.
+    pub fn apply(&self, world: &mut World, ctx: &RuleApplicationContext) -> bool {
+        let topology = world.topology();
+        let solutions =
+            self.before
                 .search_strategy
-                .main_plan
-                .first_solution(world.topology())
+                .solutions(topology, ctx.contained, ctx.excluded);
+
+        for phi in solutions {
+            // Check if input conditions are satisfied
+            if !self
+                .before
+                .input_conditions_satisfied(&phi, world.topology(), ctx.input)
             {
-                rule.substitute(&phi, world);
-                steps += 1;
-                applied = true;
+                continue;
+            }
+
+            let modified = self.substitute(&phi, world);
+            if modified {
+                return true;
             }
         }
 
-        if !applied {
-            return steps;
-        }
+        false
     }
 }
 
@@ -189,6 +204,7 @@ mod test {
         topology::Topology,
         world::World,
     };
+    use std::collections::BTreeSet;
 
     fn assert_rule_application(folder: &str, expected_application_count: usize) {
         let folder = format!("test_resources/rules/{folder}");
@@ -219,7 +235,7 @@ mod test {
         while let Some(phi) = rule
             .before
             .search_strategy
-            .solutions(world.topology())
+            .solutions(world.topology(), None, &BTreeSet::default())
             .first()
         {
             let changed = rule.substitute(&phi, &mut world);
