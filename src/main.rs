@@ -88,10 +88,10 @@ pub fn main() {
         // use seamlang::benchmarks::main_benchmark;
         // main_benchmark();
 
-        // use seamlang::benchmarks::benchmark_run;
-        // benchmark_run();
+        use seamlang::benchmarks::benchmark_run;
+        benchmark_run();
 
-        main_editor();
+        // main_editor();
 
         // benchmark_topology_new();
         // color_replace();

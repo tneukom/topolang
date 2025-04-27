@@ -69,30 +69,49 @@ pub fn main_benchmark_pixmap_regions() {
 pub fn benchmark_run() {
     let folder = "test_resources/benchmark";
     let material_map = MaterialMap::load(format!("{folder}/hex_wave.png")).unwrap();
-    let mut world = World::from(material_map);
+    let world = World::from(material_map);
 
     let compiler = Compiler::new();
     let rules = compiler.compile(&world).unwrap();
 
-    for (i_rule, rule) in rules.rules.iter().enumerate() {
-        // Print regions in pattern
-        for (region_key, region) in &rule.rule.before.topology.regions {
-            println!(
-                "Region {}: color = {:?}",
-                region_key,
-                region.material.to_rgba().hex()
-            );
+    // for (i_rule, rule) in rules.rules.iter().enumerate() {
+    //     // Print regions in pattern
+    //     for (region_key, region) in &rule.rule.before.topology.regions {
+    //         println!(
+    //             "Region {}: color = {:?}",
+    //             region_key,
+    //             region.material.to_rgba().hex()
+    //         );
+    //     }
+    //
+    //     let plan = &rule.rule.before.search_strategy.main_plan;
+    //     println!("=== Plan {i_rule} ===");
+    //     plan.print();
+    // }
+
+    for _ in 0..50 {
+        let mut interpreter = Interpreter::new(rules.clone());
+        let mut world = world.clone();
+
+        let now = Instant::now();
+        let mut ticks = 0usize;
+        loop {
+            ticks += 1;
+            let ticked = interpreter
+                .tick(&mut world, &CanvasInput::default(), 1024)
+                .unwrap();
+            if !ticked.changed() {
+                break;
+            }
+
+            // For debugging, save each image
+            // world
+            //     .material_map()
+            //     .save(format!("benchmark_{ticks}.png"))
+            //     .unwrap();
         }
-
-        let plan = &rule.rule.before.search_strategy.main_plan;
-        println!("=== Plan {i_rule} ===");
-        plan.print();
+        println!("elapsed = {:.3?}, ticks = {}", now.elapsed(), ticks);
     }
-
-    let now = Instant::now();
-    let mut interpreter = Interpreter::new(rules.clone());
-    interpreter.stabilize(&mut world, &CanvasInput::default(), 1024);
-    println!("elapsed = {:.3?}", now.elapsed());
 }
 
 pub fn main_benchmark() {

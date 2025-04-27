@@ -13,7 +13,6 @@ use crate::{
 };
 use ahash::HashMap;
 use itertools::Itertools;
-use log::info;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     fmt,
@@ -690,10 +689,10 @@ impl Topology {
         let region = self.regions.get_mut(&region_key).unwrap();
         self.modifications.remove(&region.modified_time);
         let modified_time = modification_time_counter();
-        info!(
-            "increasing modified_time of Region {} from {} to {}",
-            region_key, region.modified_time, modified_time
-        );
+        // info!(
+        //     "increasing modified_time of Region {} from {} to {}",
+        //     region_key, region.modified_time, modified_time
+        // );
         region.modified_time = modified_time;
         region.material = material;
         self.modifications.insert(modified_time, region_key);

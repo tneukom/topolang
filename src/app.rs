@@ -1,11 +1,11 @@
 use crate::{
     brush::Brush,
-    compiler::{CompiledRules, Compiler},
+    compiler::Compiler,
     coordinate_frame::CoordinateFrames,
     field::RgbaField,
     gif_recorder::GifRecorder,
     history::SnapshotCause,
-    interpreter::{Interpreter, InterpreterError, Ticked},
+    interpreter::Interpreter,
     material::Material,
     material_effects::material_map_effects,
     math::{point::Point, rect::Rect, rgba8::Rgba8},

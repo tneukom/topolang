@@ -203,6 +203,7 @@ pub enum SearchError {
 }
 
 impl SearchStep {
+    #[inline(never)]
     pub fn propagate(&self, phi: &mut Morphism, codom: &Topology) -> Result<(), SearchError> {
         for propagation in &self.propagations {
             let derived = propagation.derives();
@@ -226,6 +227,7 @@ impl SearchStep {
         Ok(())
     }
 
+    #[inline(never)]
     pub fn check_constraints(&self, phi: &Morphism, codom: &Topology) -> Result<(), SearchError> {
         for constraint in &self.constraints {
             if !constraint.is_satisfied(phi, codom) {
