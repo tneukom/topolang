@@ -26,7 +26,7 @@ impl Interpreter {
     }
 
     /// Apply rule at any modified region after `cursor` and move `cursor` forward.
-    fn apply_rule(
+    fn apply_rule_with_cursor(
         world: &mut World,
         rule: &Rule,
         ctx: &RuleApplicationContext,
@@ -78,7 +78,14 @@ impl Interpreter {
 
             // Stabilize each rule
             for (rule, cursor) in self.rules.rules.iter().zip_eq(&mut self.cursors) {
-                let modified = Self::apply_rule(world, &rule.rule, &ctx, cursor);
+                let modified = if !rule.rule.before.input_conditions.is_empty() {
+                    // Modification tracking does not work when rule has input conditions. A rule
+                    // can become active even though the Topology hasn't changed.
+                    rule.rule.apply(world, &ctx)
+                } else {
+                    Self::apply_rule_with_cursor(world, &rule.rule, &ctx, cursor)
+                };
+
                 if modified {
                     // Start again
                     n_modifications += 1;
