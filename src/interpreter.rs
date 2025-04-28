@@ -98,6 +98,10 @@ impl Interpreter {
         }
     }
 
+    pub fn wake_up(&mut self, world: &mut World) -> usize {
+        wake_up(world, &self.rules.source_region_keys)
+    }
+
     /// Apply rules (at most max_applications) and if world becomes stable under rules wake up
     /// all sleeping regions.
     #[inline(never)]
@@ -108,7 +112,7 @@ impl Interpreter {
         max_modifications: usize,
     ) -> Result<Ticked, InterpreterError> {
         let n_modifications = self.stabilize(world, input, max_modifications)?;
-        let n_woken_up = wake_up(world, &self.rules.source_region_keys);
+        let n_woken_up = self.wake_up(world);
 
         Ok(Ticked {
             n_modifications,

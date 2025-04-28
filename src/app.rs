@@ -5,7 +5,7 @@ use crate::{
     field::RgbaField,
     gif_recorder::GifRecorder,
     history::SnapshotCause,
-    interpreter::Interpreter,
+    interpreter::{Interpreter, InterpreterError},
     material::Material,
     material_effects::material_map_effects,
     math::{point::Point, rect::Rect, rgba8::Rgba8},
@@ -94,6 +94,11 @@ pub struct EguiApp {
     /// When creating App we already load the world but cannot reset the camera because we don't
     /// have the proper view_rect
     reset_camera_requested: bool,
+
+    i_frame: usize,
+    frames_per_tick: usize,
+    modifications_during_tick: usize,
+    woken_up_during_tick: usize,
 }
 
 impl EguiApp {
@@ -155,6 +160,10 @@ impl EguiApp {
             channel_sender,
             channel_receiver,
             reset_camera_requested: true,
+            i_frame: 0,
+            frames_per_tick: 3,
+            modifications_during_tick: 0,
+            woken_up_during_tick: 0,
         }
     }
 
@@ -408,6 +417,69 @@ impl EguiApp {
         }
     }
 
+    /// Returns true if stabilized
+    pub fn tick(&mut self, max_modifications: usize) {
+        let Some(interpreter) = &mut self.interpreter else {
+            return;
+        };
+
+        let ticked = interpreter.tick(&mut self.view.world, &self.canvas_input, max_modifications);
+        let modified = match ticked {
+            Ok(ticked) => ticked.changed(),
+            Err(InterpreterError::MaxModificationReached) => true,
+        };
+
+        if modified {
+            self.record_gif_frame();
+            self.view.add_snapshot(SnapshotCause::Tick);
+        }
+    }
+
+    pub fn run(&mut self) {
+        let tick_frame = self.i_frame % self.frames_per_tick == 0;
+
+        // Add gif frame if previous tick there were modifications or regions woken up
+        if tick_frame && (self.modifications_during_tick > 0 || self.woken_up_during_tick > 0) {
+            self.record_gif_frame();
+        }
+
+        let Some(interpreter) = &mut self.interpreter else {
+            return;
+        };
+
+        // Only tick once every `self.frames_per_tick`
+        if self.i_frame % self.frames_per_tick == 0 {
+            // wake up
+            self.woken_up_during_tick = interpreter.wake_up(&mut self.view.world);
+            self.modifications_during_tick = 0;
+        }
+
+        // Run for 10ms but don't wake up regions
+        let now = Instant::now();
+        while now.elapsed().as_secs_f64() < 0.01 {
+            let max_modifications = 32;
+            let modifications = match interpreter.stabilize(
+                &mut self.view.world,
+                &self.canvas_input,
+                max_modifications,
+            ) {
+                Ok(modifications) => modifications,
+                Err(InterpreterError::MaxModificationReached) => max_modifications,
+            };
+
+            if modifications == 0 {
+                break;
+            }
+
+            self.modifications_during_tick += modifications;
+            // let duration = now.elapsed().as_secs_f64();
+            // println!(
+            //     "Stabilize duration: {}, modifications: {}",
+            //     duration, modifications
+            // );
+        }
+    }
+
     pub fn run_ui(&mut self, ui: &mut egui::Ui) {
         // Step and run
         let run_mode_before = self.run_mode;
@@ -433,38 +505,25 @@ impl EguiApp {
             //     }
             // }
         } else if self.run_mode == RunMode::Run {
-            if let Some(interpreter) = &mut self.interpreter {
-                if let Ok(ticked) = interpreter.tick(&mut self.view.world, &self.canvas_input, 256)
-                {
-                    if ticked.changed() {
-                        self.record_gif_frame();
-                    }
-                } else {
-                    println!("Max modifications reached!");
-                }
-            }
+            self.run();
         }
 
+        // Step button
         if ui
             .add_enabled(self.run_mode == RunMode::Paused, egui::Button::new("Step"))
             .clicked()
         {
             self.compile();
-            if let Some(interpreter) = &mut self.interpreter {
-                let ticked = interpreter.tick(&mut self.view.world, &self.canvas_input, 1);
-                match ticked {
-                    Ok(ticked) => {
-                        if ticked.n_woken_up > 0 {
-                            self.record_gif_frame();
-                            self.view.add_snapshot(SnapshotCause::Wakeup);
-                        }
-                    }
-                    Err(_) => {
-                        self.view.add_snapshot(SnapshotCause::Step);
-                        self.record_gif_frame();
-                    }
-                }
-            }
+            self.tick(1);
+        }
+
+        // Tick button
+        if ui
+            .add_enabled(self.run_mode == RunMode::Paused, egui::Button::new("Tick"))
+            .clicked()
+        {
+            self.compile();
+            self.tick(1024);
         }
     }
 
@@ -751,6 +810,7 @@ impl EguiApp {
 
 impl eframe::App for EguiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.i_frame += 1;
         // let mut style = ctx.style().deref().clone();
         // style.visuals.dark_mode = false;
         // ctx.set_style(style);
