@@ -312,8 +312,8 @@ pub fn segmented_choice<'a, T: Copy + Eq>(
 ) -> bool {
     let style = ui.style();
     let frame = egui::Frame {
-        inner_margin: egui::Margin::same(6.0),
-        rounding: egui::Rounding::same(4.0),
+        inner_margin: egui::Margin::same(6),
+        corner_radius: egui::CornerRadius::same(4),
         fill: style.visuals.widgets.inactive.bg_fill,
         ..Default::default()
     };
