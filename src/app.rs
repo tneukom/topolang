@@ -6,7 +6,6 @@ use crate::{
     gif_recorder::GifRecorder,
     history::SnapshotCause,
     interpreter::{Interpreter, InterpreterError},
-    material::Material,
     material_effects::material_map_effects,
     math::{point::Point, rect::Rect, rgba8::Rgba8},
     painting::view_painter::{DrawView, ViewPainter},
@@ -17,7 +16,6 @@ use crate::{
     widgets::{brush_chooser, prefab_picker, styled_button, FileChooser},
     world::World,
 };
-use data_encoding::BASE64;
 use glow::HasContext;
 use itertools::Itertools;
 use log::{info, warn};
@@ -35,29 +33,8 @@ pub struct Clipboard {
 }
 
 impl Clipboard {
-    const DATA_URL_HEADER: &'static str = "data:image/png;base64,";
-
     pub fn new(material_map: MaterialMap) -> Self {
         Self { material_map }
-    }
-
-    pub fn decode(encoded: &str) -> Option<Self> {
-        // Strip DATA_URL_HEADER
-        if encoded.len() <= Self::DATA_URL_HEADER.len() {
-            return None;
-        }
-        let payload = &encoded[Self::DATA_URL_HEADER.len()..];
-        let png = BASE64.decode(payload.as_bytes()).ok()?;
-        let rgba_field = RgbaField::load_from_memory(&png).ok()?;
-        let material_map = rgba_field.into_material().into();
-        Some(Self { material_map })
-    }
-
-    pub fn encode(&self) -> String {
-        let rgba_field = self.material_map.to_rgba_field(Material::TRANSPARENT);
-        let png = rgba_field.to_png().unwrap();
-        let base64_png = BASE64.encode(&png);
-        format!("{}{}", Self::DATA_URL_HEADER, base64_png)
     }
 }
 
@@ -201,10 +178,24 @@ impl EguiApp {
         });
     }
 
+    /// Put `material_map` into system clipboard and local clipboard (for WASM)
     pub fn clipboard_put(&mut self, ctx: &egui::Context, material_map: MaterialMap) {
         let clipboard = Clipboard::new(material_map);
-        let encoded = clipboard.encode();
-        ctx.output_mut(|output| output.copied_text = encoded);
+        let rgba_field = material_map_effects(&clipboard.material_map, Rgba8::TRANSPARENT);
+
+        // TODO: Currently egui does not support pasting images from the system clipboard, see
+        //   https://github.com/emilk/egui/issues/2108
+        //   Until the issue is resolved we copy the image as a base64 png, some image editor
+        //   support pasting these, some don't.
+        // Convert material_map to RgbaField and then to egui Image and put into system clipboard
+        // let egui_image = egui::ColorImage::from_rgba_unmultiplied(
+        //     [rgba_field.width() as usize, rgba_field.height() as usize],
+        //     rgba_field.as_raw(),
+        // );
+        // ctx.copy_image(egui_image);
+
+        ctx.copy_text(rgba_field.encode_base64_png());
+
         self.clipboard = Some(clipboard);
     }
 
@@ -835,9 +826,9 @@ impl eframe::App for EguiApp {
         for event in events {
             match event {
                 egui::Event::Paste(paste) => {
-                    if let Some(clipboard) = Clipboard::decode(&paste) {
-                        self.view
-                            .clipboard_paste(&self.view_input, clipboard.material_map);
+                    if let Ok(rgba_field) = RgbaField::decode_base64_png(&paste) {
+                        let material_map = MaterialMap::from(rgba_field);
+                        self.view.clipboard_paste(&self.view_input, material_map);
                     }
                 }
                 egui::Event::Copy => {

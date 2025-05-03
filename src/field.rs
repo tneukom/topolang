@@ -2,6 +2,7 @@ use crate::{
     material::Material,
     math::{point::Point, rect::Rect, rgba8::Rgba8},
 };
+use data_encoding::BASE64;
 use std::{
     io::Cursor,
     ops::{Index, IndexMut},
@@ -232,6 +233,8 @@ impl<T: Clone> Field<T> {
 }
 
 impl RgbaField {
+    const PNG_URL_HEADER: &'static str = "data:image/png;base64,";
+
     fn from_imageio_bitmap(imageio_bitmap: &image::RgbaImage) -> Self {
         let mut bitmap = Self::filled(
             Rect::low_size(
@@ -302,6 +305,23 @@ impl RgbaField {
 
     pub fn into_material(self) -> MaterialField {
         self.into_map(|rgba| rgba.into())
+    }
+
+    pub fn decode_base64_png(encoded: &str) -> anyhow::Result<Self> {
+        // Strip DATA_URL_HEADER
+        if encoded.len() <= Self::PNG_URL_HEADER.len() {
+            anyhow::bail!("Encoded string too short");
+        }
+        let payload = &encoded[Self::PNG_URL_HEADER.len()..];
+        let png = BASE64.decode(payload.as_bytes())?;
+        let rgba_field = RgbaField::load_from_memory(&png)?;
+        Ok(rgba_field)
+    }
+
+    pub fn encode_base64_png(&self) -> String {
+        let png = self.to_png().unwrap();
+        let base64_png = BASE64.encode(&png);
+        format!("{}{}", Self::PNG_URL_HEADER, base64_png)
     }
 }
 
