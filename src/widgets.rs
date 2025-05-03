@@ -90,6 +90,10 @@ pub fn palette_widget(ui: &mut egui::Ui, palette: &Palette, rgba: &mut Rgba8) ->
     color_set
 }
 
+pub fn styled_button(name: &str) -> egui::Button {
+    egui::Button::new(name).corner_radius(4)
+}
+
 fn palette_chooser(ui: &mut egui::Ui) -> &'static Palette {
     // Id local to the widget
     // let palette_memory_id = ui.make_persistent_id("active_palette");
@@ -105,7 +109,10 @@ fn palette_chooser(ui: &mut egui::Ui) -> &'static Palette {
     // Show a list of palette buttons instead
     ui.horizontal_wrapped(|ui| {
         for (i_palette, palette) in palettes.iter().enumerate() {
-            ui.selectable_value(&mut active_palette, i_palette, &palette.name);
+            let button = styled_button(&palette.name).selected(active_palette == i_palette);
+            if ui.add(button).clicked() {
+                active_palette = i_palette;
+            }
         }
     });
 
@@ -182,7 +189,7 @@ pub fn material_chooser(ui: &mut egui::Ui, material: &mut Material) {
     ];
 
     ui.add_enabled_ui(!is_reserved, |ui| {
-        segmented_choice(ui, choices, &mut material.class);
+        choice_buttons(ui, Some("Class"), choices, &mut material.class);
     });
 }
 
@@ -236,11 +243,10 @@ pub fn brush_size_chooser(ui: &mut egui::Ui, size: &mut i64) {
 }
 
 pub fn brush_chooser(ui: &mut egui::Ui, brush: &mut Brush) {
-    material_chooser(ui, &mut brush.material);
-
     // Brush shape
     brush_size_chooser(ui, &mut brush.size);
-    ui.separator();
+
+    material_chooser(ui, &mut brush.material);
 }
 
 struct Prefab {
@@ -305,41 +311,45 @@ pub fn enum_combo<T: ReflectEnum + PartialEq + 'static>(
         });
 }
 
-pub fn segmented_choice<'a, T: Copy + Eq>(
+pub fn choice_buttons<'a, T: Copy + Eq>(
     ui: &mut egui::Ui,
+    title: Option<&str>,
     choices: impl IntoIterator<Item = (T, &'a str)>,
     selected: &mut T,
 ) -> bool {
-    let style = ui.style();
-    let frame = egui::Frame {
-        inner_margin: egui::Margin::same(6),
-        corner_radius: egui::CornerRadius::same(4),
-        fill: style.visuals.widgets.inactive.bg_fill,
-        ..Default::default()
-    };
-
     let mut clicked = false;
-    frame.show(ui, |ui| {
-        ui.horizontal(|ui| {
-            for (choice, label) in choices.into_iter() {
-                if ui.selectable_value(selected, choice, label).clicked() {
-                    clicked = true;
-                }
+
+    // TODO: Would be nicer if this was left of the buttons, but vertical centering doesn't work
+    //   properly because the layout doesn't know the height of the widgets following the labels.
+    //   It works if the label is after the buttons.
+    if let Some(title) = title {
+        ui.label(title);
+    }
+
+    ui.horizontal(|ui| {
+        for (choice, label) in choices.into_iter() {
+            if ui
+                .add(styled_button(label).selected(choice == *selected))
+                .clicked()
+            {
+                *selected = choice;
+                clicked = true;
             }
-        })
+        }
     });
 
     clicked
 }
 
-pub fn segmented_enum_choice<T: Copy + ReflectEnum + Eq>(
+pub fn enum_choice_buttons<T: Copy + ReflectEnum + Eq>(
     ui: &mut egui::Ui,
+    title: Option<&str>,
     selected: &mut T,
 ) -> bool {
     let choices = T::all()
         .into_iter()
         .map(|&choice| (choice, choice.as_str()));
-    segmented_choice(ui, choices, selected)
+    choice_buttons(ui, title, choices, selected)
 }
 
 pub struct FileChooser {

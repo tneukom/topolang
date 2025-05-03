@@ -14,7 +14,7 @@ use crate::{
     rule::CanvasInput,
     utils::ReflectEnum,
     view::{EditMode, View, ViewInput, ViewSettings},
-    widgets::{brush_chooser, prefab_picker, segmented_enum_choice, FileChooser},
+    widgets::{brush_chooser, prefab_picker, styled_button, FileChooser},
     world::World,
 };
 use data_encoding::BASE64;
@@ -230,15 +230,15 @@ impl EguiApp {
 
     pub fn copy_paste_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            if ui.button("🗐 Copy").clicked() {
+            if ui.add(styled_button("🗐 Copy")).clicked() {
                 self.clipboard_copy(ui.ctx());
             }
 
-            if ui.button("✂ Cut").clicked() {
+            if ui.add(styled_button("✂ Cut")).clicked() {
                 self.clipboard_cut(ui.ctx());
             }
 
-            if ui.button("📋 Paste").clicked() {
+            if ui.add(styled_button("📋 Paste")).clicked() {
                 if let Some(clipboard) = &self.clipboard {
                     self.view
                         .clipboard_paste(&self.view_input, clipboard.material_map.clone());
@@ -481,41 +481,45 @@ impl EguiApp {
     }
 
     pub fn run_ui(&mut self, ui: &mut egui::Ui) {
-        // Step and run
-        let run_mode_before = self.run_mode;
-        segmented_enum_choice(ui, &mut self.run_mode);
+        ui.horizontal(|ui| {
+            let step_button = styled_button("Step");
+            if ui
+                .add_enabled(self.run_mode == RunMode::Paused, step_button)
+                .clicked()
+            {
+                // Single step
+                self.compile();
+                self.tick(1);
+            }
 
-        if self.run_mode != RunMode::Paused && run_mode_before == RunMode::Paused {
-            self.compile();
-        }
+            let run_button = styled_button("Run").selected(self.run_mode == RunMode::Run);
+            if ui.add(run_button).clicked() {
+                self.run_mode = match self.run_mode {
+                    RunMode::Run => {
+                        self.view.add_snapshot(SnapshotCause::Run);
+                        RunMode::Paused
+                    }
+                    _ => {
+                        self.compile();
+                        RunMode::Run
+                    }
+                }
+            }
 
-        if run_mode_before != RunMode::Paused && self.run_mode == RunMode::Paused {
-            self.view.add_snapshot(SnapshotCause::Run);
-        }
-
-        if self.run_mode == RunMode::Walk {
-            todo!("Fix");
-            // if let Some(interpreter) = &mut self.interpreter {
-            //     if let Ok(ticked) = interpreter.tick(&mut self.view.world, &self.canvas_input, 1) {
-            //         if ticked.changed() {
-            //             self.record_gif_frame();
-            //         }
-            //     } else {
-            //         println!("Max modifications reached!");
-            //     }
-            // }
-        } else if self.run_mode == RunMode::Run {
-            self.run();
-        }
-
-        // Step button
-        if ui
-            .add_enabled(self.run_mode == RunMode::Paused, egui::Button::new("Step"))
-            .clicked()
-        {
-            self.compile();
-            self.tick(1);
-        }
+            let walk_button = styled_button("Walk").selected(self.run_mode == RunMode::Walk);
+            if ui.add(walk_button).clicked() {
+                self.run_mode = match self.run_mode {
+                    RunMode::Walk => {
+                        self.view.add_snapshot(SnapshotCause::Run);
+                        RunMode::Paused
+                    }
+                    _ => {
+                        self.compile();
+                        RunMode::Walk
+                    }
+                }
+            }
+        });
 
         // Tick button
         if ui
@@ -533,10 +537,10 @@ impl EguiApp {
 
         // Undo, Redo buttons
         ui.horizontal(|ui| {
-            if ui.button("⟲ Undo").clicked() {
+            if ui.add(styled_button("⟲ Undo")).clicked() {
                 history.undo();
             }
-            if ui.button("⟳ Redo").clicked() {
+            if ui.add(styled_button("⟳ Redo")).clicked() {
                 history.redo();
             }
         });
@@ -821,7 +825,9 @@ impl eframe::App for EguiApp {
             self.load_file(&content);
         }
 
-        ctx.style_mut(|style| style.spacing.button_padding = egui::Vec2::new(5.0, 5.0));
+        ctx.style_mut(|style| {
+            style.spacing.button_padding = egui::Vec2::new(6.0, 6.0);
+        });
 
         // We cannot lock input while called clipboard_copy, clipboard_cut, ...
         // TODO: Only clone Paste, Copy, Cut events
