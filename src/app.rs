@@ -5,7 +5,7 @@ use crate::{
     field::RgbaField,
     gif_recorder::GifRecorder,
     history::SnapshotCause,
-    interpreter::{Interpreter, InterpreterError},
+    interpreter::{Interpreter, InterpreterError, Ticked},
     material_effects::material_map_effects,
     math::{point::Point, rect::Rect, rgba8::Rgba8},
     painting::view_painter::{DrawView, ViewPainter},
@@ -74,6 +74,7 @@ pub struct EguiApp {
 
     i_frame: usize,
     frames_per_tick: usize,
+    frames_per_slowmo_tick: usize,
     modifications_during_tick: usize,
     woken_up_during_tick: usize,
 }
@@ -139,6 +140,7 @@ impl EguiApp {
             reset_camera_requested: true,
             i_frame: 0,
             frames_per_tick: 3,
+            frames_per_slowmo_tick: 12,
             modifications_during_tick: 0,
             woken_up_during_tick: 0,
         }
@@ -442,7 +444,29 @@ impl EguiApp {
         }
     }
 
+    pub fn slowmo(&mut self) {
+        // Tick at lower rate than 60fps
+        let tick_frame = self.i_frame % self.frames_per_slowmo_tick == 0;
+        if !tick_frame {
+            return;
+        }
+
+        let Some(interpreter) = &mut self.interpreter else {
+            return;
+        };
+
+        let modified = match interpreter.tick(&mut self.view.world, &self.canvas_input, 1) {
+            Ok(ticked) => ticked.changed(),
+            Err(_) => true,
+        };
+
+        if modified {
+            self.record_gif_frame();
+        }
+    }
+
     pub fn run(&mut self) {
+        // Tick at lower rate than 60fps
         let tick_frame = self.i_frame % self.frames_per_tick == 0;
 
         // Add gif frame if previous tick there were modifications or regions woken up
@@ -513,18 +537,24 @@ impl EguiApp {
                 }
             }
 
-            let walk_button = styled_button("Walk").selected(self.run_mode == RunMode::Walk);
+            let walk_button = styled_button("Slowmo").selected(self.run_mode == RunMode::Slowmo);
             if ui.add(walk_button).clicked() {
                 self.run_mode = match self.run_mode {
-                    RunMode::Walk => {
+                    RunMode::Slowmo => {
                         self.view.add_snapshot(SnapshotCause::Run);
                         RunMode::Paused
                     }
                     _ => {
                         self.compile();
-                        RunMode::Walk
+                        RunMode::Slowmo
                     }
                 }
+            }
+
+            if self.run_mode == RunMode::Slowmo {
+                self.slowmo();
+            } else if self.run_mode == RunMode::Run {
+                self.run();
             }
         });
 
@@ -897,7 +927,7 @@ impl eframe::App for EguiApp {
             self.central_panel(ui);
         });
 
-        self.view_settings.locked = [RunMode::Walk, RunMode::Run].contains(&self.run_mode);
+        self.view_settings.locked = [RunMode::Slowmo, RunMode::Run].contains(&self.run_mode);
         self.view
             .handle_input(&mut self.view_input, &mut self.view_settings);
 
@@ -922,12 +952,12 @@ impl eframe::App for EguiApp {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunMode {
     Paused,
-    Walk,
+    Slowmo,
     Run,
 }
 
 impl RunMode {
-    pub const ALL: [Self; 3] = [Self::Paused, Self::Walk, Self::Run];
+    pub const ALL: [Self; 3] = [Self::Paused, Self::Slowmo, Self::Run];
 }
 
 impl ReflectEnum for RunMode {
@@ -938,7 +968,7 @@ impl ReflectEnum for RunMode {
     fn as_str(self) -> &'static str {
         match self {
             Self::Paused => "Paused",
-            Self::Walk => "Walk",
+            Self::Slowmo => "Walk",
             Self::Run => "Run",
         }
     }
