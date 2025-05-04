@@ -13,7 +13,7 @@ use crate::{
     rule::CanvasInput,
     utils::ReflectEnum,
     view::{EditMode, View, ViewInput, ViewSettings},
-    widgets::{brush_chooser, prefab_picker, styled_button, FileChooser},
+    widgets::{brush_chooser, prefab_picker, styled_button, styled_space, FileChooser},
     world::World,
 };
 use glow::HasContext;
@@ -158,23 +158,35 @@ impl EguiApp {
     pub fn view_ui(&mut self, ui: &mut egui::Ui) {
         // Edit mode choices
         ui.horizontal(|ui| {
-            for mode in EditMode::ALL {
-                let icon = Self::edit_mode_icon(mode);
+            ui.scope(|ui| {
+                const BUTTON_PADDING: f32 = 3.0;
+                ui.style_mut().spacing.button_padding = egui::Vec2::splat(BUTTON_PADDING);
 
-                // The behavior of Egui when clicking a button and moving the mouse is a bit weird.
-                // If a native Windows button is pressed down, the mouse moved while still inside
-                // the button and then released, it counts as a click.
-                // Egui aborts the clicked state if the mouse is moved too much. So we also consider
-                // dragging and check if the pointer is still over the button.
-                let button = egui::widgets::ImageButton::new(icon)
-                    .selected(mode == self.view_settings.edit_mode)
-                    .sense(egui::Sense::click_and_drag());
-                let response = ui.add_sized([32.0, 32.0], button);
+                for mode in EditMode::ALL {
+                    let icon = Self::edit_mode_icon(mode);
+                    // let icon_size = icon.texture_size().unwrap();
+                    let icon_size = egui::Vec2::splat(32.0);
+                    let button_size = icon_size + 2.0 * egui::Vec2::splat(BUTTON_PADDING);
 
-                if response.clicked() || response.drag_stopped() && response.hover_pos().is_some() {
-                    self.view_settings.edit_mode = mode;
+                    // The behavior of Egui when clicking a button and moving the mouse is a bit weird.
+                    // If a native Windows button is pressed down, the mouse moved while still inside
+                    // the button and then released, it counts as a click.
+                    // Egui aborts the clicked state if the mouse is moved too much. So we also consider
+                    // dragging and check if the pointer is still over the button.
+                    let button = egui::Button::image(icon)
+                        .corner_radius(4)
+                        .selected(mode == self.view_settings.edit_mode)
+                        .sense(egui::Sense::click_and_drag());
+                    let response = ui.add_sized(button_size, button);
+                    // let response = ui.add(button);
+
+                    if response.clicked()
+                        || response.drag_stopped() && response.hover_pos().is_some()
+                    {
+                        self.view_settings.edit_mode = mode;
+                    }
                 }
-            }
+            });
         });
     }
 
@@ -384,11 +396,15 @@ impl EguiApp {
         const GRID_SIZE_CHOICES: [Option<i64>; 4] = [None, Some(4), Some(8), Some(16)];
         const GRID_SIZE_LABELS: [&str; 4] = ["None", "4px", "8px", "16px"];
 
+        ui.label("Grid");
         ui.horizontal(|ui| {
-            ui.label("Grid:");
-
             for (choice, label) in GRID_SIZE_CHOICES.into_iter().zip_eq(GRID_SIZE_LABELS) {
-                ui.selectable_value(&mut self.view.grid_size, choice, label);
+                if ui
+                    .add(styled_button(label).selected(choice == self.view.grid_size))
+                    .clicked()
+                {
+                    self.view.grid_size = choice;
+                }
             }
         });
     }
@@ -512,13 +528,16 @@ impl EguiApp {
             }
         });
 
-        // Tick button
-        if ui
-            .add_enabled(self.run_mode == RunMode::Paused, egui::Button::new("Tick"))
-            .clicked()
+        #[cfg(not(feature = "minimal_ui"))]
         {
-            self.compile();
-            self.tick(1024);
+            // Tick button
+            if ui
+                .add_enabled(self.run_mode == RunMode::Paused, egui::Button::new("Tick"))
+                .clicked()
+            {
+                self.compile();
+                self.tick(1024);
+            }
         }
     }
 
@@ -584,29 +603,33 @@ impl EguiApp {
         ui.separator();
 
         self.copy_paste_ui(ui);
+        styled_space(ui);
         self.undo_redo_ui(ui);
         ui.separator();
 
         ui.label("Brush");
-
         brush_chooser(ui, &mut self.view_settings.brush);
+        ui.separator();
 
         if let Some(prefab) = prefab_picker(ui) {
             self.view_settings.edit_mode = EditMode::SelectRect;
             self.view.paste(prefab.clone());
         }
+        ui.separator();
 
         // ui.label("History");
         // self.history_ui(ui);
         // ui.separator();
 
-        ui.label("Run");
         self.run_ui(ui);
         ui.separator();
 
-        ui.label("Gif");
-        self.gif_ui(ui);
-        ui.separator();
+        #[cfg(not(feature = "minimal_ui"))]
+        {
+            ui.label("Gif");
+            self.gif_ui(ui);
+            ui.separator();
+        }
 
         self.grid_size_ui(ui);
     }
@@ -817,7 +840,7 @@ impl eframe::App for EguiApp {
         }
 
         ctx.style_mut(|style| {
-            style.spacing.button_padding = egui::Vec2::new(6.0, 6.0);
+            style.spacing.button_padding = egui::Vec2::new(8.0, 8.0);
         });
 
         // We cannot lock input while called clipboard_copy, clipboard_cut, ...

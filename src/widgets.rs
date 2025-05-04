@@ -85,13 +85,15 @@ pub fn palette_widget(ui: &mut egui::Ui, palette: &Palette, rgba: &mut Rgba8) ->
         });
     });
 
-    // Link to palette
-    ui.hyperlink_to("Link", &palette.link);
     color_set
 }
 
 pub fn styled_button(name: &str) -> egui::Button {
     egui::Button::new(name).corner_radius(4)
+}
+
+pub fn styled_space(ui: &mut egui::Ui) {
+    ui.add_space(6.0);
 }
 
 fn palette_chooser(ui: &mut egui::Ui) -> &'static Palette {
@@ -117,7 +119,12 @@ fn palette_chooser(ui: &mut egui::Ui) -> &'static Palette {
     });
 
     ui.memory_mut(|memory| memory.data.insert_temp(palette_memory_id, active_palette));
-    &palettes[active_palette]
+    let palette = &palettes[active_palette];
+
+    // Link to palette
+    ui.hyperlink_to("Link", &palette.link);
+
+    palette
 }
 
 /// Return true if the color was changed
@@ -129,7 +136,13 @@ pub fn color_chooser(ui: &mut egui::Ui, color: &mut Rgba8) -> bool {
 }
 
 pub fn rgb_chooser(ui: &mut egui::Ui, rgb: &mut Rgb8) -> bool {
-    let palette = palette_chooser(ui);
+    let palette = if cfg!(feature = "minimal_ui") {
+        &Palette::palettes()[0]
+    } else {
+        let palette = palette_chooser(ui);
+        styled_space(ui);
+        palette
+    };
 
     // Palette itself
     let mut rgba = Rgba8::from_rgb(*rgb);
@@ -175,9 +188,10 @@ pub fn material_chooser(ui: &mut egui::Ui, material: &mut Material) {
             _ => Material::new(rgb, MaterialClass::Normal),
         };
     }
+    styled_space(ui);
 
-    ui.label("System colors");
     system_material_widget(ui, material);
+    styled_space(ui);
 
     // Material classes
     let is_reserved = material.is_rule() || material.is_wildcard();
@@ -189,7 +203,7 @@ pub fn material_chooser(ui: &mut egui::Ui, material: &mut Material) {
     ];
 
     ui.add_enabled_ui(!is_reserved, |ui| {
-        choice_buttons(ui, Some("Class"), choices, &mut material.class);
+        choice_buttons(ui, None, choices, &mut material.class);
     });
 }
 
@@ -245,6 +259,7 @@ pub fn brush_size_chooser(ui: &mut egui::Ui, size: &mut i64) {
 pub fn brush_chooser(ui: &mut egui::Ui, brush: &mut Brush) {
     // Brush shape
     brush_size_chooser(ui, &mut brush.size);
+    ui.add_space(10.0);
 
     material_chooser(ui, &mut brush.material);
 }
