@@ -1,10 +1,9 @@
 use crate::{
     field::RgbaField,
-    material::Material,
+    material::{Material, MaterialClass},
     math::{
-        point::Point,
         rect::{Rect, RectBounds},
-        rgba8::Rgba8,
+        rgba8::{Rgb8, Rgba8},
     },
     pixmap::MaterialMap,
     rule::{InputCondition, InputEvent, Pattern, Rule},
@@ -44,28 +43,32 @@ pub struct CompiledRules {
 /// └────────────────┘
 pub struct Symbol {
     pattern: Pattern,
-    padding_region_key: RegionKey,
-    padding_inner_border_key: BorderKey,
+    outer_border_key: BorderKey,
 }
 
 impl Symbol {
+    pub const BORDER_MATERIAL: Material = Material::new(Rgb8::MAGENTA, MaterialClass::Solid);
+
     pub fn load(png_bytes: &[u8]) -> Self {
         let material_field = RgbaField::load_from_memory(png_bytes)
             .unwrap()
             .into_material();
-        let material_map = MaterialMap::from(material_field);
+        let material_map = MaterialMap::from(material_field).without(Material::WILDCARD);
 
         // Compile material map into pattern
         let topology = Topology::new(&material_map);
         let guess_chooser = SimpleGuessChooser::default();
         let search_strategy = SearchStrategy::for_morphism(&topology, &guess_chooser);
 
-        let padding_region_key = topology.region_key_at(Point(0, 0)).unwrap();
-        let padding_region = &topology[padding_region_key];
+        let (border_region_key, border_region) = topology
+            .regions_by_material(Self::BORDER_MATERIAL)
+            .exactly_one()
+            .ok()
+            .unwrap();
 
-        // Outer border and one inner border
-        assert_eq!(padding_region.boundary.borders.len(), 2);
-        let padding_inner_border_key = BorderKey::new(padding_region_key, 1);
+        // Unique outer border
+        assert_eq!(border_region.boundary.outer_border().seams_len(), 1);
+        let outer_border_key = BorderKey::new(border_region_key, 0);
 
         let pattern = Pattern {
             material_map,
@@ -76,13 +79,14 @@ impl Symbol {
 
         Self {
             pattern,
-            padding_region_key,
-            padding_inner_border_key,
+            outer_border_key,
         }
     }
 
-    /// Extract
-    pub fn extract_tagged(
+    /// Extract found symbols from `material_map` and return the regions they were part of. The
+    /// holes left from the symbols are filled with the material that surrounds them, meaning there
+    /// cannot be different materials around the symbol.
+    pub fn extract_symbols(
         &self,
         topology: &Topology,
         material_map: &mut MaterialMap,
@@ -90,15 +94,23 @@ impl Symbol {
         let mut tagged = Vec::new();
 
         for phi in self.pattern.search_strategy.main_plan.solutions(topology) {
-            // Remove right side of padding_inner_border, the actual symbol
-            let phi_padding_region_key = phi[self.padding_region_key];
-            let phi_padding_inner_border_key = phi[self.padding_inner_border_key];
+            let phi_outer_border_key = phi[self.outer_border_key];
+            let phi_outer_border = &topology[phi_outer_border_key];
 
-            let padding_material = topology[phi_padding_region_key].material;
-            let padding_inner_border = &topology[phi_padding_inner_border_key];
-            material_map.fill_right_of_border(padding_inner_border, padding_material);
+            // Border must be a single loop seam
+            let Ok(phi_outer_seam) = phi_outer_border.atomic_seams().exactly_one() else {
+                println!("Symbol cannot be surrounded by multiple different materials.");
+                continue;
+            };
 
-            tagged.push(phi_padding_region_key);
+            let surrounding_region_key = topology.right_of(phi_outer_seam).unwrap();
+            let surrounding_region = &topology[surrounding_region_key];
+
+            // Remove left side of phi_outer_border (the symbol) and fill with the surrounding
+            // material.
+            material_map.fill_left_of_border(phi_outer_border, surrounding_region.material);
+
+            tagged.push(surrounding_region_key);
         }
 
         tagged
@@ -161,7 +173,7 @@ impl Compiler {
         // Extract symbols from pattern and add InputCondition for each tagged area.
         let mut extracted_symbols = Vec::new();
         for (&event, symbol) in &self.input_event_symbols {
-            for tagged_region_key in symbol.extract_tagged(&topology, &mut material_map) {
+            for tagged_region_key in symbol.extract_symbols(&topology, &mut material_map) {
                 let tagged_strong_region_key = topology[tagged_region_key].strong_key();
                 extracted_symbols.push((event, tagged_strong_region_key));
             }

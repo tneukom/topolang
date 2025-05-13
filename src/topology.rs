@@ -171,6 +171,7 @@ impl Border {
             .all(|(self_side, other_side)| self_side + offset == other_side)
     }
 
+    /// Number of atomic seams in the border
     pub fn seams_len(&self) -> usize {
         self.cycle_segments.len()
     }
