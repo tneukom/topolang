@@ -517,6 +517,8 @@ impl SearchStrategy {
         contained: Option<RegionKey>,
         excluded: &BTreeSet<StrongRegionKey>,
     ) -> Vec<Morphism> {
+        let _span = tracy_client::span!("SearchStrategy::solutions");
+
         let mut solutions = Vec::new();
         // Without the explicit type annotation of the lambda fails to compile, weird. Maybe the
         // lifetime it derives for phi is wrong.

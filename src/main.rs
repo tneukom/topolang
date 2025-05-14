@@ -59,6 +59,8 @@ pub fn main_editor() {
             viewport: egui::ViewportBuilder::default().with_drag_and_drop(true),
             #[cfg(feature = "force_120hz")]
             vsync: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            window_builder: Some(Box::new(|builder| builder.with_maximized(true))),
             ..eframe::NativeOptions::default()
         };
 
@@ -84,6 +86,8 @@ pub fn main() {
     {
         env_logger::init();
         warn!("Logging!");
+
+        tracy_client::Client::start();
 
         // use seamlang::benchmarks::main_benchmark;
         // main_benchmark();

@@ -693,6 +693,9 @@ impl EguiApp {
                     format!("Zoom: {}", zoom)
                 };
                 ui.label(zoom_fmt);
+
+                let world_mouse = self.view_input.world_mouse.floor();
+                ui.label(format!("Mouse: {}, {}", world_mouse.x, world_mouse.y));
             });
         });
     }
@@ -858,6 +861,8 @@ impl EguiApp {
 
 impl eframe::App for EguiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        tracy_client::frame_mark();
+
         self.i_frame += 1;
         // let mut style = ctx.style().deref().clone();
         // style.visuals.dark_mode = false;

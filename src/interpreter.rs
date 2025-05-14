@@ -63,6 +63,8 @@ impl Interpreter {
         input: &CanvasInput,
         max_modifications: usize,
     ) -> Result<usize, InterpreterError> {
+        let _span = tracy_client::span!("stabilize");
+
         let ctx = RuleApplicationContext {
             contained: None,
             excluded: &self.rules.source_region_keys,
@@ -81,8 +83,10 @@ impl Interpreter {
                 let modified = if !rule.rule.before.input_conditions.is_empty() {
                     // Modification tracking does not work when rule has input conditions. A rule
                     // can become active even though the Topology hasn't changed.
+                    let _span = tracy_client::span!("apply input rule");
                     rule.rule.apply(world, &ctx)
                 } else {
+                    let _span = tracy_client::span!("apply cursor rule");
                     Self::apply_rule_with_cursor(world, &rule.rule, &ctx, cursor)
                 };
 
@@ -111,6 +115,8 @@ impl Interpreter {
         input: &CanvasInput,
         max_modifications: usize,
     ) -> Result<Ticked, InterpreterError> {
+        let _span = tracy_client::span!("tick");
+
         let n_modifications = self.stabilize(world, input, max_modifications)?;
         let n_woken_up = self.wake_up(world);
 

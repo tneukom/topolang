@@ -7,7 +7,7 @@ use crate::{
     world::World,
 };
 use itertools::Itertools;
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, fmt::format};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputEvent {
@@ -92,6 +92,11 @@ impl Pattern {
             .iter()
             .all(|cond| cond.is_satisfied(&phi, codom, input))
     }
+
+    pub fn debug_id_str(&self) -> String {
+        let before_bounds = self.material_map.bounding_rect();
+        format!("({}, {})", before_bounds.left(), before_bounds.top())
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -169,6 +174,13 @@ impl Rule {
     /// `contained` are considered.
     /// Returns true if a modification was made.
     pub fn apply(&self, world: &mut World, ctx: &RuleApplicationContext) -> bool {
+        let tracy_span = tracy_client::span!("Rule::apply");
+        tracy_span.emit_color(0xFFFFFF);
+        // let debug_id_str = ;
+        // println!("{}", debug_id_str);
+        tracy_span.emit_text(&self.before.debug_id_str());
+        // tracy_span.emit_text("wtf???");
+
         let topology = world.topology();
         let solutions =
             self.before
