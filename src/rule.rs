@@ -176,10 +176,7 @@ impl Rule {
     pub fn apply(&self, world: &mut World, ctx: &RuleApplicationContext) -> bool {
         let tracy_span = tracy_client::span!("Rule::apply");
         tracy_span.emit_color(0xFFFFFF);
-        // let debug_id_str = ;
-        // println!("{}", debug_id_str);
         tracy_span.emit_text(&self.before.debug_id_str());
-        // tracy_span.emit_text("wtf???");
 
         let topology = world.topology();
         let masked_topology = MaskedTopology::new(topology, ctx.excluded);

@@ -83,10 +83,14 @@ impl Interpreter {
                 let modified = if !rule.rule.before.input_conditions.is_empty() {
                     // Modification tracking does not work when rule has input conditions. A rule
                     // can become active even though the Topology hasn't changed.
-                    let _span = tracy_client::span!("apply input rule");
+                    let tracy_span = tracy_client::span!("apply input rule");
+                    tracy_span.emit_text(&rule.rule.before.debug_id_str());
+
                     rule.rule.apply(world, &ctx)
                 } else {
-                    let _span = tracy_client::span!("apply cursor rule");
+                    let tracy_span = tracy_client::span!("apply cursor rule");
+                    tracy_span.emit_text(&rule.rule.before.debug_id_str());
+
                     Self::apply_rule_with_cursor(world, &rule.rule, &ctx, cursor)
                 };
 

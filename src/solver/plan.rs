@@ -36,6 +36,9 @@ impl Guess {
         codom: &MaskedTopology,
         mut f: impl FnMut(&mut Morphism),
     ) {
+        let tracy_span = tracy_client::span!("guess");
+        tracy_span.emit_color(0xFF00FF);
+
         match self {
             &Self::Region(region_key) => {
                 for phi_region_key in codom.visible_region_keys() {
@@ -209,6 +212,9 @@ pub enum SearchError {
 impl SearchStep {
     #[inline(never)]
     pub fn propagate(&self, phi: &mut Morphism, codom: &MaskedTopology) -> Result<(), SearchError> {
+        let tracy_span = tracy_client::span!("propagate");
+        tracy_span.emit_color(0xFFFF00);
+
         for propagation in &self.propagations {
             let derived = propagation.derives();
             match propagation.derive(phi, &codom.inner) {
@@ -239,6 +245,9 @@ impl SearchStep {
 
     #[inline(never)]
     pub fn check_constraints(&self, phi: &Morphism, codom: &Topology) -> Result<(), SearchError> {
+        let tracy_span = tracy_client::span!("check_constraints");
+        tracy_span.emit_color(0x00FFFF);
+
         for constraint in &self.constraints {
             if !constraint.is_satisfied(phi, codom) {
                 return Err(SearchError::ConstraintConflict);
@@ -380,7 +389,8 @@ impl SearchPlan {
         codom: &MaskedTopology,
         found: &mut impl FnMut(&Morphism),
     ) {
-        // println!("Step {i_step}");
+        let tracy_span = tracy_client::span!("search_step");
+        tracy_span.emit_color(0xFFFF00);
 
         if i_step >= self.steps.len() {
             found(phi);
@@ -415,6 +425,9 @@ impl SearchPlan {
         phi_region_key: RegionKey,
         mut found: impl FnMut(&Morphism),
     ) {
+        let tracy_span = tracy_client::span!("search_with_first_guessed");
+        tracy_span.emit_color(0xFFFF00);
+
         let first_step = self.steps.first().unwrap();
 
         // Create Morphism with first guess assigned
