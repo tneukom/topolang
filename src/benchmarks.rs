@@ -116,7 +116,7 @@ pub fn benchmark_run() {
 
 pub fn main_benchmark() {
     let folder = "test_resources/benchmark";
-    let original_world = RgbaField::load(format!("{folder}/gates4.png"))
+    let original_world = RgbaField::load(format!("{folder}/gates.png"))
         .unwrap()
         .intot::<MaterialMap>()
         .intot::<World>();

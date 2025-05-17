@@ -46,7 +46,8 @@ rfd = { version = "0.15.2", default-features = false, features = ["gtk3"] }
 ahash = { version = "0.8.11", default-features = false, features = ["std"] }
 web-sys = "0.3.77"
 cached = "0.55.1"
-tracy-client = { version = "0.18.0", features = ["enable", "only-localhost"] }
+tracy-client = { version = "0.18.0", default-features = false, features = ["enable", "system-tracing",
+    "context-switch-tracing", "code-transfer", "callstack-inlines", "only-localhost"] }
 
 #[dev-dependencies]
 #rstest = "0.21.0"

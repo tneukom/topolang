@@ -198,10 +198,16 @@ pub struct GuessChooserBeginningWith<After: GuessChooser> {
 impl<After: GuessChooser> GuessChooser for GuessChooserBeginningWith<After> {}
 
 #[derive(Debug, Clone)]
-pub struct SearchStep {
+pub enum ConstraintAction {
+    Propagation(AnyPropagation),
+    Constraint(AnyConstraint),
+}
+
+/// Search branching point where an assignment has to be guessed and tried.
+#[derive(Debug, Clone)]
+pub struct SearchBranch {
     guess: Guess,
-    propagations: Vec<AnyPropagation>,
-    constraints: Vec<AnyConstraint>,
+    actions: Vec<ConstraintAction>,
 }
 
 pub enum SearchError {
@@ -209,48 +215,48 @@ pub enum SearchError {
     ConstraintConflict,
 }
 
-impl SearchStep {
+impl SearchBranch {
     #[inline(never)]
-    pub fn propagate(&self, phi: &mut Morphism, codom: &MaskedTopology) -> Result<(), SearchError> {
-        let tracy_span = tracy_client::span!("propagate");
+    pub fn propagate_and_check_constraints(
+        &self,
+        phi: &mut Morphism,
+        codom: &MaskedTopology,
+    ) -> Result<(), SearchError> {
+        let tracy_span = tracy_client::span!("propagate_and_check_constraints");
         tracy_span.emit_color(0xFFFF00);
 
-        for propagation in &self.propagations {
-            let derived = propagation.derives();
-            match propagation.derive(phi, &codom.inner) {
-                Ok(phi_derived) => {
-                    // println!(
-                    //     "Propagated by {} {:?} -> {:?}",
-                    //     propagation.name(),
-                    //     derived,
-                    //     phi_derived
-                    // );
-                    // Make sure we're not assigning hidden elements
-                    if let Element::Region(phi_derived) = phi_derived {
-                        if codom.is_hidden_by_key(phi_derived) {
+        for action in &self.actions {
+            match action {
+                ConstraintAction::Propagation(propagation) => {
+                    // let tracy_span = tracy_client::span!("propagate");
+                    // tracy_span.emit_color(0x00FFFF);
+
+                    let derived = propagation.derives();
+                    match propagation.derive(phi, &codom.inner) {
+                        Ok(phi_derived) => {
+                            // Make sure we're not assigning hidden elements
+                            if let Element::Region(phi_derived) = phi_derived {
+                                if codom.is_hidden_by_key(phi_derived) {
+                                    return Err(SearchError::PropagationFailed);
+                                }
+                            }
+
+                            phi.insert(derived, phi_derived);
+                        }
+                        Err(_err) => {
+                            // println!("Propagation {propagation:?} failed");
                             return Err(SearchError::PropagationFailed);
                         }
                     }
-                    phi.insert(derived, phi_derived);
                 }
-                Err(_err) => {
-                    // println!("Propagation {propagation:?} failed");
-                    return Err(SearchError::PropagationFailed);
+                ConstraintAction::Constraint(constraint) => {
+                    // let tracy_span = tracy_client::span!("check_constraint");
+                    // tracy_span.emit_color(0x00FFFF);
+
+                    if !constraint.is_satisfied(phi, codom.inner) {
+                        return Err(SearchError::ConstraintConflict);
+                    }
                 }
-            }
-        }
-
-        Ok(())
-    }
-
-    #[inline(never)]
-    pub fn check_constraints(&self, phi: &Morphism, codom: &Topology) -> Result<(), SearchError> {
-        let tracy_span = tracy_client::span!("check_constraints");
-        tracy_span.emit_color(0x00FFFF);
-
-        for constraint in &self.constraints {
-            if !constraint.is_satisfied(phi, codom) {
-                return Err(SearchError::ConstraintConflict);
             }
         }
 
@@ -260,7 +266,7 @@ impl SearchStep {
 
 #[derive(Debug, Clone)]
 pub struct SearchPlan {
-    steps: Vec<SearchStep>,
+    steps: Vec<SearchBranch>,
 }
 
 impl SearchPlan {
@@ -287,6 +293,40 @@ impl SearchPlan {
         variables
     }
 
+    pub fn applicable_constraint(
+        assigned_variables: &HashSet<Element>,
+        constraints: &mut Vec<AnyConstraint>,
+    ) -> Option<AnyConstraint> {
+        let i_applicable = constraints.iter().position(|constraint| {
+            constraint
+                .variables()
+                .iter()
+                .all(|variable| assigned_variables.contains(variable))
+        })?;
+
+        Some(constraints.remove(i_applicable))
+    }
+
+    pub fn applicable_propagation(
+        assigned_variables: &HashSet<Element>,
+        propagations: &mut Vec<AnyPropagation>,
+    ) -> Option<AnyPropagation> {
+        // Find a propagated to apply or break if there is none.
+        let i_applicable = propagations.iter().position(|propagation| {
+            // Variable is already assigned, so this propagation is not applicable
+            if assigned_variables.contains(&propagation.derives()) {
+                return false;
+            }
+
+            propagation
+                .require()
+                .iter()
+                .all(|required| assigned_variables.contains(required))
+        })?;
+
+        Some(propagations.remove(i_applicable))
+    }
+
     /// Make a plan to find solutions. Using `first` one can fix the guess that the plan should
     /// start with, otherwise `guess_chooser` is used to find the initial guess.
     pub fn for_morphism(
@@ -295,7 +335,7 @@ impl SearchPlan {
         first: Option<Guess>,
     ) -> Self {
         let mut available_constraints = morphism_constraints(dom);
-        let available_propagations = morphism_propagations(dom);
+        let mut available_propagations = morphism_propagations(dom);
         // for propagation in &propagations {
         //     println!("Available propagation: {propagation:?}");
         // }
@@ -311,6 +351,7 @@ impl SearchPlan {
             let guess = if assigned_variables.is_empty() && first.is_some() {
                 first.unwrap()
             } else {
+                assert!(!free_variables.is_empty());
                 guess_chooser
                     .choose(&free_variables, &assigned_variables, dom)
                     .unwrap()
@@ -319,52 +360,34 @@ impl SearchPlan {
             free_variables.remove(&guess.variable());
             assigned_variables.insert(guess.variable());
 
-            // Propagate any variable we can
-            let mut propagations = Vec::new();
+            // Check if there are any applicable constraints or propagations
+            let mut actions = Vec::new();
             loop {
-                // Find a propagated to apply or break if there is none.
-                let Some(applicable) = available_propagations.iter().find(|propagation| {
-                    if assigned_variables.contains(&propagation.derives()) {
-                        return false;
-                    }
-
-                    propagation
-                        .require()
-                        .iter()
-                        .all(|required| assigned_variables.contains(required))
-                }) else {
-                    break;
-                };
-
-                let derived = applicable.derives();
-                free_variables.remove(&derived);
-                assigned_variables.insert(derived);
-                propagations.push(applicable.clone())
-            }
-
-            // Check any constraint we can
-            // TODO: Use extract_if when stable (https://github.com/rust-lang/rust/issues/43244)
-            let mut constraints = Vec::new();
-            let mut i = 0;
-            while i < available_constraints.len() {
-                let constraint = &available_constraints[i];
-                let applicable = constraint
-                    .variables()
-                    .iter()
-                    .all(|variable| assigned_variables.contains(variable));
-                if applicable {
-                    let constraint = available_constraints.remove(i);
-                    constraints.push(constraint);
-                } else {
-                    i += 1;
+                if let Some(constraint) =
+                    Self::applicable_constraint(&assigned_variables, &mut available_constraints)
+                {
+                    let action = ConstraintAction::Constraint(constraint);
+                    actions.push(action);
+                    continue;
                 }
+
+                if let Some(propagation) =
+                    Self::applicable_propagation(&assigned_variables, &mut available_propagations)
+                {
+                    let derived = propagation.derives();
+                    free_variables.remove(&derived);
+                    assigned_variables.insert(derived);
+
+                    let action = ConstraintAction::Propagation(propagation);
+                    actions.push(action);
+                    continue;
+                }
+
+                // No applicable constraints or propagations left, so we need to make another guess.
+                break;
             }
 
-            let step = SearchStep {
-                guess,
-                propagations,
-                constraints,
-            };
+            let step = SearchBranch { guess, actions };
             steps.push(step);
         }
 
@@ -400,11 +423,7 @@ impl SearchPlan {
         let step = &self.steps[i_step];
 
         step.guess.guess(phi, codom, |phi| {
-            if step.propagate(phi, codom).is_err() {
-                return;
-            }
-
-            if step.check_constraints(phi, &codom.inner).is_err() {
+            if step.propagate_and_check_constraints(phi, codom).is_err() {
                 return;
             }
 
@@ -437,11 +456,10 @@ impl SearchPlan {
         };
         phi.region_map.insert(region_key, phi_region_key);
 
-        if first_step.propagate(&mut phi, codom).is_err() {
-            return;
-        }
-
-        if first_step.check_constraints(&phi, &codom.inner).is_err() {
+        if first_step
+            .propagate_and_check_constraints(&mut phi, codom)
+            .is_err()
+        {
             return;
         }
 
@@ -462,17 +480,20 @@ impl SearchPlan {
         for (i_step, step) in self.steps.iter().enumerate() {
             println!("Step {i_step}");
             println!("  Guess {:?}", &step.guess);
-            println!("  Propagations");
-            for propagation in &step.propagations {
-                println!(
-                    "    {:?} -> {:?}",
-                    propagation.as_propagation(),
-                    propagation.derives()
-                );
-            }
-            println!("  Constraints");
-            for constraint in &step.constraints {
-                println!("    {:?}", constraint.as_constraint());
+            println!("  Actions");
+            for action in &step.actions {
+                match action {
+                    ConstraintAction::Propagation(propagation) => {
+                        println!(
+                            "    Propagation {:?} -> {:?}",
+                            propagation.as_propagation(),
+                            propagation.derives()
+                        );
+                    }
+                    ConstraintAction::Constraint(constraint) => {
+                        println!("    Constraint {:?}", constraint.as_constraint());
+                    }
+                }
             }
         }
     }
