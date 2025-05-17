@@ -10,7 +10,9 @@ use crate::{
     solver::plan::{
         GuessChooser, GuessChooserUsingStatistics, SearchPlan, SearchStrategy, SimpleGuessChooser,
     },
-    topology::{BorderKey, Region, RegionKey, StrongRegionKey, Topology},
+    topology::{
+        BorderKey, MaskedTopology, Region, RegionKey, StrongRegionKey, Topology, TopologyStatistics,
+    },
     world::World,
 };
 use ahash::HashMap;
@@ -93,7 +95,12 @@ impl Symbol {
     ) -> Vec<RegionKey> {
         let mut tagged = Vec::new();
 
-        for phi in self.pattern.search_strategy.main_plan.solutions(topology) {
+        for phi in self
+            .pattern
+            .search_strategy
+            .main_plan
+            .solutions(&topology.into())
+        {
             let phi_outer_border_key = phi[self.outer_border_key];
             let phi_outer_border = &topology[phi_outer_border_key];
 
@@ -202,19 +209,21 @@ impl Compiler {
 
     #[inline(never)]
     pub fn compile(&self, world: &World) -> anyhow::Result<CompiledRules> {
+        let topology = world.topology();
+        let material_map = world.material_map();
+        let masked_topology = MaskedTopology::whole(world.topology());
+
         // Find all matches for rule_frame in world
         let matches = {
             let guess_chooser = SimpleGuessChooser::default();
             let search_plan = SearchPlan::for_morphism(&self.rule_frame, &guess_chooser, None);
-            search_plan.solutions(world.topology())
+            search_plan.solutions(&masked_topology)
         };
-
-        let topology = world.topology();
-        let material_map = world.material_map();
 
         // Extract all matches and creates rules from them
         let mut rules: Vec<CompiledRule> = Vec::new();
-        let world_statistics = world.topology().statistics();
+        // TODO: Statistics should be calculated after hiding found rules!
+        let world_statistics = TopologyStatistics::new(&masked_topology);
         let guess_chooser = GuessChooserUsingStatistics::new(world_statistics);
 
         // Compile each found rule

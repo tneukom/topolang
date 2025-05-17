@@ -11,10 +11,10 @@ use crate::{
     regions::{pixmap_regions, region_boundaries, split_boundary_into_cycles},
     utils::{UndirectedEdge, UndirectedGraph},
 };
-use ahash::HashMap;
+use ahash::{HashMap, HashSet};
 use itertools::Itertools;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet},
     fmt,
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
@@ -399,16 +399,6 @@ pub struct FillRegion {
     pub material: Material,
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct TopologyStatistics {
-    pub material_counts: HashMap<Material, usize>,
-}
-
-// pub struct Change {
-//     pub time: u64,
-//     pub bounds: AreaBounds,
-// }
-
 #[derive(Debug, Clone)]
 pub struct Topology {
     pub region_map: Pixmap<RegionKey>,
@@ -734,17 +724,6 @@ impl Topology {
         Ok(Topology::new(&material_map))
     }
 
-    pub fn statistics(&self) -> TopologyStatistics {
-        let mut statistics = TopologyStatistics::default();
-        for region in self.regions.values() {
-            *statistics
-                .material_counts
-                .entry(region.material)
-                .or_default() += 1;
-        }
-        statistics
-    }
-
     pub fn regions_by_material(
         &self,
         material: Material,
@@ -824,6 +803,77 @@ pub type ModificationTime = i64;
 pub fn modification_time_counter() -> ModificationTime {
     static MTIME: AtomicI64 = AtomicI64::new(0);
     MTIME.fetch_add(1, Ordering::Relaxed)
+}
+
+// TODO: It might make more sense to mask a Morphism, so we can panic if a hidden element is
+// assigned.
+pub struct MaskedTopology<'a> {
+    pub inner: &'a Topology,
+    pub hidden: Option<&'a BTreeSet<StrongRegionKey>>,
+}
+
+impl<'a> MaskedTopology<'a> {
+    pub fn new(topology: &'a Topology, hidden: &'a BTreeSet<StrongRegionKey>) -> Self {
+        Self {
+            inner: topology,
+            hidden: Some(hidden),
+        }
+    }
+
+    pub fn whole(topology: &'a Topology) -> Self {
+        Self {
+            inner: topology,
+            hidden: None,
+        }
+    }
+
+    pub fn is_hidden(&self, region: &Region) -> bool {
+        match self.hidden {
+            None => false,
+            Some(hidden) => hidden.contains(&region.strong_key()),
+        }
+    }
+
+    pub fn is_hidden_by_key(&self, region_key: RegionKey) -> bool {
+        let region = &self.inner[region_key];
+        self.is_hidden(region)
+    }
+
+    pub fn visible_regions(
+        &'a self,
+    ) -> impl Iterator<Item = (RegionKey, &'a Region)> + Clone + use<'a> {
+        self.inner
+            .iter_regions()
+            .filter(|(_, region)| !self.is_hidden(region))
+    }
+
+    pub fn visible_region_keys(&'a self) -> impl Iterator<Item = RegionKey> + Clone + use<'a> {
+        self.visible_regions().map(|(key, _)| key)
+    }
+}
+
+impl<'a> From<&'a Topology> for MaskedTopology<'a> {
+    fn from(topology: &'a Topology) -> Self {
+        MaskedTopology::whole(topology)
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct TopologyStatistics {
+    pub material_counts: HashMap<Material, usize>,
+}
+
+impl TopologyStatistics {
+    pub fn new(topology: &MaskedTopology) -> Self {
+        let mut statistics = TopologyStatistics::default();
+        for (_, region) in topology.visible_regions() {
+            *statistics
+                .material_counts
+                .entry(region.material)
+                .or_default() += 1;
+        }
+        statistics
+    }
 }
 
 #[cfg(test)]

@@ -6,10 +6,9 @@ use crate::{
         element::Element,
         propagations::{morphism_propagations, AnyPropagation, Propagation},
     },
-    topology::{BorderKey, RegionKey, Seam, StrongRegionKey, Topology, TopologyStatistics},
+    topology::{BorderKey, MaskedTopology, RegionKey, Seam, Topology, TopologyStatistics},
 };
 use ahash::HashSet;
-use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Guess {
@@ -31,10 +30,15 @@ impl Guess {
         }
     }
 
-    pub fn guess(&self, phi: &mut Morphism, codom: &Topology, mut f: impl FnMut(&mut Morphism)) {
+    pub fn guess(
+        &self,
+        phi: &mut Morphism,
+        codom: &MaskedTopology,
+        mut f: impl FnMut(&mut Morphism),
+    ) {
         match self {
             &Self::Region(region_key) => {
-                for &phi_region_key in codom.regions.keys() {
+                for phi_region_key in codom.visible_region_keys() {
                     phi.region_map.insert(region_key, phi_region_key);
                     // println!("Guess Region {region_key} -> Region {phi_region_key}");
                     f(phi);
@@ -42,7 +46,7 @@ impl Guess {
             }
             &Self::InteriorBorder(border_key) => {
                 let phi_region_key = phi.region_map[&border_key.region_key];
-                let phi_region = &codom[phi_region_key];
+                let phi_region = &codom.inner[phi_region_key];
                 for i_border in 1..phi_region.boundary.borders.len() {
                     let phi_border_key = BorderKey::new(phi_region_key, i_border);
                     phi.border_map.insert(border_key, phi_border_key);
@@ -51,7 +55,7 @@ impl Guess {
             }
             &Self::Seam(border_key, seam) => {
                 let phi_border_key = phi.border_map[&border_key];
-                let phi_border = &codom[phi_border_key];
+                let phi_border = &codom.inner[phi_border_key];
                 for phi_seam in phi_border.atomic_seams() {
                     phi.seam_map.insert(seam, phi_seam);
                     // println!("Guess {seam:?} -> {phi_seam:?}");
@@ -204,10 +208,10 @@ pub enum SearchError {
 
 impl SearchStep {
     #[inline(never)]
-    pub fn propagate(&self, phi: &mut Morphism, codom: &Topology) -> Result<(), SearchError> {
+    pub fn propagate(&self, phi: &mut Morphism, codom: &MaskedTopology) -> Result<(), SearchError> {
         for propagation in &self.propagations {
             let derived = propagation.derives();
-            match propagation.derive(phi, codom) {
+            match propagation.derive(phi, &codom.inner) {
                 Ok(phi_derived) => {
                     // println!(
                     //     "Propagated by {} {:?} -> {:?}",
@@ -215,6 +219,12 @@ impl SearchStep {
                     //     derived,
                     //     phi_derived
                     // );
+                    // Make sure we're not assigning hidden elements
+                    if let Element::Region(phi_derived) = phi_derived {
+                        if codom.is_hidden_by_key(phi_derived) {
+                            return Err(SearchError::PropagationFailed);
+                        }
+                    }
                     phi.insert(derived, phi_derived);
                 }
                 Err(_err) => {
@@ -367,7 +377,7 @@ impl SearchPlan {
         &self,
         i_step: usize,
         phi: &mut Morphism,
-        codom: &Topology,
+        codom: &MaskedTopology,
         found: &mut impl FnMut(&Morphism),
     ) {
         // println!("Step {i_step}");
@@ -384,7 +394,7 @@ impl SearchPlan {
                 return;
             }
 
-            if step.check_constraints(phi, codom).is_err() {
+            if step.check_constraints(phi, &codom.inner).is_err() {
                 return;
             }
 
@@ -393,7 +403,7 @@ impl SearchPlan {
     }
 
     #[inline(never)]
-    pub fn search(&self, codom: &Topology, mut found: impl FnMut(&Morphism)) {
+    pub fn search(&self, codom: &MaskedTopology, mut found: impl FnMut(&Morphism)) {
         let mut phi = Morphism::new();
         self.search_step(0, &mut phi, codom, &mut found);
     }
@@ -401,7 +411,7 @@ impl SearchPlan {
     #[inline(never)]
     pub fn search_with_first_guessed(
         &self,
-        codom: &Topology,
+        codom: &MaskedTopology,
         phi_region_key: RegionKey,
         mut found: impl FnMut(&Morphism),
     ) {
@@ -418,7 +428,7 @@ impl SearchPlan {
             return;
         }
 
-        if first_step.check_constraints(&phi, codom).is_err() {
+        if first_step.check_constraints(&phi, &codom.inner).is_err() {
             return;
         }
 
@@ -426,44 +436,12 @@ impl SearchPlan {
     }
 
     #[inline(never)]
-    pub fn solutions(&self, codom: &Topology) -> Vec<Morphism> {
+    pub fn solutions(&self, codom: &MaskedTopology) -> Vec<Morphism> {
         let mut solutions = Vec::new();
         self.search(codom, |phi| {
             solutions.push(phi.clone());
         });
         solutions
-    }
-
-    fn is_excluded(
-        phi: &Morphism,
-        codom: &Topology,
-        excluding: &BTreeSet<StrongRegionKey>,
-    ) -> bool {
-        phi.region_map.values().any(|phi_region_key| {
-            let strong_phi_region_key = codom.regions[phi_region_key].top_left_interior_pixel();
-            excluding.contains(&strong_phi_region_key)
-        })
-    }
-
-    #[inline(never)]
-    pub fn solutions_excluding(
-        &self,
-        codom: &Topology,
-        excluding: &BTreeSet<StrongRegionKey>,
-    ) -> Vec<Morphism> {
-        let mut solutions = Vec::new();
-        self.search(codom, |phi| {
-            if !Self::is_excluded(phi, codom, excluding) {
-                solutions.push(phi.clone());
-            }
-        });
-        solutions
-    }
-
-    #[inline(never)]
-    pub fn first_solution(&self, codom: &Topology) -> Option<Morphism> {
-        // TODO: Abort search after first solution found
-        self.solutions(codom).into_iter().next()
     }
 
     pub fn print(&self) {
@@ -508,28 +486,29 @@ impl SearchStrategy {
         Self { plans, main_plan }
     }
 
-    /// Find all solutions `phi` where the image of `phi` contains `region_key` but does not
-    /// contain any element in `excluded`.
+    /// Find all solutions `phi` where the image of `phi` contains `region_key`
     #[inline(never)]
-    pub fn solutions(
-        &self,
-        codom: &Topology,
-        contained: Option<RegionKey>,
-        excluded: &BTreeSet<StrongRegionKey>,
-    ) -> Vec<Morphism> {
+    pub fn solutions(&self, codom: &MaskedTopology, contained: Option<RegionKey>) -> Vec<Morphism> {
         let _span = tracy_client::span!("SearchStrategy::solutions");
 
         let mut solutions = Vec::new();
         // Without the explicit type annotation of the lambda fails to compile, weird. Maybe the
         // lifetime it derives for phi is wrong.
         let mut on_solution_found = |phi: &Morphism| {
-            if !SearchPlan::is_excluded(phi, codom, excluded) {
-                solutions.push(phi.clone());
+            for &phi_region_key in phi.region_map.values() {
+                assert!(!codom.is_hidden_by_key(phi_region_key));
             }
+
+            solutions.push(phi.clone());
         };
 
         if let Some(contained) = contained {
-            let region = &codom[contained];
+            let region = &codom.inner[contained];
+            // If `contained` is hidden there are no solutions
+            if codom.is_hidden(region) {
+                return Vec::new();
+            }
+
             for pair in &self.plans {
                 let (first_material, plan) = pair;
                 if first_material.matches(region.material) {
@@ -555,7 +534,7 @@ mod test {
         math::rgba8::Rgba8,
         pixmap::MaterialMap,
         solver::plan::{SearchPlan, SimpleGuessChooser},
-        topology::Topology,
+        topology::{MaskedTopology, Topology},
     };
     use itertools::Itertools;
     use std::path::Path;
@@ -626,7 +605,7 @@ mod test {
         let plan = SearchPlan::for_morphism(&dom, &guess_chooser, None);
         // plan.print();
 
-        let solutions = plan.solutions(&codom);
+        let solutions = plan.solutions(&MaskedTopology::whole(&codom));
 
         println!("Number of solutions found: {}", solutions.len());
         for phi in &solutions {

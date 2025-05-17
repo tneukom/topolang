@@ -5,7 +5,7 @@ use crate::{
     field::RgbaField,
     gif_recorder::GifRecorder,
     history::SnapshotCause,
-    interpreter::{Interpreter, InterpreterError, Ticked},
+    interpreter::{Interpreter, InterpreterError},
     material_effects::material_map_effects,
     math::{point::Point, rect::Rect, rgba8::Rgba8},
     painting::view_painter::{DrawView, ViewPainter},

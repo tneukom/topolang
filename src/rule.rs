@@ -3,11 +3,11 @@ use crate::{
     morphism::Morphism,
     pixmap::MaterialMap,
     solver::plan::SearchStrategy,
-    topology::{FillRegion, RegionKey, StrongRegionKey, Topology},
+    topology::{FillRegion, MaskedTopology, RegionKey, StrongRegionKey, Topology},
     world::World,
 };
 use itertools::Itertools;
-use std::{collections::BTreeSet, fmt::format};
+use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputEvent {
@@ -182,10 +182,11 @@ impl Rule {
         // tracy_span.emit_text("wtf???");
 
         let topology = world.topology();
-        let solutions =
-            self.before
-                .search_strategy
-                .solutions(topology, ctx.contained, ctx.excluded);
+        let masked_topology = MaskedTopology::new(topology, ctx.excluded);
+        let solutions = self
+            .before
+            .search_strategy
+            .solutions(&masked_topology, ctx.contained);
 
         for phi in solutions {
             // Check if input conditions are satisfied
@@ -216,7 +217,6 @@ mod test {
         topology::Topology,
         world::World,
     };
-    use std::collections::BTreeSet;
 
     fn assert_rule_application(folder: &str, expected_application_count: usize) {
         let folder = format!("test_resources/rules/{folder}");
@@ -247,7 +247,7 @@ mod test {
         while let Some(phi) = rule
             .before
             .search_strategy
-            .solutions(world.topology(), None, &BTreeSet::default())
+            .solutions(&world.topology().into(), None)
             .first()
         {
             let changed = rule.substitute(&phi, &mut world);
