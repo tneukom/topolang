@@ -13,7 +13,9 @@ use crate::{
     rule::CanvasInput,
     utils::ReflectEnum,
     view::{EditMode, View, ViewInput, ViewSettings},
-    widgets::{brush_chooser, prefab_picker, styled_button, styled_space, FileChooser},
+    widgets::{
+        brush_chooser, enum_choice_buttons, prefab_picker, styled_button, styled_space, FileChooser,
+    },
     world::World,
 };
 use glow::HasContext;
@@ -38,6 +40,45 @@ impl Clipboard {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RunSpeed {
+    Hz1,
+    Hz2,
+    Hz5,
+    Hz10,
+    Hz30,
+}
+
+impl RunSpeed {
+    const ALL: [Self; 5] = [Self::Hz1, Self::Hz2, Self::Hz5, Self::Hz10, Self::Hz30];
+
+    pub fn frames_per_tick(self) -> usize {
+        match self {
+            Self::Hz1 => 60,
+            Self::Hz2 => 30,
+            Self::Hz5 => 12,
+            Self::Hz10 => 6,
+            Self::Hz30 => 2,
+        }
+    }
+}
+
+impl ReflectEnum for RunSpeed {
+    fn all() -> &'static [Self] {
+        &Self::ALL
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Hz1 => "1 Hz",
+            Self::Hz2 => "2 Hz",
+            Self::Hz5 => "3 Hz",
+            Self::Hz10 => "10 Hz",
+            Self::Hz30 => "30 Hz",
+        }
+    }
+}
+
 pub struct EguiApp {
     view_painter: Arc<Mutex<ViewPainter>>,
     start_time: Instant,
@@ -55,6 +96,7 @@ pub struct EguiApp {
     compiler: Compiler,
     interpreter: Option<Interpreter>,
     run_mode: RunMode,
+    run_speed: RunSpeed,
 
     // stabilize: bool,
     // stabilize_count: i64,
@@ -73,8 +115,6 @@ pub struct EguiApp {
     reset_camera_requested: bool,
 
     i_frame: usize,
-    frames_per_tick: usize,
-    frames_per_slowmo_tick: usize,
     modifications_during_tick: usize,
     woken_up_during_tick: usize,
 }
@@ -122,6 +162,7 @@ impl EguiApp {
             new_size: Point(512, 512),
             file_name: "".to_string(),
             run_mode: RunMode::Paused,
+            run_speed: RunSpeed::Hz30,
             view_input: ViewInput::EMPTY,
             canvas_input: CanvasInput::default(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -139,8 +180,6 @@ impl EguiApp {
             channel_receiver,
             reset_camera_requested: true,
             i_frame: 0,
-            frames_per_tick: 3,
-            frames_per_slowmo_tick: 12,
             modifications_during_tick: 0,
             woken_up_during_tick: 0,
         }
@@ -446,7 +485,7 @@ impl EguiApp {
 
     pub fn slowmo(&mut self) {
         // Tick at lower rate than 60fps
-        let tick_frame = self.i_frame % self.frames_per_slowmo_tick == 0;
+        let tick_frame = self.i_frame % self.run_speed.frames_per_tick() == 0;
         if !tick_frame {
             return;
         }
@@ -467,7 +506,7 @@ impl EguiApp {
 
     pub fn run(&mut self) {
         // Tick at lower rate than 60fps
-        let tick_frame = self.i_frame % self.frames_per_tick == 0;
+        let tick_frame = self.i_frame % self.run_speed.frames_per_tick() == 0;
 
         // Add gif frame if previous tick there were modifications or regions woken up
         if tick_frame && (self.modifications_during_tick > 0 || self.woken_up_during_tick > 0) {
@@ -479,7 +518,7 @@ impl EguiApp {
         };
 
         // Only tick once every `self.frames_per_tick`
-        if self.i_frame % self.frames_per_tick == 0 {
+        if self.i_frame % self.run_speed.frames_per_tick() == 0 {
             // wake up
             self.woken_up_during_tick = interpreter.wake_up(&mut self.view.world);
             self.modifications_during_tick = 0;
@@ -557,6 +596,10 @@ impl EguiApp {
                 self.run();
             }
         });
+
+        // Run speed buttons
+        ui.label("Run speed");
+        enum_choice_buttons(ui, None, &mut self.run_speed);
 
         #[cfg(not(feature = "minimal_ui"))]
         {
