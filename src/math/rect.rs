@@ -164,7 +164,7 @@ impl<T: Num> Rect<T> {
     /// Returns the smallest rectangle `rect` such that `rect.half_open_contains(index)` for all
     /// indices.
     pub fn index_bounds(indices: impl IntoIterator<Item = Point<T>>) -> Self {
-        RectBounds::iter_bounds(indices.into_iter()).inc_high()
+        Self::iter_bounds(indices).inc_high()
     }
 
     pub fn intersect(self, rhs: Self) -> Self {
@@ -248,6 +248,17 @@ impl<T: Num> Rect<T> {
     pub fn center(self) -> Point<T> {
         Point::new(self.x.center(), self.y.center())
     }
+
+    /// Return an empty Rect if the iter is empty
+    pub fn iter_bounds<It>(iter: It) -> Self
+    where
+        It: IntoIterator,
+        <It as IntoIterator>::Item: RectBounds<T>,
+    {
+        iter.into_iter()
+            .map(|item| item.bounds())
+            .fold(Rect::EMPTY, Rect::bounds_with_rect)
+    }
 }
 
 impl<T: AsPrimitive<f64>> Rect<T> {
@@ -326,14 +337,8 @@ impl<T: Num + Hash> Hash for Rect<T> {
     }
 }
 
-pub trait RectBounds<T: Num>: Sized {
+pub trait RectBounds<T>: Sized {
     fn bounds(self) -> Rect<T>;
-
-    /// Return an empty Rect if the iter is empty
-    fn iter_bounds(iter: impl Iterator<Item = Self>) -> Rect<T> {
-        iter.map(Self::bounds)
-            .fold(Rect::EMPTY, Rect::bounds_with_rect)
-    }
 }
 
 impl<T: Num> RectBounds<T> for Point<T> {

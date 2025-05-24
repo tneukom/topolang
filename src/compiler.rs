@@ -2,7 +2,7 @@ use crate::{
     field::RgbaField,
     material::{Material, MaterialClass},
     math::{
-        rect::{Rect, RectBounds},
+        rect::Rect,
         rgba8::{Rgb8, Rgba8},
     },
     pixmap::MaterialMap,

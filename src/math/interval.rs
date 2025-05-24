@@ -172,6 +172,16 @@ impl<T: Num> Interval<T> {
         let two = T::ONE + T::ONE;
         (self.high + self.low) / two
     }
+
+    pub fn iter_bounds<It>(iter: It) -> Self
+    where
+        It: IntoIterator,
+        <It as IntoIterator>::Item: IntervalBounds<T>,
+    {
+        iter.into_iter()
+            .map(|item| item.bounds())
+            .fold(Interval::EMPTY, Interval::bounds_with_interval)
+    }
 }
 
 impl<T> Interval<T>
@@ -267,13 +277,8 @@ impl<T: Num + Hash> Hash for Interval<T> {
     }
 }
 
-pub trait IntervalBounds<T: Num>: Sized {
+pub trait IntervalBounds<T>: Sized {
     fn bounds(self) -> Interval<T>;
-
-    fn iter_bounds(iter: impl Iterator<Item = Self>) -> Interval<T> {
-        iter.map(Self::bounds)
-            .fold(Interval::EMPTY, Interval::bounds_with_interval)
-    }
 }
 
 impl<T: Num> IntervalBounds<T> for T {
