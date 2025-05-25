@@ -145,7 +145,8 @@ pub type StrongRegionKey = Pixel;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Border {
-    /// First side is minimum side of cycle, contains at least one item
+    /// Vec of (side, right region key), first side is minimum side of cycle,
+    /// contains at least one item.
     pub cycle: Vec<(Side, Option<RegionKey>)>,
 
     // /// Start side of first seam is first side in cycle, contains at least one item
@@ -176,22 +177,31 @@ impl Border {
         self.cycle_segments.len()
     }
 
-    fn seam_from_segment(&self, segment: CycleSegment) -> Seam {
+    fn seam_from_segment(&self, segment: CycleSegment, atoms: usize) -> Seam {
         Seam {
             start: self.cycle[segment.first()].0,
             stop: self.cycle[segment.last()].0,
-            atoms: 1,
+            atoms,
         }
     }
 
     pub fn atomic_seam(&self, i: usize) -> Seam {
-        self.seam_from_segment(self.cycle_segments.segment(i))
+        self.seam_from_segment(self.cycle_segments.atomic_segment(i), 1)
     }
 
     pub fn seam(&self, start: usize, atoms: usize) -> Seam {
-        let start_seam = self.atomic_seam(start);
-        let stop_seam = self.atomic_seam((start + atoms - 1) % self.cycle_segments.len());
-        Seam::new_with_len(start_seam.start, stop_seam.stop, atoms)
+        self.seam_from_segment(self.cycle_segments.segment(start, atoms), atoms)
+    }
+
+    pub fn seam_sides(
+        &self,
+        start: usize,
+        atoms: usize,
+    ) -> impl DoubleEndedIterator<Item = Side> + Clone + use<'_> {
+        self.cycle_segments
+            .segment(start, atoms)
+            .iter()
+            .map(|i| self.cycle[i].0)
     }
 
     /// Seam that starts and stop at `corner`
@@ -221,7 +231,7 @@ impl Border {
     pub fn atomic_seams(&self) -> impl ExactSizeIterator<Item = Seam> + Clone + '_ {
         self.cycle_segments
             .iter()
-            .map(|segment| self.seam_from_segment(segment))
+            .map(|segment| self.seam_from_segment(segment, 1))
     }
 
     /// All seams (atomic and non-atomic) of this border that are not the full loop
@@ -291,6 +301,10 @@ impl Boundary {
             .iter()
             .zip(&other.borders)
             .all(|(self_border, other_border)| self_border.translated_eq(offset, other_border))
+    }
+
+    pub fn iter_sides(&self) -> impl Iterator<Item = Side> + Clone + use<'_> {
+        self.borders.iter().flat_map(|border| border.sides())
     }
 }
 

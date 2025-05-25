@@ -3,7 +3,11 @@ use itertools::Itertools;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CycleSegment {
     start: usize,
+
+    /// Exclusive
     end: usize,
+
+    /// Length of the whole cycle of which this segment is a part.
     cycle_len: usize,
 }
 
@@ -79,22 +83,24 @@ impl CycleSegments {
             steps = vec![0];
         }
 
-        Self {
-            steps,
-            cycle_len: cycle_len,
-        }
+        Self { steps, cycle_len }
     }
 
     /// Returns the indices of the segment as a Range mod `self.cycle_len`
-    pub fn segment(&self, i: usize) -> CycleSegment {
-        let step = self.steps[i];
-        let mut next_step = self.steps[(i + 1) % self.steps.len()];
-        if next_step <= step {
+    pub fn atomic_segment(&self, i: usize) -> CycleSegment {
+        self.segment(i, 1)
+    }
+
+    pub fn segment(&self, i: usize, count: usize) -> CycleSegment {
+        assert!(count > 0);
+        let start_step = self.steps[i];
+        let mut stop_step = self.steps[(i + count) % self.steps.len()];
+        if stop_step <= start_step {
             // In case the segment wraps around
-            next_step += self.cycle_len;
+            stop_step += self.cycle_len;
         }
 
-        CycleSegment::new(step, next_step, self.cycle_len)
+        CycleSegment::new(start_step, stop_step, self.cycle_len)
     }
 
     /// Number of segments
@@ -104,7 +110,7 @@ impl CycleSegments {
 
     /// Iterate segments
     pub fn iter(&self) -> impl ExactSizeIterator<Item = CycleSegment> + Clone + '_ {
-        (0..self.len()).map(|i| self.segment(i))
+        (0..self.len()).map(|i| self.atomic_segment(i))
     }
 }
 
