@@ -62,12 +62,14 @@ pub struct CycleSegments {
 
 impl CycleSegments {
     /// See `from_iter`
-    pub fn from_slice<T: Eq + Clone>(cycle: &[T]) -> Self {
-        Self::from_iter(cycle.iter())
+    pub fn constant_segments_from_slice<T: Eq + Clone>(cycle: &[T]) -> Self {
+        Self::constant_segments_from_iter(cycle.iter())
     }
 
     /// `cycle` cannot be empty.
-    pub fn from_iter<T: Eq + Clone>(cycle: impl ExactSizeIterator<Item = T> + Clone) -> Self {
+    pub fn constant_segments_from_iter<T: Eq + Clone>(
+        cycle: impl ExactSizeIterator<Item = T> + Clone,
+    ) -> Self {
         let cycle_len = cycle.len();
         assert!(cycle_len > 0);
 
@@ -121,7 +123,7 @@ mod test {
 
     fn check_segments(cycle_str: &str) {
         let cycle = cycle_str.as_bytes();
-        let segments = CycleSegments::from_slice(cycle);
+        let segments = CycleSegments::constant_segments_from_slice(cycle);
 
         // Check that sum of lengths equals cycle.len()
         let total_len: usize = segments.iter().map(|segment| segment.len()).sum();

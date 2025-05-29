@@ -11,8 +11,9 @@ use crate::{
     math::pixel::{Side, SideName},
     union_find::UnionFind,
 };
-use ahash::{HashMap, HashMapExt};
+use ahash::HashMapExt;
 use itertools::Itertools;
+use std::collections::BTreeSet;
 
 use crate::{
     math::{pixel::Pixel, rect::Rect},
@@ -198,9 +199,6 @@ pub fn pixmap_regions<T: Copy + Eq>(pixmap: &Pixmap<T>) -> (Pixmap<usize>, Vec<R
     (Pixmap::new(region_field), region_bounding_rects)
 }
 
-/// Mapping each side to the region_id on its right side
-pub type RegionBoundary = HashMap<Side, Option<usize>>;
-
 pub fn iter_pixmap_sides<T: Copy>(
     pixmap: &Pixmap<T>,
 ) -> impl Iterator<Item = (Side, T, Option<T>)> + '_ {
@@ -213,13 +211,13 @@ pub fn iter_pixmap_sides<T: Copy>(
 }
 
 #[inline(never)]
-pub fn region_boundaries(region_map: &Pixmap<usize>, n_regions: usize) -> Vec<RegionBoundary> {
-    let mut boundaries = vec![RegionBoundary::new(); n_regions];
+pub fn region_boundaries(region_map: &Pixmap<usize>, n_regions: usize) -> Vec<BTreeSet<Side>> {
+    let mut boundaries = vec![BTreeSet::new(); n_regions];
 
     for (side, left, right) in iter_pixmap_sides(region_map) {
         let boundary = &mut boundaries[left];
         if Some(left) != right {
-            boundary.insert(side, right);
+            boundary.insert(side);
         }
     }
 
@@ -229,42 +227,38 @@ pub fn region_boundaries(region_map: &Pixmap<usize>, n_regions: usize) -> Vec<Re
 /// Split a set of sides into cycles. Each cycle starts with its smallest side. The list of cycles
 /// is ordered by the first side in each cycle. This means the first cycle is the outer cycle.
 #[inline(never)]
-pub fn split_boundary_into_cycles<T>(mut sides: HashMap<Side, T>) -> Vec<Vec<(Side, T)>> {
+pub fn split_boundary_into_cycles(mut sides: BTreeSet<Side>) -> Vec<Vec<Side>> {
     let mut cycles = Vec::new();
 
     // Pop the next side after `side` from `sides` and return it.
-    fn pop_next_side_on_boundar<T>(sides: &mut HashMap<Side, T>, side: Side) -> Option<(Side, T)> {
+    fn pop_next_side_on_boundary(sides: &mut BTreeSet<Side>, side: Side) -> Option<Side> {
         for next_side in side.continuing_sides() {
             // There is always exactly one continuing side
-            if let Some(next_color) = sides.remove(&next_side) {
-                return Some((next_side, next_color));
+            if sides.remove(&next_side) {
+                return Some(next_side);
             }
         }
 
         None
     }
 
-    while !sides.is_empty() {
-        // Pop first element
-        let mut side = *sides.keys().next().unwrap();
-        let color = sides.remove(&side).unwrap();
-
+    while let Some(mut side) = sides.pop_first() {
         // Extract cycle
-        let mut cycle = vec![(side, color)];
-        while let Some((next_side, next_color)) = pop_next_side_on_boundar(&mut sides, side) {
-            cycle.push((next_side, next_color));
+        let mut cycle = vec![side];
+        while let Some(next_side) = pop_next_side_on_boundary(&mut sides, side) {
+            cycle.push(next_side);
             side = next_side;
         }
 
         // Make sure cycle starts with the smallest element
-        let i_min = cycle.iter().position_min_by_key(|(side, _)| side).unwrap();
+        let i_min = cycle.iter().position_min().unwrap();
         cycle.rotate_left(i_min);
 
         cycles.push(cycle);
     }
 
     // Sort cycles by first element
-    cycles.sort_by_key(|cycle| cycle[0].0);
+    cycles.sort_by_key(|cycle| cycle[0]);
     cycles
 }
 
@@ -320,9 +314,9 @@ mod test {
         },
         utils::IntoT,
     };
-    use ahash::{HashMap, HashMapExt};
+    use ahash::HashMapExt;
     use itertools::Itertools;
-    use std::collections::{BTreeMap, HashSet};
+    use std::collections::{BTreeMap, BTreeSet, HashSet};
 
     /// Contains interior and boundary sides
     pub fn iter_sides_in_rect(rect: Rect<i64>) -> impl Iterator<Item = Side> + Clone {
@@ -332,16 +326,17 @@ mod test {
 
     /// Collect the boundary of the area with the given value, in other words the sides that have
     /// a pixel of the given value on the left side and a different value on the right side.
-    fn boundary_of<T: Ord + Copy>(map: &Pixmap<T>, interior: T) -> HashMap<Side, Option<T>> {
-        let mut boundary = HashMap::new();
+    fn boundary_of<T: Ord + Copy>(map: &Pixmap<T>, interior: T) -> BTreeSet<Side> {
+        let mut boundary = BTreeSet::new();
         for side in iter_sides_in_rect(map.bounding_rect()) {
             if map.get(side.left_pixel) == Some(interior) {
                 let right_color = map.get(side.right_pixel());
                 if right_color != Some(interior) {
-                    boundary.insert(side, right_color);
+                    boundary.insert(side);
                 }
             }
         }
+
         boundary
     }
 
@@ -438,7 +433,7 @@ mod test {
         test_region_boundaries("multiple_tiles_c.png");
     }
 
-    fn area_boundary(area: &HashSet<Point<i64>>) -> HashSet<Side> {
+    fn area_boundary(area: &HashSet<Point<i64>>) -> BTreeSet<Side> {
         area.iter()
             // iter over all sides of each pixel in area
             .flat_map(|pixel| pixel.sides_ccw())
@@ -447,22 +442,11 @@ mod test {
             .collect()
     }
 
-    /// Helper function to split boundary into cycles on HashSet<Side> instead of HashMap<Side, T>
-    /// Naturally mapping HashSet<Side> to HashMap<Side, ()> and Vec<(Side, ()> to Vec<Side>
-    fn split_set_boundary_into_cycles(boundary: HashSet<Side>) -> Vec<Vec<Side>> {
-        let side_map: HashMap<Side, ()> = boundary.into_iter().map(|side| (side, ())).collect();
-        let cycles = split_boundary_into_cycles(side_map);
-        cycles
-            .into_iter()
-            .map(|cycle| cycle.into_iter().map(|(side, _)| side).collect())
-            .collect()
-    }
-
     fn test_left_of_border(area: HashSet<Point<i64>>, n_sides: usize) {
         let boundary = area_boundary(&area);
         assert_eq!(boundary.len(), n_sides);
 
-        let borders = split_set_boundary_into_cycles(boundary.into());
+        let borders = split_boundary_into_cycles(boundary);
         assert_eq!(borders.len(), 1);
 
         let border = &borders[0];
@@ -474,12 +458,12 @@ mod test {
     /// See also regarding this: min_side_cw_ccw test in pixel.rs
     #[test]
     fn compatible_reverse_borders() {
-        let sides_ccw: HashSet<_> = Point(0, 0).sides_ccw().into_iter().collect();
-        let cycles_ccw = split_set_boundary_into_cycles(sides_ccw);
+        let sides_ccw: BTreeSet<_> = Point(0, 0).sides_ccw().into_iter().collect();
+        let cycles_ccw = split_boundary_into_cycles(sides_ccw);
         assert_eq!(cycles_ccw.len(), 1);
 
-        let sides_cw: HashSet<_> = Point(0, 0).sides_cw().into_iter().collect();
-        let cycles_cw = split_set_boundary_into_cycles(sides_cw);
+        let sides_cw: BTreeSet<_> = Point(0, 0).sides_cw().into_iter().collect();
+        let cycles_cw = split_boundary_into_cycles(sides_cw);
         assert_eq!(cycles_cw.len(), 1);
 
         assert_eq!(
@@ -515,6 +499,7 @@ mod test {
             .collect()
     }
 
+    /// Check if the area right of the red area inner border is equal to the blue area.
     fn test_right_of_border(filename: &str) {
         let folder = "test_resources/regions/right_of_border";
         let path = format!("{folder}/{filename}");
@@ -523,7 +508,7 @@ mod test {
         let blue_area = pixmap_color_area(&color_map, Rgba8::BLUE);
 
         let red_boundary = area_boundary(&red_area);
-        let red_borders = split_set_boundary_into_cycles(red_boundary.into());
+        let red_borders = split_boundary_into_cycles(red_boundary);
         assert_eq!(red_borders.len(), 2); // inner and outer border
 
         let inner_border = &red_borders[1];

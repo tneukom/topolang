@@ -8,7 +8,9 @@ use crate::{
         rect::Rect,
     },
     pixmap::{MaterialMap, Pixmap},
-    regions::{pixmap_regions, region_boundaries, split_boundary_into_cycles},
+    regions::{
+        area_left_of_boundary, pixmap_regions, region_boundaries, split_boundary_into_cycles,
+    },
     utils::{UndirectedEdge, UndirectedGraph},
 };
 use ahash::{HashMap, HashSet};
@@ -147,7 +149,7 @@ pub type StrongRegionKey = Pixel;
 pub struct Border {
     /// Vec of (side, right region key), first side is minimum side of cycle,
     /// contains at least one item.
-    pub cycle: Vec<(Side, Option<RegionKey>)>,
+    pub sides: Vec<Side>,
 
     // /// Start side of first seam is first side in cycle, contains at least one item
     // pub seams: Vec<Seam>,
@@ -157,19 +159,26 @@ pub struct Border {
 }
 
 impl Border {
-    pub fn sides(&self) -> impl DoubleEndedIterator<Item = Side> + Clone + '_ {
-        self.cycle.iter().map(|(side, _)| *side)
+    pub fn sides(&self) -> &[Side] {
+        &self.sides
+    }
+
+    pub fn iter_sides(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = Side> + ExactSizeIterator + Clone + use<'_> {
+        self.sides.iter().copied()
     }
 
     /// self + offset == other
     pub fn translated_eq(&self, offset: Point<i64>, other: &Self) -> bool {
-        if self.cycle.len() != other.cycle.len() {
+        if self.sides.len() != other.sides.len() {
             return false;
         }
 
-        self.sides()
-            .zip(other.sides())
-            .all(|(self_side, other_side)| self_side + offset == other_side)
+        self.sides
+            .iter()
+            .zip(&other.sides)
+            .all(|(&self_side, &other_side)| self_side + offset == other_side)
     }
 
     /// Number of atomic seams in the border
@@ -179,8 +188,8 @@ impl Border {
 
     fn seam_from_segment(&self, segment: CycleSegment, atoms: usize) -> Seam {
         Seam {
-            start: self.cycle[segment.first()].0,
-            stop: self.cycle[segment.last()].0,
+            start: self.sides[segment.first()],
+            stop: self.sides[segment.last()],
             atoms,
         }
     }
@@ -201,7 +210,7 @@ impl Border {
         self.cycle_segments
             .segment(start, atoms)
             .iter()
-            .map(|i| self.cycle[i].0)
+            .map(|i| self.sides[i])
     }
 
     /// Seam that starts and stop at `corner`
@@ -288,7 +297,7 @@ impl Boundary {
     pub fn top_left_interior_pixel(&self) -> Pixel {
         let first_border = &self.borders[0];
         assert!(first_border.is_outer);
-        first_border.cycle[0].0.left_pixel
+        first_border.sides[0].left_pixel
     }
 
     /// self + offset == other
@@ -304,7 +313,13 @@ impl Boundary {
     }
 
     pub fn iter_sides(&self) -> impl Iterator<Item = Side> + Clone + use<'_> {
-        self.borders.iter().flat_map(|border| border.sides())
+        self.borders.iter().flat_map(|border| border.iter_sides())
+    }
+
+    /// Compute the interior area (area left of the boundary). Prefer using `Topology::region_map`
+    /// if available.
+    pub fn interior_area(&self) -> Vec<Pixel> {
+        area_left_of_boundary(self.iter_sides())
     }
 }
 
@@ -458,11 +473,11 @@ impl Topology {
                 .enumerate()
             {
                 // Each cycle is a border
-                let cycle_right_side = cycle.iter().copied().map(|(_, right_side)| right_side);
-                let cycle_segments = CycleSegments::from_iter(cycle_right_side);
+                let cycle_right_side = cycle.iter().map(|side| region_map.get(side.right_pixel()));
+                let cycle_segments = CycleSegments::constant_segments_from_iter(cycle_right_side);
 
                 let border = Border {
-                    cycle,
+                    sides: cycle,
                     cycle_segments,
                     is_outer: i_border == 0,
                 };

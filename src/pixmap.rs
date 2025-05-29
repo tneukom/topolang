@@ -163,22 +163,22 @@ impl<T: Copy> Pixmap<T> {
     }
 
     pub fn left_of_border(&self, border: &Border) -> Self {
-        self.left_of_boundary(border.sides())
+        self.left_of_boundary(border.iter_sides())
     }
 
     /// Returns sub pixmap with the keys right of the given border.
     pub fn right_of_border(&self, border: &Border) -> Self {
-        self.right_of_boundary(border.sides())
+        self.right_of_boundary(border.iter_sides())
     }
 
     pub fn fill_right_of_border(&mut self, border: &Border, value: T) {
-        for pixel in area_right_of_boundary(border.sides()) {
+        for pixel in area_right_of_boundary(border.iter_sides()) {
             self.set(pixel, value);
         }
     }
 
     pub fn fill_left_of_border(&mut self, border: &Border, value: T) {
-        for pixel in area_left_of_boundary(border.sides()) {
+        for pixel in area_left_of_boundary(border.iter_sides()) {
             self.set(pixel, value);
         }
     }
