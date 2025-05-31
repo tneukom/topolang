@@ -1,69 +1,8 @@
 use crate::{
-    compiler::Compiler,
-    field::{Field, RgbaField},
-    interpreter::Interpreter,
-    math::rgba8::Rgba8,
-    pixmap::{MaterialMap, RgbaMap},
-    regions::{field_regions_fast, pixmap_regions, CompactLabels},
-    rule::CanvasInput,
-    topology::Topology,
-    utils::IntoT,
-    world::World,
+    compiler::Compiler, field::RgbaField, interpreter::Interpreter, pixmap::MaterialMap,
+    rule::CanvasInput, topology::Topology, utils::IntoT, world::World,
 };
-use std::time::{Duration, Instant};
-
-pub fn main_benchmark_field_regions() {
-    let folder = "test_resources/regions";
-    let color_map = Field::load(format!("{folder}/b.png")).unwrap();
-
-    let mut total_elapsed = Duration::from_millis(0);
-    let mut compact_labels = CompactLabels::new(color_map.len());
-    for _ in 0..1000 {
-        let now = Instant::now();
-        let _region_map = field_regions_fast(&color_map);
-        // compact_labels.clear();
-        // compact_labels.compact(region_map.iter_mut());
-
-        let elapsed = now.elapsed();
-        total_elapsed += elapsed;
-        println!("Elapsed = {:.3?}", now.elapsed());
-    }
-    println!("Total elapsed = {:.3?}", total_elapsed);
-
-    // field_regions4b: 4.791s
-    // field_regions2: 4.175s
-    // field_regions: 11.999s
-    // field_regions4: 1.563s
-    // field_regions5: 7.782s
-
-    let mut region_map = field_regions_fast(&color_map);
-    compact_labels.clear();
-    compact_labels.compact(region_map.iter_mut());
-    let region_map_rgba = region_map.map(|id| Rgba8::new(*id as u8, 0, 0, 255));
-    region_map_rgba.save(format!("{folder}/b_out.png")).unwrap();
-}
-
-pub fn main_benchmark_pixmap_regions() {
-    let folder = "test_resources/regions";
-    let color_field = Field::load(format!("{folder}/b.png")).unwrap();
-    let color_map: RgbaMap = color_field.into();
-
-    let mut total_elapsed = Duration::from_millis(0);
-    for _ in 0..500 {
-        let now = Instant::now();
-        let _region_map = pixmap_regions(&color_map);
-        let elapsed = now.elapsed();
-        total_elapsed += elapsed;
-        println!("Elapsed = {:.3?}", now.elapsed());
-    }
-
-    let (region_map, _) = pixmap_regions(&color_map);
-    let region_field = region_map.to_field(255);
-    let region_field_rgba = region_field.map(|id| Rgba8::new(*id as u8, 0, 0, 255));
-    region_field_rgba
-        .save(format!("{folder}/b_out.png"))
-        .unwrap();
-}
+use std::time::Instant;
 
 /// Run a scene by repeatedly stabilizing and waking up sleeping components.
 pub fn benchmark_run() {
@@ -140,7 +79,7 @@ pub fn main_benchmark() {
 }
 
 pub fn benchmark_topology_new() {
-    let folder = "resources/benchmarks";
+    let folder = "test_resources/benchmark";
     let material_map = RgbaField::load(format!("{folder}/hex_wave.png"))
         .unwrap()
         .intot::<MaterialMap>();

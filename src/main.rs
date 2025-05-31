@@ -95,9 +95,11 @@ pub fn main() {
         // use seamlang::benchmarks::benchmark_run;
         // benchmark_run();
 
+        use seamlang::benchmarks::benchmark_topology_new;
+        benchmark_topology_new();
+
         main_editor();
 
-        // benchmark_topology_new();
         // color_replace();
 
         // main_benchmark_pixmap_regions();

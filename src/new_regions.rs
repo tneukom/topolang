@@ -62,6 +62,7 @@ pub struct BoundaryCycles {
 }
 
 impl BoundaryCycles {
+    #[inline(never)]
     pub fn from_material_map(material_map: &MaterialMap) -> Self {
         // Collect boundary sides of `material_map`
         let mut sides = BTreeSet::new();
@@ -152,6 +153,7 @@ impl ConnectedCycleGroups {
     /// another cycle. The two cycles belong to the same group.
     /// If a cycle is counter-clockwise it's the outer border of a region.
     /// Returns a map from the min side of a cycle to the outer cycle of the cycle group.
+    #[inline(never)]
     pub fn from_cycles(cycles: &BoundaryCycles) -> Self {
         // Maps minimal side of a cycle to the minimal side of the outer cycle
         let mut cycle_to_outer_cycle: BTreeMap<CycleMinSide, CycleMinSide> = BTreeMap::new();
