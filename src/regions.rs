@@ -11,9 +11,9 @@ use crate::{
     math::pixel::{Side, SideName},
     union_find::UnionFind,
 };
-use ahash::HashMapExt;
 use itertools::Itertools;
 use std::collections::BTreeSet;
+
 
 use crate::{
     math::{pixel::Pixel, rect::Rect},

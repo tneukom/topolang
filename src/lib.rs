@@ -35,6 +35,7 @@ pub(crate) mod world;
 // pub(crate) mod material_effects;
 pub(crate) mod interpreter;
 pub(crate) mod material_effects;
+pub(crate) mod new_regions;
 pub(crate) mod solver;
 
 #[cfg(target_arch = "wasm32")]

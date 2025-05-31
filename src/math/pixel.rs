@@ -12,6 +12,7 @@ use std::{
     ops::Add,
 };
 
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SideName {
     Left,
@@ -245,8 +246,12 @@ impl Side {
         self.reversed().left_pixel
     }
 
-    pub fn continuing_sides(self) -> [Side; 2] {
+    pub fn continuing_sides(self) -> [Self; 2] {
         [self.next_ccw(), self.reversed().previous_ccw().reversed()]
+    }
+
+    pub fn opposite(self) -> Self {
+        Self::new(self.left_pixel, self.name.opposite())
     }
 }
 
