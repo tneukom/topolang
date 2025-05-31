@@ -7,10 +7,9 @@ use crate::{
         point::Point,
         rect::Rect,
     },
+    new_regions::{BoundaryCycles, ConnectedCycleGroups},
     pixmap::{MaterialMap, Pixmap},
-    regions::{
-        area_left_of_boundary, pixmap_regions, region_boundaries, split_boundary_into_cycles,
-    },
+    regions::area_left_of_boundary,
     utils::{UndirectedEdge, UndirectedGraph},
 };
 use ahash::{HashMap, HashSet};
@@ -454,37 +453,40 @@ impl Topology {
 
     #[inline(never)]
     pub fn new(material_map: &MaterialMap) -> Self {
-        let (region_map, region_bounding_rects) = pixmap_regions(material_map);
-        let n_regions = region_bounding_rects.len();
+        let boundary_cycles = BoundaryCycles::from_material_map(material_map);
+        let cycle_groups = ConnectedCycleGroups::from_cycles(&boundary_cycles);
+
+        // Derive region_map from cycle_groups
+        let mut region_map = Pixmap::nones(material_map.bounding_rect());
+        for (region_key, cycle_group) in cycle_groups.groups().enumerate() {
+            for pixel in cycle_group.area(&boundary_cycles) {
+                region_map.set(pixel, region_key);
+            }
+        }
 
         let mut regions: BTreeMap<usize, Region> = BTreeMap::new();
         let mut modifications: BTreeMap<ModificationTime, RegionKey> = BTreeMap::new();
-
-        let region_boundaries = region_boundaries(&region_map, n_regions);
-
-        for (region_key, (pre_boundary, region_bounding_rect)) in region_boundaries
-            .into_iter()
-            .zip(region_bounding_rects)
-            .enumerate()
-        {
+        for (region_key, cycle_group) in cycle_groups.groups().enumerate() {
+            // Create Boundary
             let mut borders = Vec::new();
-            for (i_border, cycle) in split_boundary_into_cycles(pre_boundary)
-                .into_iter()
-                .enumerate()
-            {
+            for cycle in cycle_group.iter_cycles(&boundary_cycles) {
                 // Each cycle is a border
-                let cycle_right_side = cycle.iter().map(|side| region_map.get(side.right_pixel()));
+                // TODO: Use cycle(reverse(side)) instead to compute seams
+                let cycle_right_side = cycle
+                    .sides
+                    .iter()
+                    .map(|side| region_map.get(side.right_pixel()));
                 let cycle_segments = CycleSegments::constant_segments_from_iter(cycle_right_side);
 
                 let border = Border {
-                    sides: cycle,
+                    sides: cycle.sides.clone(),
                     cycle_segments,
-                    is_outer: i_border == 0,
+                    is_outer: cycle.is_outer(),
                 };
                 borders.push(border);
             }
 
-            let boundary = Boundary::new(borders, region_bounding_rect);
+            let boundary = Boundary::new(borders, cycle_group.bounds);
 
             let region = Region {
                 material: material_map

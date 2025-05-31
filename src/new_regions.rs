@@ -43,6 +43,14 @@ impl Cycle {
     pub fn interior_pixel(&self) -> Pixel {
         self.sides[0].left_pixel
     }
+
+    pub fn is_inner(&self) -> bool {
+        is_inner_border(self.sides[0])
+    }
+
+    pub fn is_outer(&self) -> bool {
+        is_outer_border(self.sides[0])
+    }
 }
 
 pub struct BoundaryCycles {
@@ -111,12 +119,20 @@ impl CycleGroup {
 
     pub fn iter_sides<'a>(
         &'a self,
-        cycles: &'a BoundaryCycles,
+        boundary_cycles: &'a BoundaryCycles,
     ) -> impl Iterator<Item = Side> + Clone + use<'a> {
+        self.iter_cycles(boundary_cycles)
+            .flat_map(|cycle| &cycle.sides)
+            .copied()
+    }
+
+    pub fn iter_cycles<'a>(
+        &'a self,
+        boundary_cycles: &'a BoundaryCycles,
+    ) -> impl Iterator<Item = &'a Cycle> + Clone + use<'a> {
         self.cycle_min_sides
             .iter()
-            .flat_map(|cycle_min_side| &cycles.cycles[cycle_min_side].sides)
-            .copied()
+            .map(|cycle_min_side| &boundary_cycles.cycles[cycle_min_side])
     }
 
     pub fn area(&self, boundary_cycles: &BoundaryCycles) -> Vec<Pixel> {
