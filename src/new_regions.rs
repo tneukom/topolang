@@ -3,11 +3,12 @@ use crate::{
         pixel::{Pixel, Side, SideName},
         rect::Rect,
     },
-    pixmap::MaterialMap,
+    pixmap::{MaterialMap, Pixmap},
     regions::{area_left_of_boundary, iter_pixmap_sides, split_boundary_into_cycles},
 };
+use ahash::{HashMap, HashSet};
 use itertools::Itertools;
-use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+use std::collections::{btree_map::Entry, BTreeMap};
 
 type CycleMinSide = Side;
 
@@ -58,14 +59,14 @@ pub struct BoundaryCycles {
     cycles: BTreeMap<CycleMinSide, Cycle>,
 
     /// Mapping from any side of a cycle to the min side of the cycle
-    side_to_cycle: BTreeMap<Side, CycleMinSide>,
+    side_to_cycle: HashMap<Side, CycleMinSide>,
 }
 
 impl BoundaryCycles {
     #[inline(never)]
     pub fn from_material_map(material_map: &MaterialMap) -> Self {
         // Collect boundary sides of `material_map`
-        let mut sides = BTreeSet::new();
+        let mut sides = HashSet::default();
         for (side, left, right) in iter_pixmap_sides(material_map) {
             if Some(left) != right {
                 sides.insert(side);
@@ -79,7 +80,7 @@ impl BoundaryCycles {
             .collect();
 
         // `cycle_map` maps each side to the cycle index it belongs to.
-        let mut side_to_cycle = BTreeMap::new();
+        let mut side_to_cycle = HashMap::default();
         for (&first_side, cycle) in cycles.iter() {
             for &side in &cycle.sides {
                 side_to_cycle.insert(side, first_side);
@@ -207,6 +208,18 @@ impl ConnectedCycleGroups {
     pub fn groups(&self) -> impl Iterator<Item = &CycleGroup> + Clone {
         self.outer_cycle_to_group.values()
     }
+
+    #[inline(never)]
+    pub fn region_map(&self, boundary_cycles: &BoundaryCycles, bounds: Rect<i64>) -> Pixmap<usize> {
+        // Derive region_map from cycle_groups
+        let mut region_map = Pixmap::nones(bounds);
+        for (region_key, cycle_group) in self.groups().enumerate() {
+            for pixel in cycle_group.area(&boundary_cycles) {
+                region_map.set(pixel, region_key);
+            }
+        }
+        region_map
+    }
 }
 
 // fn compute_topology(material_map: &MaterialMap) {
@@ -228,6 +241,17 @@ mod test {
         let material_map = MaterialMap::load(path).unwrap();
 
         let boundary_cycles = BoundaryCycles::from_material_map(&material_map);
+
+        // For debugging
+        // println!("cycle count: {}", boundary_cycles.cycles.len());
+        // for cycle in boundary_cycles.cycles.values() {
+        //     println!(
+        //         "Cycle start: {}, length: {}",
+        //         cycle.sides.first().unwrap(),
+        //         cycle.sides.len()
+        //     );
+        // }
+
         let cycle_group = ConnectedCycleGroups::from_cycles(&boundary_cycles);
 
         // for group in cycle_group.outer_cycle_to_group.values() {
@@ -251,7 +275,7 @@ mod test {
 
         // repainted_material_map
         //     .save(format!("{folder}/{name}.repainted.png"))
-        //     .unwrap()
+        //     .unwrap();
 
         assert_eq!(&material_map, &repainted_material_map);
     }

@@ -11,14 +11,14 @@ use crate::{
     math::pixel::{Side, SideName},
     union_find::UnionFind,
 };
-use itertools::Itertools;
-use std::collections::BTreeSet;
-
-
 use crate::{
     math::{pixel::Pixel, rect::Rect},
     pixmap::Pixmap,
 };
+use ahash::HashSet;
+use itertools::Itertools;
+use std::{collections::BTreeSet, hash::Hash};
+
 
 pub struct CompactLabels {
     remap: Vec<usize>,
@@ -224,30 +224,37 @@ pub fn region_boundaries(region_map: &Pixmap<usize>, n_regions: usize) -> Vec<BT
     boundaries
 }
 
+fn pop_arbitrary<T: Eq + Hash + Copy>(set: &mut HashSet<T>) -> Option<T> {
+    let &next = set.iter().next()?;
+    Some(set.take(&next).unwrap())
+}
+
 /// Split a set of sides into cycles. Each cycle starts with its smallest side. The list of cycles
 /// is ordered by the first side in each cycle. This means the first cycle is the outer cycle.
 #[inline(never)]
-pub fn split_boundary_into_cycles(mut sides: BTreeSet<Side>) -> Vec<Vec<Side>> {
+pub fn split_boundary_into_cycles(mut sides: HashSet<Side>) -> Vec<Vec<Side>> {
     let mut cycles = Vec::new();
 
-    // Pop the next side after `side` from `sides` and return it.
-    fn pop_next_side_on_boundary(sides: &mut BTreeSet<Side>, side: Side) -> Option<Side> {
-        for next_side in side.continuing_sides() {
-            // There is always exactly one continuing side
-            if sides.remove(&next_side) {
-                return Some(next_side);
-            }
-        }
-
-        None
-    }
-
-    while let Some(mut side) = sides.pop_first() {
+    while let Some(start_side) = pop_arbitrary(&mut sides) {
         // Extract cycle
-        let mut cycle = vec![side];
-        while let Some(next_side) = pop_next_side_on_boundary(&mut sides, side) {
-            cycle.push(next_side);
-            side = next_side;
+        let mut cycle = vec![start_side];
+        let mut side = start_side;
+        'outer: loop {
+            // If 3 regions meet in a corner, there are 2 possible continuing side, but only
+            // one valid one. Because `side.continuing_sides()` returns the side in clockwise order
+            // we get the right one. Careful when changing this code!
+            for continuing_side in side.continuing_sides() {
+                if continuing_side == start_side {
+                    // Cycle finished
+                    break 'outer;
+                }
+
+                if sides.remove(&continuing_side) {
+                    cycle.push(continuing_side);
+                    side = continuing_side;
+                    break;
+                }
+            }
         }
 
         // Make sure cycle starts with the smallest element
@@ -314,9 +321,9 @@ mod test {
         },
         utils::IntoT,
     };
-    use ahash::HashMapExt;
+    use ahash::HashSet;
     use itertools::Itertools;
-    use std::collections::{BTreeMap, BTreeSet, HashSet};
+    use std::collections::{BTreeMap, BTreeSet};
 
     /// Contains interior and boundary sides
     pub fn iter_sides_in_rect(rect: Rect<i64>) -> impl Iterator<Item = Side> + Clone {
@@ -433,7 +440,7 @@ mod test {
         test_region_boundaries("multiple_tiles_c.png");
     }
 
-    fn area_boundary(area: &HashSet<Point<i64>>) -> BTreeSet<Side> {
+    fn area_boundary(area: &HashSet<Point<i64>>) -> HashSet<Side> {
         area.iter()
             // iter over all sides of each pixel in area
             .flat_map(|pixel| pixel.sides_ccw())
@@ -458,11 +465,11 @@ mod test {
     /// See also regarding this: min_side_cw_ccw test in pixel.rs
     #[test]
     fn compatible_reverse_borders() {
-        let sides_ccw: BTreeSet<_> = Point(0, 0).sides_ccw().into_iter().collect();
+        let sides_ccw: HashSet<_> = Point(0, 0).sides_ccw().into_iter().collect();
         let cycles_ccw = split_boundary_into_cycles(sides_ccw);
         assert_eq!(cycles_ccw.len(), 1);
 
-        let sides_cw: BTreeSet<_> = Point(0, 0).sides_cw().into_iter().collect();
+        let sides_cw: HashSet<_> = Point(0, 0).sides_cw().into_iter().collect();
         let cycles_cw = split_boundary_into_cycles(sides_cw);
         assert_eq!(cycles_cw.len(), 1);
 
@@ -474,19 +481,21 @@ mod test {
 
     #[test]
     fn simple_left_of_border_a() {
-        let area: HashSet<_> = [Point(0, 0)].into();
+        let area: HashSet<_> = [Point(0, 0)].into_iter().collect();
         test_left_of_border(area, 6);
     }
 
     #[test]
     fn simple_left_of_border_b() {
-        let area: HashSet<_> = [Point(0, 0), Point(1, 0)].into();
+        let area: HashSet<_> = [Point(0, 0), Point(1, 0)].into_iter().collect();
         test_left_of_border(area, 10);
     }
 
     #[test]
     fn simple_left_of_border_c() {
-        let area: HashSet<_> = [Point(0, 0), Point(1, 0), Point(0, 1), Point(1, 1)].into();
+        let area: HashSet<_> = [Point(0, 0), Point(1, 0), Point(0, 1), Point(1, 1)]
+            .into_iter()
+            .collect();
         test_left_of_border(area, 14);
     }
 

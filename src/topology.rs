@@ -457,12 +457,7 @@ impl Topology {
         let cycle_groups = ConnectedCycleGroups::from_cycles(&boundary_cycles);
 
         // Derive region_map from cycle_groups
-        let mut region_map = Pixmap::nones(material_map.bounding_rect());
-        for (region_key, cycle_group) in cycle_groups.groups().enumerate() {
-            for pixel in cycle_group.area(&boundary_cycles) {
-                region_map.set(pixel, region_key);
-            }
-        }
+        let region_map = cycle_groups.region_map(&boundary_cycles, material_map.bounding_rect());
 
         let mut regions: BTreeMap<usize, Region> = BTreeMap::new();
         let mut modifications: BTreeMap<ModificationTime, RegionKey> = BTreeMap::new();

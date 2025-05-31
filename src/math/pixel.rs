@@ -246,6 +246,8 @@ impl Side {
         self.reversed().left_pixel
     }
 
+    /// Returns the two sides that continue from `self` side or in other words that have
+    /// `continuing_side.start_corner == self.stop_corner`. Sides are returned in ccw order.
     pub fn continuing_sides(self) -> [Self; 2] {
         [self.next_ccw(), self.reversed().previous_ccw().reversed()]
     }
