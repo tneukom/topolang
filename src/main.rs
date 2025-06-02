@@ -89,16 +89,15 @@ pub fn main() {
 
         tracy_client::Client::start();
 
-        // use seamlang::benchmarks::main_benchmark;
-        // main_benchmark();
+        // seamlang::benchmarks::main_benchmark();
 
-        // use seamlang::benchmarks::benchmark_run;
-        // benchmark_run();
+        // seamlang::benchmarks::benchmark_run();
 
-        // use seamlang::benchmarks::benchmark_topology_new;
-        // benchmark_topology_new();
+        // seamlang::benchmarks::benchmark_topology_new();
 
-        main_editor();
+        seamlang::benchmarks::benchmark_topology_draw();
+
+        // main_editor();
 
         // color_replace();
 

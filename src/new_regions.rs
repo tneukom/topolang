@@ -22,6 +22,14 @@ pub fn is_inner_border(min_side: Side) -> bool {
     !is_outer_border(min_side)
 }
 
+fn is_boundary_side(side: Side, material_map: &MaterialMap) -> bool {
+    let Some(left_material) = material_map.get(side.left_pixel) else {
+        return false;
+    };
+    let right_material = material_map.get(side.right_pixel());
+    Some(left_material) != right_material
+}
+
 #[derive(Debug, Clone)]
 pub struct Cycle {
     pub sides: Vec<Side>,
@@ -56,6 +64,50 @@ impl Cycle {
 }
 
 #[derive(Debug, Clone)]
+pub struct Sides {
+    pub bounds: Rect<i64>,
+    pub sides: HashSet<Side>,
+}
+
+impl Sides {
+    pub fn empty(bounds: Rect<i64>) -> Self {
+        Self {
+            bounds,
+            sides: HashSet::default(),
+        }
+    }
+
+    pub fn boundary_sides(material_map: &MaterialMap) -> Self {
+        // Collect boundary sides of `material_map`
+        let mut sides = HashSet::default();
+        for (side, left, right) in iter_pixmap_sides(material_map) {
+            if Some(left) != right {
+                sides.insert(side);
+            }
+        }
+
+        Self {
+            sides,
+            bounds: material_map.bounding_rect(),
+        }
+    }
+
+    fn set(&mut self, side: Side, contained: bool) {
+        if contained {
+            self.sides.insert(side);
+        } else {
+            self.sides.remove(&side);
+        }
+    }
+
+    pub fn update_pixel_boundary(&mut self, material_map: &MaterialMap, pixel: Pixel) {
+        for side in pixel.sides_ccw_and_cw() {
+            self.set(side, is_boundary_side(side, material_map));
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct BoundaryCycles {
     pub bounds: Rect<i64>,
 
@@ -67,21 +119,29 @@ pub struct BoundaryCycles {
 }
 
 impl BoundaryCycles {
-    #[inline(never)]
-    pub fn from_material_map(material_map: &MaterialMap) -> Self {
-        // Collect boundary sides of `material_map`
-        let mut sides = HashSet::default();
-        for (side, left, right) in iter_pixmap_sides(material_map) {
-            if Some(left) != right {
-                sides.insert(side);
-            }
-        }
+    pub fn extract_cycle(&mut self, cycle_min_side: CycleMinSide, to: &mut Sides) {
+        // Probably not strictly required
+        assert_eq!(self.bounds, to.bounds);
 
+        let cycle = self.cycles.remove(&cycle_min_side).unwrap();
+        for side in cycle.sides {
+            self.side_to_cycle.remove(&side);
+            to.sides.insert(side);
+        }
+    }
+
+    pub fn sides(&self) -> impl Iterator<Item = Side> + use<'_> {
+        self.cycles.values().flat_map(|cycle| &cycle.sides).copied()
+    }
+
+    #[inline(never)]
+    pub fn new(boundary_sides: &Sides) -> Self {
         // Split boundary sides into cycles
-        let cycles: BTreeMap<Side, Cycle> = split_boundary_into_cycles(sides)
-            .into_iter()
-            .map(|cycle_sides| (cycle_sides[0], Cycle::new(cycle_sides)))
-            .collect();
+        let cycles: BTreeMap<Side, Cycle> =
+            split_boundary_into_cycles(boundary_sides.sides.clone())
+                .into_iter()
+                .map(|cycle_sides| (cycle_sides[0], Cycle::new(cycle_sides)))
+                .collect();
 
         // `cycle_map` maps each side to the cycle index it belongs to.
         let mut side_to_cycle = HashMap::default();
@@ -92,10 +152,51 @@ impl BoundaryCycles {
         }
 
         Self {
-            bounds: material_map.bounding_rect(),
+            bounds: boundary_sides.bounds,
             cycles,
             side_to_cycle,
         }
+    }
+
+    pub fn extend(&mut self, other: Self) {
+        self.cycles.extend(other.cycles);
+        self.side_to_cycle.extend(other.side_to_cycle);
+    }
+
+    pub fn debug_print(&self) {
+        println!("BoundaryCycles with {} cycles", self.cycles.len());
+        for (cycle_min_side, cycle) in &self.cycles {
+            println!("  Cycle {cycle_min_side}");
+            for side in &cycle.sides {
+                println!("    {side}");
+            }
+        }
+    }
+
+    pub fn update(
+        &mut self,
+        material_map: &MaterialMap,
+        pixels: impl Iterator<Item = Pixel> + Clone,
+    ) {
+        // Extract all touched cycles into Sides
+        let touched_sides = pixels.clone().flat_map(Pixel::outgoing_sides);
+
+        let mut sides = Sides::empty(self.bounds);
+        for side in touched_sides {
+            if let Some(&cycle_min_side) = self.side_to_cycle.get(&side) {
+                self.extract_cycle(cycle_min_side, &mut sides);
+            }
+        }
+
+        // Update sides
+        for pixel in pixels {
+            sides.update_pixel_boundary(material_map, pixel);
+        }
+
+        // Rebuild cycles for extracted sides
+        let cycles = Self::new(&sides);
+
+        self.extend(cycles);
     }
 
     /// Same as walk_to_boundary_cycle but only applicable if `pixel` is guaranteed to be inside  a
@@ -276,7 +377,7 @@ impl ConnectedCycleGroups {
 #[cfg(test)]
 mod test {
     use crate::{
-        new_regions::{BoundaryCycles, ConnectedCycleGroups},
+        new_regions::{BoundaryCycles, ConnectedCycleGroups, Sides},
         pixmap::MaterialMap,
     };
 
@@ -285,7 +386,9 @@ mod test {
         let path = format!("{folder}/{name}.png");
         let material_map = MaterialMap::load(path).unwrap();
 
-        let boundary_cycles = BoundaryCycles::from_material_map(&material_map);
+        let boundary_sides = Sides::boundary_sides(&material_map);
+
+        let boundary_cycles = BoundaryCycles::new(&boundary_sides);
 
         // For debugging
         // println!("cycle count: {}", boundary_cycles.cycles.len());

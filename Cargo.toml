@@ -54,3 +54,6 @@ tracy-client = { version = "0.18.0", default-features = false, features = ["enab
 
 [profile.release]
 debug = 1
+
+[profile.test]
+debug = 1

@@ -7,7 +7,7 @@ use crate::{
         point::Point,
         rect::Rect,
     },
-    new_regions::{BoundaryCycles, ConnectedCycleGroups},
+    new_regions::{BoundaryCycles, ConnectedCycleGroups, Sides},
     pixmap::{MaterialMap, Pixmap},
     regions::area_left_of_boundary,
     utils::{UndirectedEdge, UndirectedGraph},
@@ -454,8 +454,10 @@ impl Topology {
     }
 
     #[inline(never)]
-    pub fn new(material_map: &MaterialMap) -> Self {
-        let boundary_cycles = BoundaryCycles::from_material_map(material_map);
+    pub fn from_boundary_cycles(
+        boundary_cycles: BoundaryCycles,
+        material_map: &MaterialMap,
+    ) -> Self {
         let cycle_groups = ConnectedCycleGroups::from_cycles(&boundary_cycles);
 
         let mut regions: BTreeMap<RegionKey, Region> = BTreeMap::new();
@@ -509,13 +511,20 @@ impl Topology {
         }
 
         Self {
-            bounding_rect: material_map.bounding_rect(),
+            bounding_rect: boundary_cycles.bounds,
             cycle_groups,
             boundary_cycles,
             regions,
             seam_indices,
             modifications,
         }
+    }
+
+    #[inline(never)]
+    pub fn new(material_map: &MaterialMap) -> Self {
+        let boundary_sides = Sides::boundary_sides(material_map);
+        let boundary_cycles = BoundaryCycles::new(&boundary_sides);
+        Self::from_boundary_cycles(boundary_cycles, material_map)
     }
 
     pub fn region_map(&self) -> Pixmap<RegionKey> {
@@ -796,112 +805,23 @@ impl Topology {
         self.modifications_after(mtime).next()
     }
 
-    /// MaterialMap of the given `region_keys`
-    pub fn sub_material_map(
-        &self,
-        region_keys: impl Iterator<Item = RegionKey> + Clone,
-    ) -> MaterialMap {
-        let bounds = Rect::iter_bounds(region_keys.clone().map(|key| self.regions[&key].bounds()));
-        let mut material_map = MaterialMap::nones(bounds);
-
-        for region_key in region_keys {
-            let region = &self.regions[&region_key];
-            self.fill_region(region_key, region.material, &mut material_map);
+    /// Draw the given (pixel, material) pairs. Equivalent to drawing to the underlying MaterialMap
+    /// and recreating the Topology.
+    pub fn draw(
+        mut self,
+        material_map: &mut MaterialMap,
+        pixel_materials: impl Iterator<Item = (Pixel, Option<Material>)> + Clone,
+    ) -> Self {
+        for (pixel, material) in pixel_materials.clone() {
+            material_map.put(pixel, material);
         }
 
-        material_map
+        let pixels = pixel_materials.map(|(pixel, _)| pixel);
+        self.boundary_cycles.update(material_map, pixels);
+
+        // Rebuild Topology from updated BoundaryCycles
+        Topology::from_boundary_cycles(self.boundary_cycles, material_map)
     }
-
-    // /// Remove a region but do not modify any other Regions. Meaning seams of other Regions to the
-    // /// removed Region become invalid. The Topology has to be fixed somehow after this operation
-    // /// to be made valid again.
-    // fn remove_region_without_modifying_other_regions(&mut self, remove_region_key: RegionKey) {
-    //     let region = self.regions.remove(&remove_region_key).unwrap();
-    //
-    //     // Remove from `self.region_map`
-    //     for pixel in region.bounds().iter_indices() {
-    //         if self.region_map.get(pixel) == Some(remove_region_key) {
-    //             self.region_map.remove(pixel);
-    //         }
-    //     }
-    //
-    //     // Remove from `self.seam_indices`
-    //     for seam in region.iter_seams() {
-    //         self.seam_indices.remove(&seam.start).unwrap();
-    //     }
-    //
-    //     // Remove from `self.modifications`
-    //     self.modifications
-    //         .retain(|_, &mut region_key| region_key != remove_region_key);
-    // }
-
-    // fn insert_topology_without_modifying_existing_regions(&mut self, topology: Topology) {
-    //     let region_key_offset = match self.regions.keys().copied().max() {
-    //         Some(max_region_key) => max_region_key + 1,
-    //         None => 0,
-    //     };
-    //
-    //     for (region_key, region) in topology.regions {
-    //         let insert_region_key = region_key + region_key_offset;
-    //
-    //         // Insert into `self.region_map`
-    //         for pixel in region.bounds().iter_indices() {
-    //             if topology.region_map.get(pixel) == Some(region_key) {
-    //                 let replaced = self.region_map.set(pixel, insert_region_key);
-    //                 assert!(replaced.is_none());
-    //             }
-    //         }
-    //
-    //         // Insert into `self.seam_indices`
-    //         for (i_border, border) in region.boundary.borders.iter().enumerate() {
-    //             for (i_seam, seam) in border.atomic_seams().enumerate() {
-    //                 let seam_key = SeamIndex::new(insert_region_key, i_border, i_seam);
-    //                 self.seam_indices.insert(seam.start, seam_key);
-    //             }
-    //         }
-    //
-    //         // Insert into `self.modifications`
-    //         self.modifications
-    //             .insert(modification_time_counter(), insert_region_key);
-    //
-    //         // Insert `region` into `self.regions`
-    //         self.regions.insert(insert_region_key, region);
-    //     }
-    // }
-
-    // /// Draw the given (pixel, material) pairs. Equivalent to drawing to the underlying MaterialMap
-    // /// and recreating the Topology.
-    // pub fn draw(
-    //     &mut self,
-    //     pixel_materials: impl Iterator<Item = (Pixel, Option<Material>)> + Clone,
-    // ) {
-    //     // By rebuilding the Topology of all touched regions we can simply remove all the existing
-    //     // Regions and insert the rebuilt ones. Because the interface (pixels bordering the rest of
-    //     // the Topology) is unchanged we can ignore the seams between the existing Regions and the
-    //     // updated ones.
-    //     // The changes are shielded from the rest of the Topology by padding that is unchanged.
-    //
-    //     // Find all regions that touch any of the modified pixels
-    //     let pixels = pixel_materials.clone().map(|(pixel, _)| pixel);
-    //     let touched = self.touched_regions(pixels);
-    //
-    //     // Copy touched regions into touched_material_map and overwrite with draw_material_map
-    //     let mut touched_material_map = self.sub_material_map(touched.iter().copied());
-    //
-    //     for (pixel, material) in pixel_materials {
-    //         touched_material_map.put(pixel, material);
-    //     }
-    //
-    //     let touched_topology = Topology::new(&touched_material_map);
-    //
-    //     // Remove touched regions
-    //     for region_key in touched {
-    //         self.remove_region_without_modifying_other_regions(region_key);
-    //     }
-    //
-    //     // Insert new Topology
-    //     self.insert_topology_without_modifying_existing_regions(touched_topology);
-    // }
 }
 
 /// Warning: Slow
@@ -1035,6 +955,7 @@ impl TopologyStatistics {
 pub mod test {
     use crate::{
         material::Material,
+        pixmap::MaterialMap,
         topology::{SeamIndex, Topology},
         utils::{KeyValueItertools, UndirectedEdge, UndirectedGraph},
     };
@@ -1226,76 +1147,93 @@ pub mod test {
         check_topology("4a.png", &expected_edges);
     }
 
-    // /// Uses transparent as None color
-    // fn check_draw_topology(from_filename: &str, to_filename: &str) {
-    //     let folder = "test_resources/topology/draw";
-    //     let from_material_map = MaterialMap::load(format!("{folder}/{from_filename}"))
-    //         .unwrap()
-    //         .without(Material::TRANSPARENT);
-    //     let to_material_map = MaterialMap::load(format!("{folder}/{to_filename}"))
-    //         .unwrap()
-    //         .without(Material::TRANSPARENT);
-    //     assert_eq!(
-    //         from_material_map.bounding_rect(),
-    //         to_material_map.bounding_rect()
-    //     );
-    //     let diff: Vec<_> = from_material_map
-    //         .field
-    //         .indices()
-    //         .filter_map(|pixel| {
-    //             let from_material = from_material_map.get(pixel);
-    //             let to_material = to_material_map.get(pixel);
-    //             (from_material != to_material).then_some((pixel, to_material))
-    //         })
-    //         .collect();
-    //
-    //     let from_topology = Topology::new(&from_material_map);
-    //     let to_topology = Topology::new(&to_material_map);
-    //
-    //     let mut drawn_topology = from_topology.clone();
-    //     drawn_topology.draw(diff.into_iter());
-    //     check_structure(&drawn_topology);
-    //
-    //     assert_eq!(to_topology.region_map(), drawn_topology.region_map());
-    //
-    //     assert_eq!(to_topology, drawn_topology);
-    // }
+    /// Uses transparent as None color
+    fn check_draw_topology(from_filename: &str, to_filename: &str) {
+        let folder = "test_resources/topology/draw";
+        let mut from_material_map = MaterialMap::load(format!("{folder}/{from_filename}"))
+            .unwrap()
+            .without(Material::TRANSPARENT);
+        let to_material_map = MaterialMap::load(format!("{folder}/{to_filename}"))
+            .unwrap()
+            .without(Material::TRANSPARENT);
+        assert_eq!(
+            from_material_map.bounding_rect(),
+            to_material_map.bounding_rect()
+        );
+        let diff: Vec<_> = from_material_map
+            .field
+            .indices()
+            .filter_map(|pixel| {
+                let from_material = from_material_map.get(pixel);
+                let to_material = to_material_map.get(pixel);
+                (from_material != to_material).then_some((pixel, to_material))
+            })
+            .collect();
 
-    // #[test]
-    // fn draw_topology_a0_to_a1() {
-    //     check_draw_topology("a0.png", "a1.png");
-    // }
-    //
-    // #[test]
-    // fn draw_topology_a1_to_a2() {
-    //     check_draw_topology("a1.png", "a2.png");
-    // }
-    //
-    // #[test]
-    // fn draw_topology_a2_to_a3() {
-    //     check_draw_topology("a2.png", "a3.png");
-    // }
-    //
-    // #[test]
-    // fn draw_topology_b0_to_b1() {
-    //     check_draw_topology("b0.png", "b1.png");
-    // }
-    //
-    // #[test]
-    // fn draw_topology_b1_to_b2() {
-    //     check_draw_topology("b1.png", "b2.png");
-    // }
-    //
-    // #[test]
-    // fn draw_topology_c0_to_c1() {
-    //     // Approach does not work for this case.
-    //     // Alternative approach: Calculate PreRegion { borders } for each touched Region, then
-    //     // calculate seams in context of Topology.
-    //     check_draw_topology("c0.png", "c1.png");
-    // }
-    //
-    // #[test]
-    // fn draw_topology_hole0_to_hole1() {
-    //     check_draw_topology("hole0.png", "hole1.png");
-    // }
+        let from_topology = Topology::new(&from_material_map);
+        let to_topology = Topology::new(&to_material_map);
+
+        let mut drawn_topology = from_topology.clone();
+
+        drawn_topology = drawn_topology.draw(&mut from_material_map, diff.into_iter());
+
+        check_structure(&drawn_topology);
+
+        assert_eq!(from_material_map, to_material_map);
+        assert_eq!(to_topology.region_map(), drawn_topology.region_map());
+        assert_eq!(to_topology, drawn_topology);
+    }
+
+    #[test]
+    fn draw_small0_to_small1() {
+        check_draw_topology("small0.png", "small1.png");
+    }
+
+    #[test]
+    fn draw_topology_a0_to_a1() {
+        check_draw_topology("a0.png", "a1.png");
+    }
+
+    #[test]
+    fn draw_topology_a1_to_a2() {
+        check_draw_topology("a1.png", "a2.png");
+    }
+
+    #[test]
+    fn draw_topology_a2_to_a3() {
+        check_draw_topology("a2.png", "a3.png");
+    }
+
+    #[test]
+    fn draw_topology_b0_to_b1() {
+        check_draw_topology("b0.png", "b1.png");
+    }
+
+    #[test]
+    fn draw_topology_b1_to_b2() {
+        check_draw_topology("b1.png", "b2.png");
+    }
+
+    #[test]
+    fn draw_topology_c0_to_c1() {
+        // Approach does not work for this case.
+        // Alternative approach: Calculate PreRegion { borders } for each touched Region, then
+        // calculate seams in context of Topology.
+        check_draw_topology("c0.png", "c1.png");
+    }
+
+    #[test]
+    fn draw_topology_hole0_to_hole1() {
+        check_draw_topology("hole0.png", "hole1.png");
+    }
+
+    #[test]
+    fn draw_topology_bridge0_to_bridge1() {
+        check_draw_topology("bridge0.png", "bridge1.png");
+    }
+
+    #[test]
+    fn draw_topology_fail_a0_to_fail_a1() {
+        check_draw_topology("fail_a0.png", "fail_a1.png");
+    }
 }

@@ -62,9 +62,11 @@ pub fn split_boundary_into_cycles(mut sides: HashSet<Side>) -> Vec<Vec<Side>> {
                 if sides.remove(&continuing_side) {
                     cycle.push(continuing_side);
                     side = continuing_side;
-                    break;
+                    continue 'outer;
                 }
             }
+
+            unreachable!("Has to continue with a side");
         }
 
         // Make sure cycle starts with the smallest element

@@ -169,6 +169,10 @@ impl Point<i64> {
         self.sides_ccw().map(|side| side.reversed())
     }
 
+    pub fn sides_ccw_and_cw(self) -> impl Iterator<Item = Side> + Clone {
+        self.sides_ccw().into_iter().chain(self.sides_cw())
+    }
+
     pub fn corners(self) -> [Corner; 6] {
         self.sides_ccw().map(|side| side.start_corner())
     }
@@ -194,6 +198,13 @@ impl Point<i64> {
             self.bottom_right_neighbor(),
             self.right_neighbor(),
         ]
+    }
+
+    /// All sides that start with one of the pixel corners
+    pub fn outgoing_sides(self) -> impl Iterator<Item = Side> + Clone {
+        self.corners()
+            .into_iter()
+            .flat_map(|corner| corner.outgoing_sides())
     }
 }
 
@@ -245,10 +256,22 @@ impl Side {
         self.reversed().left_pixel
     }
 
+    /// Rotate side around start_corner in clockwise direction
+    pub fn rotate_cw_around_start_corner(self) -> Self {
+        self.reversed().next_ccw()
+    }
+
+    pub fn rotate_ccw_around_start_corner(self) -> Self {
+        self.previous_ccw().reversed()
+    }
+
     /// Returns the two sides that continue from `self` side or in other words that have
     /// `continuing_side.start_corner == self.stop_corner`. Sides are returned in ccw order.
     pub fn continuing_sides(self) -> [Self; 2] {
-        [self.next_ccw(), self.reversed().previous_ccw().reversed()]
+        [
+            self.next_ccw(),
+            self.next_ccw().rotate_cw_around_start_corner(),
+        ]
     }
 
     pub fn opposite(self) -> Self {
@@ -352,11 +375,26 @@ impl Corner {
             SideName::Right => Self::right_side_stop(side.left_pixel),
         }
     }
+
+    pub fn outgoing_side(self) -> Side {
+        match self.name {
+            CornerName::TopStart => self.pixel.top_side(),
+            CornerName::TopStop => self.pixel.top_left_side(),
+        }
+    }
+
+    pub fn outgoing_sides(self) -> [Side; 3] {
+        let side_0 = self.outgoing_side();
+        let side_1 = side_0.rotate_cw_around_start_corner();
+        let side_2 = side_1.rotate_cw_around_start_corner();
+        [side_0, side_1, side_2]
+    }
 }
 
 #[cfg(test)]
 mod test {
     use crate::math::pixel::{Pixel, Side, SideName};
+    use itertools::Itertools;
 
     const PIXELS: [Pixel; 3] = [Pixel::new(0, 0), Pixel::new(-2, 4), Pixel::new(9, 17)];
 
@@ -492,5 +530,80 @@ mod test {
         let &ccw_min_side = p.sides_ccw().iter().min().unwrap();
         let &cw_min_side = p.sides_cw().iter().min().unwrap();
         assert_eq!(ccw_min_side.start_corner(), cw_min_side.start_corner());
+    }
+
+    #[test]
+    fn rotate_around_corner() {
+        let pixel = Pixel::new(0, 0);
+        assert_eq!(
+            pixel.bottom_side().rotate_ccw_around_start_corner(),
+            pixel.left_side().reversed()
+        );
+
+        for side in pixel.sides_ccw() {
+            assert_eq!(
+                side.rotate_ccw_around_start_corner().start_corner(),
+                side.start_corner()
+            );
+            assert_eq!(
+                side.rotate_cw_around_start_corner().start_corner(),
+                side.start_corner()
+            );
+            assert_eq!(
+                side.rotate_cw_around_start_corner()
+                    .rotate_cw_around_start_corner(),
+                side.rotate_ccw_around_start_corner()
+            );
+            assert_eq!(
+                side.rotate_ccw_around_start_corner()
+                    .rotate_ccw_around_start_corner(),
+                side.rotate_cw_around_start_corner()
+            );
+            assert_eq!(
+                side.rotate_ccw_around_start_corner()
+                    .rotate_cw_around_start_corner(),
+                side
+            );
+            assert_eq!(
+                side.rotate_cw_around_start_corner()
+                    .rotate_ccw_around_start_corner(),
+                side
+            );
+        }
+    }
+
+    #[test]
+    fn continuing_sides() {
+        let pixel = Pixel::new(0, 0);
+        for side in pixel.sides_ccw() {
+            let continuing_sides = side.continuing_sides();
+            assert_ne!(continuing_sides[0], continuing_sides[1]);
+            for continuing_side in continuing_sides {
+                assert_eq!(continuing_side.start_corner(), side.stop_corner());
+            }
+        }
+    }
+
+    #[test]
+    fn outgoing_sides() {
+        let pixel = Pixel::new(0, 0);
+        for corner in pixel.corners() {
+            let outgoing_sides = corner.outgoing_sides();
+            assert!(outgoing_sides.iter().all_unique());
+            for outgoing_side in outgoing_sides {
+                assert_eq!(outgoing_side.start_corner(), corner);
+            }
+        }
+    }
+
+    #[test]
+    fn pixel_outgoing_sides() {
+        let pixel = Pixel::new(0, 0);
+        let mut outgoing_sides = pixel.outgoing_sides();
+
+        // 3 sides for each corner
+        assert_eq!(outgoing_sides.clone().count(), 3 * 6);
+
+        assert!(outgoing_sides.all_unique())
     }
 }

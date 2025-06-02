@@ -91,3 +91,29 @@ pub fn benchmark_topology_new() {
         println!("elapsed = {:.3?}", now.elapsed());
     }
 }
+
+pub fn benchmark_topology_draw() {
+    let folder = "test_resources/benchmark";
+    let before_material_map = MaterialMap::load(format!("{folder}/draw_before.png")).unwrap();
+    let after_material_map = MaterialMap::load(format!("{folder}/draw_after.png")).unwrap();
+
+    let diff: Vec<_> = before_material_map
+        .field
+        .indices()
+        .filter_map(|pixel| {
+            let from_material = before_material_map.get(pixel);
+            let to_material = after_material_map.get(pixel);
+            (from_material != to_material).then_some((pixel, to_material))
+        })
+        .collect();
+
+    for _ in 0..100 {
+        let mut material_map = before_material_map.clone();
+        let topology = Topology::new(&material_map);
+
+        use std::time::Instant;
+        let now = Instant::now();
+        let topology = topology.draw(&mut material_map, diff.iter().copied());
+        println!("elapsed = {:.3?}", now.elapsed());
+    }
+}
