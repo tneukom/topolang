@@ -12,7 +12,6 @@ use std::{
     ops::Add,
 };
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum SideName {
     Left,
@@ -254,6 +253,14 @@ impl Side {
 
     pub fn opposite(self) -> Self {
         Self::new(self.left_pixel, self.name.opposite())
+    }
+
+    /// Returns the sequence of sides where `item[0] = self` and
+    /// `item[i + 1] = item[i].reversed().opposite`
+    /// Each side in that sequence has the same direction (`side.name` is constant).
+    /// There is one pixel between two consecutive sides.
+    pub fn walk(self) -> impl Iterator<Item = Side> + Clone {
+        std::iter::successors(Some(self), |side| Some(side.reversed().opposite()))
     }
 }
 

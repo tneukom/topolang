@@ -22,6 +22,7 @@ pub fn is_inner_border(min_side: Side) -> bool {
     !is_outer_border(min_side)
 }
 
+#[derive(Debug, Clone)]
 pub struct Cycle {
     pub sides: Vec<Side>,
     pub bounds: Rect<i64>,
@@ -54,12 +55,15 @@ impl Cycle {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct BoundaryCycles {
+    pub bounds: Rect<i64>,
+
     /// Mapping from the min side of each cycle to the cycle itself
-    cycles: BTreeMap<CycleMinSide, Cycle>,
+    pub cycles: BTreeMap<CycleMinSide, Cycle>,
 
     /// Mapping from any side of a cycle to the min side of the cycle
-    side_to_cycle: HashMap<Side, CycleMinSide>,
+    pub side_to_cycle: HashMap<Side, CycleMinSide>,
 }
 
 impl BoundaryCycles {
@@ -88,9 +92,41 @@ impl BoundaryCycles {
         }
 
         Self {
+            bounds: material_map.bounding_rect(),
             cycles,
             side_to_cycle,
         }
+    }
+
+    /// Same as walk_to_boundary_cycle but only applicable if `pixel` is guaranteed to be inside  a
+    /// region.
+    pub fn walk_to_boundary_cycle_from_inside_region(&self, pixel: Pixel) -> CycleMinSide {
+        for walk_side in pixel.top_left_side().walk() {
+            if let Some(&hit_cycle) = self.side_to_cycle.get(&walk_side) {
+                return hit_cycle;
+            }
+        }
+        unreachable!("walk() is infinite");
+    }
+
+    /// Given a side of a pixel that is contained in a region, return a boundary cycle of that
+    /// region. The cycle is found in top left direction.
+    /// If the pixel is not contained in a region, None is returned.
+    pub fn walk_to_boundary_cycle(&self, pixel: Pixel) -> Option<CycleMinSide> {
+        for walk_side in pixel.top_left_side().walk() {
+            if !self.bounds.half_open_contains(walk_side.left_pixel) {
+                return None;
+            }
+
+            if let Some(&hit_cycle) = self.side_to_cycle.get(&walk_side) {
+                return Some(hit_cycle);
+            }
+
+            if let Some(_hit_reverse_cycle) = self.side_to_cycle.get(&walk_side.reversed()) {
+                return None;
+            }
+        }
+        unreachable!("walk() is infinite");
     }
 }
 
@@ -108,6 +144,10 @@ impl CycleGroup {
             cycle_min_sides: vec![outer_cycle_min_side],
             bounds,
         }
+    }
+
+    pub fn outer_cycle_min_side(&self) -> CycleMinSide {
+        self.cycle_min_sides[0]
     }
 
     pub fn add_inner_cycle(&mut self, inner_cycle_min_side: CycleMinSide) {
@@ -142,6 +182,7 @@ impl CycleGroup {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct ConnectedCycleGroups {
     pub cycle_to_outer_cycle: BTreeMap<CycleMinSide, CycleMinSide>,
     pub outer_cycle_to_group: BTreeMap<CycleMinSide, CycleGroup>,
@@ -166,19 +207,12 @@ impl ConnectedCycleGroups {
             if is_outer_border(min_side) {
                 cycle_to_outer_cycle.insert(min_side, min_side);
             } else {
-                // Move to the opposite side until we reach another cycle
-                let mut walk_side = min_side;
-                loop {
-                    // Opposite side is TopLeft of the same cell
-                    walk_side = walk_side.opposite();
-                    if let Some(hit_min_side) = cycles.side_to_cycle.get(&walk_side) {
-                        let &outer_cycle = cycle_to_outer_cycle.get(hit_min_side).unwrap();
-                        cycle_to_outer_cycle.insert(min_side, outer_cycle);
-                        break;
-                    }
-                    // BottomRight side of the top left cell
-                    walk_side = walk_side.reversed();
-                }
+                // min_side.left_pixel is contained in the region bounded by the corresponding
+                // cycle.
+                let hit_cycle =
+                    cycles.walk_to_boundary_cycle_from_inside_region(min_side.left_pixel);
+                let &outer_cycle = cycle_to_outer_cycle.get(&hit_cycle).unwrap();
+                cycle_to_outer_cycle.insert(min_side, outer_cycle);
             }
         }
 
@@ -210,15 +244,26 @@ impl ConnectedCycleGroups {
     }
 
     #[inline(never)]
-    pub fn region_map(&self, boundary_cycles: &BoundaryCycles, bounds: Rect<i64>) -> Pixmap<usize> {
+    pub fn region_map(&self, boundary_cycles: &BoundaryCycles) -> Pixmap<CycleMinSide> {
         // Derive region_map from cycle_groups
-        let mut region_map = Pixmap::nones(bounds);
-        for (region_key, cycle_group) in self.groups().enumerate() {
+        let mut region_map = Pixmap::nones(boundary_cycles.bounds);
+        for (&region_key, cycle_group) in &self.outer_cycle_to_group {
             for pixel in cycle_group.area(&boundary_cycles) {
                 region_map.set(pixel, region_key);
             }
         }
         region_map
+    }
+
+    /// Returns the outer cycle of the region that contains the given pixel
+    pub fn outer_cycle_of_region_at(
+        &self,
+        cycles: &BoundaryCycles,
+        pixel: Pixel,
+    ) -> Option<CycleMinSide> {
+        // Walk to a boundary cycle, could be an inner or outer cycle.
+        let cycle_min_side = cycles.walk_to_boundary_cycle(pixel)?;
+        Some(self.cycle_to_outer_cycle[&cycle_min_side])
     }
 }
 
@@ -313,5 +358,10 @@ mod test {
     #[test]
     fn repaint_from_cycle_groups_g() {
         check_repainted_from_cycle_groups("g");
+    }
+
+    #[test]
+    fn repaint_from_cycle_groups_h() {
+        check_repainted_from_cycle_groups("h");
     }
 }

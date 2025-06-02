@@ -19,7 +19,6 @@ use ahash::HashSet;
 use itertools::Itertools;
 use std::{collections::BTreeSet, hash::Hash};
 
-
 pub struct CompactLabels {
     remap: Vec<usize>,
     counter: usize,
