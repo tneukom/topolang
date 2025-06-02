@@ -26,7 +26,6 @@ pub(crate) mod pixmap;
 pub(crate) mod regions;
 pub(crate) mod rule;
 pub(crate) mod topology;
-pub(crate) mod union_find;
 pub(crate) mod utils;
 pub(crate) mod view;
 pub(crate) mod widgets;

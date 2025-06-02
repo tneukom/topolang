@@ -1,202 +1,13 @@
-/// Unionfind crates
-/// https://crates.io/crates/union-find
-/// https://crates.io/crates/disjoint-sets
-///
-/// https://crates.io/crates/partitions
-/// Has clear function
-///
-/// https://docs.rs/petgraph/latest/src/petgraph/unionfind.rs.html#16-27
 use crate::{
-    field::Field,
-    math::pixel::{Side, SideName},
-    union_find::UnionFind,
-};
-use crate::{
-    math::{pixel::Pixel, rect::Rect},
+    math::{
+        pixel::{Pixel, Side, SideName},
+        rect::Rect,
+    },
     pixmap::Pixmap,
 };
 use ahash::HashSet;
 use itertools::Itertools;
 use std::{collections::BTreeSet, hash::Hash};
-
-pub struct CompactLabels {
-    remap: Vec<usize>,
-    counter: usize,
-}
-
-/// Maps the given labels to [0,...,n] where n is the number of distinct labels.
-impl CompactLabels {
-    #[inline(never)]
-    pub fn new(max_label: usize) -> Self {
-        Self {
-            remap: vec![usize::MAX; max_label],
-            counter: 0,
-        }
-    }
-
-    #[inline(never)]
-    pub fn clear(&mut self) {
-        self.counter = 0;
-        for i in 0..self.remap.len() {
-            self.remap[i] = usize::MAX;
-        }
-    }
-
-    pub fn remap(&mut self, label: usize) -> usize {
-        if self.remap[label] == usize::MAX {
-            self.remap[label] = self.counter;
-            self.counter += 1;
-        }
-        self.remap[label]
-    }
-
-    #[inline(never)]
-    pub fn compact<'a>(&mut self, labels: impl IntoIterator<Item = &'a mut usize>) -> usize {
-        for label in labels {
-            *label = self.remap(*label);
-        }
-        self.counter
-    }
-
-    #[inline(never)]
-    pub fn compact_masked<'a>(
-        &mut self,
-        labels: impl IntoIterator<Item = &'a mut Option<usize>>,
-    ) -> usize {
-        for label in labels {
-            if let Some(label) = label {
-                *label = self.remap(*label);
-            }
-        }
-        self.counter
-    }
-}
-
-trait NeighborsFn<T: Copy> {
-    fn call<const N: usize>(&mut self, field: &Field<T>, center: usize, neighbors: [usize; N]);
-
-    fn for_each(&mut self, field: &Field<T>) {
-        let width = field.width() as usize;
-        let height = field.height() as usize;
-
-        // Top pixels
-        for x in 1..width {
-            let center = x;
-            self.call(field, center, [center - 1]);
-        }
-
-        // Left pixels
-        for y in 1..height {
-            let center = y * width;
-            self.call(field, center, [center - width])
-        }
-
-        // Interior pixels
-        for y in 1..height {
-            for x in 1..width {
-                let center = y * width + x;
-                self.call(
-                    field,
-                    center,
-                    [center - 1, center - width, center - width - 1],
-                );
-            }
-        }
-    }
-}
-
-struct BuildRegionsUnionFind {
-    union_find: UnionFind,
-}
-
-impl<T: Copy + Eq> NeighborsFn<T> for BuildRegionsUnionFind {
-    // Build UnionFind data structure for equivalent regions
-    fn call<const N: usize>(&mut self, field: &Field<T>, center: usize, neighbors: [usize; N]) {
-        let center_value = field.as_slice()[center];
-        for neighbor in neighbors {
-            let neighbor_value = field.as_slice()[neighbor];
-            if neighbor_value == center_value {
-                self.union_find.union(center, neighbor);
-            }
-        }
-    }
-}
-
-#[inline(never)]
-pub fn field_regions_fast<T: Copy + Eq>(field: &Field<T>) -> Field<usize> {
-    let union_find = UnionFind::new(field.len());
-    let mut build_union_find = BuildRegionsUnionFind { union_find };
-    build_union_find.for_each(field);
-    let labeling = build_union_find.union_find.into_roots();
-    Field::from_linear(field.bounds(), labeling)
-}
-
-/// Returns connected components of `field`, slower legacy function
-#[inline(never)]
-#[deprecated]
-#[allow(dead_code)]
-pub fn field_regions<T: Copy + Eq>(field: &Field<T>) -> Field<usize> {
-    // TODO: Reuse UnionFind so we don't allocate each time
-    let mut union_find = UnionFind::new(field.len());
-
-    for (center, &color) in field.enumerate() {
-        for side in [SideName::TopLeft, SideName::Top, SideName::Left] {
-            let neighbor = center.neighbor(side);
-            if let Some(neighbor_color) = field.get(neighbor).copied() {
-                if color == neighbor_color {
-                    union_find.union(
-                        field.linear_index(center).unwrap(),
-                        field.linear_index(neighbor).unwrap(),
-                    );
-                }
-            }
-        }
-    }
-
-    let labeling = union_find.into_roots();
-    Field::from_linear(field.bounds(), labeling)
-}
-
-#[inline(never)]
-pub fn mask_field<T: Copy, S>(field: &Field<T>, mask: &Field<Option<S>>) -> Field<Option<T>> {
-    let elems = field
-        .iter()
-        .zip(mask.iter())
-        .map(|(el, mask_el)| mask_el.as_ref().map(|_| el.clone()))
-        .collect();
-    Field::from_linear(field.bounds(), elems)
-}
-
-#[inline(never)]
-pub fn pixmap_regions<T: Copy + Eq>(pixmap: &Pixmap<T>) -> (Pixmap<usize>, Vec<Rect<i64>>) {
-    let mut region_field = field_regions_fast(&pixmap.field);
-
-    // TODO: field_regions_fast should directly ignore Nones
-    // Remove regions from None
-    let mut region_field = mask_field(&mut region_field, &pixmap.field);
-
-    // TODO: Reuse CompactLabels so we don't allocate each time
-    let mut compact_labels = CompactLabels::new(region_field.len());
-    compact_labels.compact_masked(region_field.iter_mut());
-
-    // Compute bounding rect for each region
-    let n_regions = compact_labels.counter;
-    let mut region_bounding_rects = vec![Rect::EMPTY; n_regions];
-    for (pixel, &region_id) in region_field.enumerate() {
-        if let Some(region_id) = region_id {
-            let region_bounding_rect = &mut region_bounding_rects[region_id];
-            *region_bounding_rect = region_bounding_rect.bounds_with(pixel);
-        }
-    }
-
-    // Bounding box upper bound is exclusive
-    // TODO: Ugly
-    for rect in &mut region_bounding_rects {
-        *rect = rect.inc_high();
-    }
-
-    (Pixmap::new(region_field), region_bounding_rects)
-}
 
 pub fn iter_pixmap_sides<T: Copy>(
     pixmap: &Pixmap<T>,
@@ -311,14 +122,10 @@ pub fn area_right_of_boundary_bounds(boundary: impl Iterator<Item = Side>) -> Re
 #[cfg(test)]
 mod test {
     use crate::{
-        field::{Field, RgbaField},
+        field::RgbaField,
         math::{pixel::Side, point::Point, rect::Rect, rgba8::Rgba8},
-        pixmap::{MaterialMap, Pixmap, RgbaMap},
-        regions::{
-            area_left_of_boundary, area_right_of_boundary, pixmap_regions, region_boundaries,
-            split_boundary_into_cycles,
-        },
-        utils::IntoT,
+        pixmap::{Pixmap, RgbaMap},
+        regions::{area_left_of_boundary, area_right_of_boundary, split_boundary_into_cycles},
     };
     use ahash::HashSet;
     use itertools::Itertools;
@@ -370,73 +177,6 @@ mod test {
             }
         }
         return true;
-    }
-
-    fn test_pixmap_regions(filename: &str) {
-        let folder = "test_resources/regions/region_map";
-        let color_map = Field::load(format!("{folder}/{filename}"))
-            .unwrap()
-            .intot::<RgbaMap>();
-
-        let (region_map, area_covers) = pixmap_regions(&color_map);
-
-        let n_regions = area_covers.len();
-        for region_id in region_map.values() {
-            assert!(region_id < n_regions, "region_ids should be 0,...,n");
-        }
-
-        // let region_field = region_map.to_field(255);
-        // let region_field_rgba = region_field.map(|id| Rgba8::new(*id as u8, 0, 0, 255));
-        // region_field_rgba
-        //     .save(format!("{folder}/out_{filename}"))
-        //     .unwrap();
-
-        let expected_region_map = pixmap_region_given_distinct_colors(&color_map);
-
-        assert!(region_map_equiv(&region_map, &expected_region_map));
-    }
-
-    #[test]
-    fn pixmap_regions_a() {
-        test_pixmap_regions("a.png");
-    }
-
-    // TODO: Is this still required now that tiled Pixmap is gone?
-    #[test]
-    fn regions_multiple_tiles() {
-        test_pixmap_regions("multiple_tiles_a.png");
-        test_pixmap_regions("multiple_tiles_b.png");
-        test_pixmap_regions("multiple_tiles_c.png");
-    }
-
-    fn test_region_boundaries(filename: &str) {
-        let folder = "test_resources/regions/region_boundary";
-        let color_map = Field::load(format!("{folder}/{filename}"))
-            .unwrap()
-            .intot::<MaterialMap>();
-
-        // Create region_map and compute boundaries of each region
-        let (region_map, area_covers) = pixmap_regions(&color_map);
-        let boundaries = region_boundaries(&region_map, area_covers.len());
-
-        // Compare each region boundary with reference implementation
-        for (region_id, boundary) in boundaries.iter().enumerate() {
-            let expected_boundary = boundary_of(&region_map, region_id);
-            assert_eq!(boundary, &expected_boundary);
-        }
-    }
-
-    #[test]
-    fn region_boundaries_a() {
-        test_region_boundaries("a.png");
-    }
-
-    // TODO: Is this still required now that tiled Pixmap is gone?
-    #[test]
-    fn region_boundaries_multiple_tiles() {
-        test_region_boundaries("multiple_tiles_a.png");
-        test_region_boundaries("multiple_tiles_b.png");
-        test_region_boundaries("multiple_tiles_c.png");
     }
 
     fn area_boundary(area: &HashSet<Point<i64>>) -> HashSet<Side> {
@@ -543,76 +283,5 @@ mod test {
     #[test]
     fn right_of_border_4() {
         test_right_of_border("4.png")
-    }
-
-    fn assert_proper_components(filename: &str, count: usize) {
-        // Load bitmap
-        let folder = "test_resources/regions/connected_components";
-        let path = format!("{folder}/{filename}");
-        let color_map: RgbaMap = RgbaField::load(path).unwrap().into();
-
-        // Compute regions
-        let (region_map, region_covers) = pixmap_regions(&color_map);
-
-        assert_eq!(
-            region_covers.len(),
-            count,
-            "number of components is correct"
-        );
-
-        // Make sure for each side, if left and right have the same color, they belong to the
-        // same region.
-        for (pixel, color) in color_map.iter() {
-            for side in pixel.sides_ccw() {
-                if Some(color) == color_map.get(side.right_pixel()) {
-                    assert_eq!(region_map.get(pixel), region_map.get(side.right_pixel()));
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn components_1a() {
-        assert_proper_components("1a.png", 1);
-    }
-
-    #[test]
-    fn components_2a() {
-        assert_proper_components("2a.png", 2);
-    }
-
-    #[test]
-    fn components_3a() {
-        assert_proper_components("3a.png", 3);
-    }
-
-    #[test]
-    fn components_3b() {
-        assert_proper_components("3b.png", 3);
-    }
-
-    #[test]
-    fn components_3c() {
-        assert_proper_components("3c.png", 3);
-    }
-
-    #[test]
-    fn components_3d() {
-        assert_proper_components("3d.png", 3);
-    }
-
-    #[test]
-    fn components_4a() {
-        assert_proper_components("4a.png", 4);
-    }
-
-    #[test]
-    fn components_5a() {
-        assert_proper_components("5a.png", 4);
-    }
-
-    #[test]
-    fn components_7a() {
-        assert_proper_components("7a.png", 6);
     }
 }

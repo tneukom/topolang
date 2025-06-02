@@ -95,10 +95,10 @@ pub fn main() {
         // use seamlang::benchmarks::benchmark_run;
         // benchmark_run();
 
-        use seamlang::benchmarks::benchmark_topology_new;
-        benchmark_topology_new();
+        // use seamlang::benchmarks::benchmark_topology_new;
+        // benchmark_topology_new();
 
-        // main_editor();
+        main_editor();
 
         // color_replace();
 
