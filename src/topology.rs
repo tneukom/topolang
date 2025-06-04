@@ -7,7 +7,7 @@ use crate::{
         point::Point,
         rect::Rect,
     },
-    new_regions::{BoundaryCycles, ConnectedCycleGroups, Sides},
+    new_regions::{BoundaryCycles, ConnectedCycleGroups, Cycle, CycleGroup, CycleMinSide, Sides},
     pixmap::{MaterialMap, Pixmap},
     regions::area_left_of_boundary,
     utils::{UndirectedEdge, UndirectedGraph},
@@ -15,7 +15,7 @@ use crate::{
 use ahash::{HashMap, HashSet};
 use itertools::Itertools;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
     fmt,
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
@@ -158,8 +158,26 @@ pub struct Border {
 }
 
 impl Border {
+    pub fn from_cycle(cycle: &Cycle, boundary_cycles: &BoundaryCycles) -> Self {
+        let cycle_reverse_cycles = cycle
+            .sides
+            .iter()
+            .map(|side| boundary_cycles.side_to_cycle.get(&side.reversed()));
+        let cycle_segments = CycleSegments::constant_segments_from_iter(cycle_reverse_cycles);
+
+        Self {
+            sides: cycle.sides.clone(),
+            cycle_segments,
+            is_outer: cycle.is_outer(),
+        }
+    }
+
     pub fn sides(&self) -> &[Side] {
         &self.sides
+    }
+
+    pub fn min_side(&self) -> CycleMinSide {
+        self.sides[0]
     }
 
     pub fn iter_sides(
@@ -334,6 +352,27 @@ pub struct Region {
 }
 
 impl Region {
+    fn from_cycle_group(
+        cycle_group: &CycleGroup,
+        material_map: &MaterialMap,
+        borders: &mut HashMap<CycleMinSide, Border>,
+    ) -> Self {
+        let boundary_borders = cycle_group
+            .cycle_min_sides
+            .iter()
+            .map(|cycle_min_side| borders.remove(cycle_min_side).unwrap())
+            .collect();
+        let boundary = Boundary::new(boundary_borders, cycle_group.bounds);
+
+        Self {
+            material: material_map
+                .get(boundary.top_left_interior_pixel())
+                .unwrap(),
+            boundary,
+            modified_time: modification_time_counter(),
+        }
+    }
+
     pub fn iter_seams(&self) -> impl Iterator<Item = Seam> + Clone + '_ {
         self.boundary
             .borders
@@ -439,14 +478,14 @@ pub struct Topology {
     /// Maps the start side of a seam to (region key, border index, seam index)
     pub seam_indices: BTreeMap<Side, SeamIndex>,
 
-    bounding_rect: Rect<i64>,
+    bounds: Rect<i64>,
 
     modifications: BTreeMap<ModificationTime, RegionKey>,
 }
 
 impl Topology {
     pub fn bounding_rect(&self) -> Rect<i64> {
-        self.bounding_rect
+        self.bounds
     }
 
     pub fn modifications(&self) -> &BTreeMap<ModificationTime, RegionKey> {
@@ -458,60 +497,43 @@ impl Topology {
         boundary_cycles: BoundaryCycles,
         material_map: &MaterialMap,
     ) -> Self {
+        let _tracy_span = tracy_client::span!("Topology::from_boundary_cycles");
+
         let cycle_groups = ConnectedCycleGroups::from_cycles(&boundary_cycles);
 
-        let mut regions: BTreeMap<RegionKey, Region> = BTreeMap::new();
-        let mut modifications: BTreeMap<ModificationTime, RegionKey> = BTreeMap::new();
-        for cycle_group in cycle_groups.groups() {
-            let region_key = cycle_group.outer_cycle_min_side();
-
-            // Create Boundary
-            let mut borders = Vec::new();
-            for cycle in cycle_group.iter_cycles(&boundary_cycles) {
-                // Each cycle is a border
-                let cycle_reverse_cycles = cycle
-                    .sides
-                    .iter()
-                    .map(|side| boundary_cycles.side_to_cycle.get(&side.reversed()));
-                let cycle_segments =
-                    CycleSegments::constant_segments_from_iter(cycle_reverse_cycles);
-
-                let border = Border {
-                    sides: cycle.sides.clone(),
-                    cycle_segments,
-                    is_outer: cycle.is_outer(),
-                };
-                borders.push(border);
-            }
-
-            let boundary = Boundary::new(borders, cycle_group.bounds);
-
-            let region = Region {
-                material: material_map
-                    .get(boundary.top_left_interior_pixel())
-                    .unwrap(),
-                boundary: boundary,
-                modified_time: modification_time_counter(),
-            };
-
-            modifications.insert(region.modified_time, region_key);
-            regions.insert(region_key, region);
+        // Create a Border for each cycle if we can't recycle one
+        let mut borders = HashMap::default();
+        for (&cycle_min_side, cycle) in &boundary_cycles.cycles {
+            borders.insert(cycle_min_side, Border::from_cycle(cycle, &boundary_cycles));
         }
 
-        // Build seam indices from regions
+        // Create Regions from cycle_groups
+        let mut regions: BTreeMap<RegionKey, Region> = BTreeMap::new();
         let mut seam_indices: BTreeMap<Side, SeamIndex> = BTreeMap::new();
+        let mut modifications: BTreeMap<ModificationTime, RegionKey> = BTreeMap::new();
 
-        for (&region_id, region) in &regions {
-            for (i_border, border) in region.boundary.borders.iter().enumerate() {
-                for (i_seam, seam) in border.atomic_seams().enumerate() {
-                    let seam_index = SeamIndex::new(region_id, i_border, i_seam);
-                    seam_indices.insert(seam.start, seam_index);
+        {
+            let _tracy_span = tracy_client::span!("build regions");
+
+            for cycle_group in cycle_groups.groups() {
+                let region_key = cycle_group.outer_cycle_min_side();
+                let region = Region::from_cycle_group(cycle_group, material_map, &mut borders);
+
+                // Update seam indices
+                for (i_border, border) in region.boundary.borders.iter().enumerate() {
+                    for (i_seam, seam) in border.atomic_seams().enumerate() {
+                        let seam_index = SeamIndex::new(region_key, i_border, i_seam);
+                        seam_indices.insert(seam.start, seam_index);
+                    }
                 }
+
+                modifications.insert(region.modified_time, region_key);
+                regions.insert(region_key, region);
             }
         }
 
         Self {
-            bounding_rect: boundary_cycles.bounds,
+            bounds: boundary_cycles.bounds,
             cycle_groups,
             boundary_cycles,
             regions,
@@ -807,20 +829,83 @@ impl Topology {
 
     /// Draw the given (pixel, material) pairs. Equivalent to drawing to the underlying MaterialMap
     /// and recreating the Topology.
+    #[inline(never)]
     pub fn draw(
-        mut self,
+        &mut self,
         material_map: &mut MaterialMap,
         pixel_materials: impl Iterator<Item = (Pixel, Option<Material>)> + Clone,
-    ) -> Self {
+    ) {
+        let _tracy_span = tracy_client::span!("Topology::draw");
+
         for (pixel, material) in pixel_materials.clone() {
             material_map.put(pixel, material);
         }
 
         let pixels = pixel_materials.map(|(pixel, _)| pixel);
-        self.boundary_cycles.update(material_map, pixels);
+        let draw_bounds = Rect::index_bounds(pixels.clone());
+        let padded_draw_bounds = draw_bounds.padded(1);
 
-        // Rebuild Topology from updated BoundaryCycles
-        Topology::from_boundary_cycles(self.boundary_cycles, material_map)
+        let touched_cycles = self.boundary_cycles.update(material_map, pixels);
+
+        let mut borders = HashMap::default();
+
+        // Discard regions that potentially touch the draw pixels with their seam indices.
+        self.regions.retain(|_, region| {
+            let discard = region.bounds().intersects(padded_draw_bounds);
+            if discard {
+                // Remove seam indices of region
+                for seam in region.iter_seams() {
+                    self.seam_indices.remove(&seam.start);
+                }
+
+                // Try to recycle borders of discarded regions, that are touched by the draw pixels.
+                for border in region.boundary.borders.drain(..) {
+                    let cycle_min_side = border.min_side();
+                    if !touched_cycles.contains(&cycle_min_side) {
+                        borders.insert(cycle_min_side, border);
+                    }
+                }
+            }
+            !discard
+        });
+
+        // TODO: This is currently the biggest performance bottleneck. We should only recompute
+        //   groups where necessary.
+        self.cycle_groups = ConnectedCycleGroups::from_cycles(&self.boundary_cycles);
+
+        // Create a new Border for each cycle if it wasn't recycled
+        for cycle_min_side in touched_cycles {
+            let cycle = &self.boundary_cycles.cycles[&cycle_min_side];
+            borders
+                .entry(cycle_min_side)
+                .or_insert_with(|| Border::from_cycle(cycle, &self.boundary_cycles));
+        }
+
+        // Create Regions from cycle_groups
+        for cycle_group in self.cycle_groups.groups() {
+            let region_key = cycle_group.outer_cycle_min_side();
+
+            if self
+                .regions
+                .contains_key(&cycle_group.outer_cycle_min_side())
+            {
+                // We were able to keep this region
+                continue;
+            }
+
+            let region = Region::from_cycle_group(cycle_group, material_map, &mut borders);
+
+            // Update seam indices
+            for (i_border, border) in region.boundary.borders.iter().enumerate() {
+                for (i_seam, seam) in border.atomic_seams().enumerate() {
+                    let seam_index = SeamIndex::new(region_key, i_border, i_seam);
+                    self.seam_indices.insert(seam.start, seam_index);
+                }
+            }
+
+            self.modifications.insert(region.modified_time, region_key);
+            self.regions.insert(region_key, region);
+        }
     }
 }
 
@@ -1174,8 +1259,7 @@ pub mod test {
         let to_topology = Topology::new(&to_material_map);
 
         let mut drawn_topology = from_topology.clone();
-
-        drawn_topology = drawn_topology.draw(&mut from_material_map, diff.into_iter());
+        drawn_topology.draw(&mut from_material_map, diff.into_iter());
 
         check_structure(&drawn_topology);
 

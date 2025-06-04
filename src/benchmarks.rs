@@ -107,13 +107,15 @@ pub fn benchmark_topology_draw() {
         })
         .collect();
 
-    for _ in 0..100 {
+    loop {
+        tracy_client::frame_mark();
+
         let mut material_map = before_material_map.clone();
-        let topology = Topology::new(&material_map);
+        let mut topology = Topology::new(&material_map);
 
         use std::time::Instant;
         let now = Instant::now();
-        let topology = topology.draw(&mut material_map, diff.iter().copied());
+        topology.draw(&mut material_map, diff.iter().copied());
         println!("elapsed = {:.3?}", now.elapsed());
     }
 }

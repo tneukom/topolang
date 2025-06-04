@@ -10,7 +10,7 @@ use ahash::{HashMap, HashSet};
 use itertools::Itertools;
 use std::collections::{btree_map::Entry, BTreeMap};
 
-type CycleMinSide = Side;
+pub type CycleMinSide = Side;
 
 /// Given the minimal side of a cycle return if the cycle is an outer border of a region. Outer
 /// borders are counterclockwise.
@@ -78,6 +78,8 @@ impl Sides {
     }
 
     pub fn boundary_sides(material_map: &MaterialMap) -> Self {
+        let _tracy_span = tracy_client::span!("Sides::boundary_sides");
+
         // Collect boundary sides of `material_map`
         let mut sides = HashSet::default();
         for (side, left, right) in iter_pixmap_sides(material_map) {
@@ -173,14 +175,22 @@ impl BoundaryCycles {
         }
     }
 
+    /// Returns the set of cycles that were rebuilt, includes at least all cycles that have a side
+    /// that is connected to a corner of a drawn pixel.
+    #[inline(never)]
     pub fn update(
         &mut self,
         material_map: &MaterialMap,
         pixels: impl Iterator<Item = Pixel> + Clone,
-    ) {
-        // Extract all touched cycles into Sides
+    ) -> Vec<CycleMinSide> {
+        let _tracy_span = tracy_client::span!("BoundaryCycles::update");
+
+        // Sides that touch the set of modified pixels. If a cycle goes through a corner
+        // it has an incoming and outgoing side. So it's enough to consider all outgoing sides
+        // of the pixel.
         let touched_sides = pixels.clone().flat_map(Pixel::outgoing_sides);
 
+        // Extract all touched cycles into Sides
         let mut sides = Sides::empty(self.bounds);
         for side in touched_sides {
             if let Some(&cycle_min_side) = self.side_to_cycle.get(&side) {
@@ -195,8 +205,11 @@ impl BoundaryCycles {
 
         // Rebuild cycles for extracted sides
         let cycles = Self::new(&sides);
+        let rebuilt_cycles: Vec<_> = cycles.cycles.keys().copied().collect();
 
         self.extend(cycles);
+
+        rebuilt_cycles
     }
 
     /// Same as walk_to_boundary_cycle but only applicable if `pixel` is guaranteed to be inside  a
@@ -298,6 +311,8 @@ impl ConnectedCycleGroups {
     /// Returns a map from the min side of a cycle to the outer cycle of the cycle group.
     #[inline(never)]
     pub fn from_cycles(cycles: &BoundaryCycles) -> Self {
+        let _tracy_span = tracy_client::span!("ConnectedCycleGroups::from_cycles");
+
         // Maps minimal side of a cycle to the minimal side of the outer cycle
         let mut cycle_to_outer_cycle: BTreeMap<CycleMinSide, CycleMinSide> = BTreeMap::new();
 
