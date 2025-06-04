@@ -241,7 +241,7 @@ impl View {
     }
 
     pub fn center_camera(&mut self, view_rect: Rect<f64>) {
-        let mut world_bounds = self.world.bounding_rect();
+        let mut world_bounds = self.world.bounds();
         if world_bounds.is_empty() {
             world_bounds = Rect::low_high(Point(-128, -128), Point(128, 128))
         }
@@ -554,7 +554,7 @@ impl View {
 
     /// Paste `material_map` at center of world.
     pub fn paste(&mut self, material_map: MaterialMap) {
-        let world_center = self.world.bounding_rect().center();
+        let world_center = self.world.bounds().center();
         let selection = Selection::new(material_map).with_center_at(world_center);
         self.selection = Some(selection);
     }

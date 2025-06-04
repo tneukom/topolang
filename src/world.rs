@@ -4,45 +4,13 @@ use crate::{
     material_effects::paint_material_map_effects,
     math::{rect::Rect, rgba8::Rgba8},
     pixmap::MaterialMap,
-    topology::{FillRegion, RegionKey, Topology},
+    topology::{RegionKey, Topology},
     view::Selection,
 };
 use std::{
-    cell::{Cell, OnceCell},
+    cell::Cell,
     sync::{Arc, RwLock},
 };
-
-#[derive(Debug, Clone)]
-struct CachedTopology {
-    topology: OnceCell<Topology>,
-}
-
-impl CachedTopology {
-    pub fn empty() -> Self {
-        Self {
-            topology: OnceCell::new(),
-        }
-    }
-
-    pub fn from(material_map: &MaterialMap) -> Self {
-        let topology = Topology::new(material_map);
-        Self {
-            topology: OnceCell::from(topology),
-        }
-    }
-
-    pub fn get_or_init(&self, material_map: &MaterialMap) -> &Topology {
-        self.topology.get_or_init(|| Topology::new(material_map))
-    }
-
-    pub fn get(&self) -> Option<&Topology> {
-        self.topology.get()
-    }
-
-    pub fn get_mut(&mut self) -> Option<&mut Topology> {
-        self.topology.get_mut()
-    }
-}
 
 #[derive(Debug, Clone)]
 struct CachedRgbaField {
@@ -82,14 +50,14 @@ pub struct World {
     material_map: MaterialMap,
 
     /// None means the topology has to be recomputed from the material_map
-    topology: CachedTopology,
+    topology: Topology,
 
     rgba_field: CachedRgbaField,
 }
 
 impl World {
     pub fn from_material_map(material_map: MaterialMap) -> Self {
-        let topology = CachedTopology::from(&material_map);
+        let topology = Topology::new(&material_map);
         let rgba_field = CachedRgbaField::new(material_map.bounding_rect());
         Self {
             material_map,
@@ -99,74 +67,45 @@ impl World {
     }
 
     pub fn topology(&self) -> &Topology {
-        self.topology.get_or_init(&self.material_map)
+        &self.topology
     }
 
     pub fn material_map(&self) -> &MaterialMap {
         &self.material_map
     }
 
-    pub fn bounding_rect(&self) -> Rect<i64> {
+    pub fn bounds(&self) -> Rect<i64> {
         self.material_map.bounding_rect()
     }
 
-    /// Invalidates all regions keys
-    /// Returns true if any regions were changed
-    /// Very naive implementation, checks if any Region actually changes material and if
-    /// yes recreates the whole topology.
+    /// Returns true if the region was modified, it did not already have the assigned material.
     #[inline(never)]
-    pub fn fill_regions(&mut self, fill_regions: &Vec<FillRegion>) -> bool {
-        let topology = self
-            .topology
-            .get_mut()
-            .expect("Requires topology, otherwise region ids will be invalid.");
-
-        let mut topology_invalidated = false;
-        let mut modified = false;
-        for &fill_region in fill_regions {
-            let region = &topology[fill_region.region_key];
-            if region.material == fill_region.material {
-                // already has desired color, skip
-                continue;
-            }
-
-            modified = true;
-            topology.fill_region(
-                fill_region.region_key,
-                fill_region.material,
-                &mut self.material_map,
-            );
-
-            self.rgba_field.expire_rgba_rect(region.bounds());
-
-            if topology_invalidated {
-                continue;
-            }
-
-            if !topology.try_set_region_material(fill_region.region_key, fill_region.material) {
-                println!("Topology invalidated!");
-                topology_invalidated = true;
-            }
-        }
-
-        if topology_invalidated {
-            self.topology = CachedTopology::empty();
-        }
-        modified
-    }
-
     pub fn fill_region(&mut self, region_key: RegionKey, material: Material) -> bool {
-        let fill_regions = vec![FillRegion {
-            region_key,
-            material,
-        }];
-        self.fill_regions(&fill_regions)
+        let region = &self.topology[region_key];
+        if region.material == material {
+            return false;
+        }
+
+        let region_area = region.boundary.interior_area();
+        for &pixel in &region_area {
+            self.material_map.set(pixel, material);
+        }
+
+        self.rgba_field.expire_rgba_rect(region.bounds());
+
+        if !self.topology.try_set_region_material(region_key, material) {
+            self.topology
+                .update(&self.material_map, region_area.into_iter());
+        }
+
+        true
     }
 
     /// Blit passed Pixmap to self.material_map but only where material_map is already defined.
     pub fn blit(&mut self, other: &MaterialMap) {
         self.material_map.blit(other);
-        self.topology = CachedTopology::empty();
+        self.topology
+            .update(&self.material_map, other.bounding_rect().iter_indices());
         self.rgba_field.expire_rgba_rect(other.bounding_rect());
     }
 
@@ -177,22 +116,27 @@ impl World {
             selection.put(pixel, self.material_map.set(pixel, Material::TRANSPARENT));
         }
 
+        self.topology
+            .update(&self.material_map, rect.iter_indices());
+
         self.rgba_field.expire_rgba_rect(rect);
-        self.topology = CachedTopology::empty();
         Selection::new(selection)
     }
 
     pub fn region_selection(&mut self, region_key: RegionKey) -> Selection {
-        let topology = self.topology.get_or_init(&self.material_map);
+        let region = &self.topology[region_key];
+        let bounds = region.bounds();
+        let region_area = region.boundary.interior_area();
 
-        let bounds = topology.regions[&region_key].bounds();
         let mut selection = MaterialMap::nones(bounds);
-        for pixel in topology.iter_region_interior(region_key) {
+        for &pixel in &region_area {
             selection.put(pixel, self.material_map.set(pixel, Material::TRANSPARENT));
         }
 
+        self.topology
+            .update(&self.material_map, region_area.into_iter());
+
         self.rgba_field.expire_rgba_rect(bounds);
-        self.topology = CachedTopology::empty();
         Selection::new(selection)
     }
 

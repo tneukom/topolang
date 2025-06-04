@@ -95,9 +95,9 @@ pub fn main() {
 
         // seamlang::benchmarks::benchmark_topology_new();
 
-        seamlang::benchmarks::benchmark_topology_draw();
+        // seamlang::benchmarks::benchmark_topology_draw();
 
-        // main_editor();
+        main_editor();
 
         // color_replace();
 

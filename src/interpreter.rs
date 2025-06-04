@@ -164,7 +164,9 @@ pub fn wake_up(world: &mut World, excluded: &BTreeSet<StrongRegionKey>) -> usize
         }
     }
 
-    world.fill_regions(&fill_regions);
+    for fill_region in &fill_regions {
+        world.fill_region(fill_region.region_key, fill_region.material);
+    }
     fill_regions.len()
 }
 
@@ -215,6 +217,13 @@ mod test {
     #[test]
     fn c() {
         assert_execute_world("c", 2);
+    }
+
+    /// Failure case where execution fails when using Topology::update but not when rebuilding
+    /// using Topology::new.
+    #[test]
+    fn fail_topology_update() {
+        assert_execute_world("fail_topology_update", 1);
     }
 
     /// Failure case: Rule was applied to its own source.

@@ -417,7 +417,7 @@ impl EguiApp {
 
     pub fn document_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            let bounds = self.view.world.bounding_rect();
+            let bounds = self.view.world.bounds();
             let size = bounds.size();
             ui.label(format!("Size: {} x {}", size.x, size.y));
         });

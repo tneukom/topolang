@@ -147,6 +147,7 @@ impl Rule {
     /// by `self.before` and `self.after`
     /// Returns true if there were any changes to the world
     pub fn substitute(&self, phi: &Morphism, world: &mut World) -> bool {
+        // TODO: The first part can be done without `world` so we could precompute it!
         let mut fill_regions = Vec::new();
         for (region_key, before_region) in &self.before.topology.regions {
             let after_material = self
@@ -166,7 +167,10 @@ impl Rule {
             fill_regions.push(fill_region);
         }
 
-        let modified = world.fill_regions(&fill_regions);
+        let mut modified = false;
+        for fill_region in fill_regions {
+            modified |= world.fill_region(fill_region.region_key, fill_region.material);
+        }
         modified
     }
 

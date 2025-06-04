@@ -15,7 +15,7 @@ use crate::{
 use ahash::{HashMap, HashSet};
 use itertools::Itertools;
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet},
     fmt,
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
@@ -728,18 +728,6 @@ impl Topology {
         todo!()
     }
 
-    /// Blit the given region to the material_map with the given material.
-    pub fn fill_region(
-        &self,
-        region_key: RegionKey,
-        material: Material,
-        material_map: &mut MaterialMap,
-    ) {
-        for pixel in self.iter_region_interior(region_key) {
-            material_map.set(pixel, material);
-        }
-    }
-
     /// Try to set the material of `region_key` to `material`, returns true if successful.
     pub fn try_set_region_material(&mut self, region_key: RegionKey, material: Material) -> bool {
         let region = &self.regions.get(&region_key).unwrap();
@@ -830,18 +818,13 @@ impl Topology {
     /// Draw the given (pixel, material) pairs. Equivalent to drawing to the underlying MaterialMap
     /// and recreating the Topology.
     #[inline(never)]
-    pub fn draw(
+    pub fn update(
         &mut self,
-        material_map: &mut MaterialMap,
-        pixel_materials: impl Iterator<Item = (Pixel, Option<Material>)> + Clone,
+        material_map: &MaterialMap,
+        pixels: impl Iterator<Item = Pixel> + Clone,
     ) {
         let _tracy_span = tracy_client::span!("Topology::draw");
 
-        for (pixel, material) in pixel_materials.clone() {
-            material_map.put(pixel, material);
-        }
-
-        let pixels = pixel_materials.map(|(pixel, _)| pixel);
         let draw_bounds = Rect::index_bounds(pixels.clone());
         let padded_draw_bounds = draw_bounds.padded(1);
 
@@ -857,6 +840,9 @@ impl Topology {
                 for seam in region.iter_seams() {
                     self.seam_indices.remove(&seam.start);
                 }
+
+                // Remove from modifications
+                self.modifications.remove(&region.modified_time);
 
                 // Try to recycle borders of discarded regions, that are touched by the draw pixels.
                 for border in region.boundary.borders.drain(..) {
@@ -1235,7 +1221,7 @@ pub mod test {
     /// Uses transparent as None color
     fn check_draw_topology(from_filename: &str, to_filename: &str) {
         let folder = "test_resources/topology/draw";
-        let mut from_material_map = MaterialMap::load(format!("{folder}/{from_filename}"))
+        let from_material_map = MaterialMap::load(format!("{folder}/{from_filename}"))
             .unwrap()
             .without(Material::TRANSPARENT);
         let to_material_map = MaterialMap::load(format!("{folder}/{to_filename}"))
@@ -1245,13 +1231,14 @@ pub mod test {
             from_material_map.bounding_rect(),
             to_material_map.bounding_rect()
         );
-        let diff: Vec<_> = from_material_map
+
+        let modified_pixels: Vec<_> = from_material_map
             .field
             .indices()
             .filter_map(|pixel| {
                 let from_material = from_material_map.get(pixel);
                 let to_material = to_material_map.get(pixel);
-                (from_material != to_material).then_some((pixel, to_material))
+                (from_material != to_material).then_some(pixel)
             })
             .collect();
 
@@ -1259,11 +1246,10 @@ pub mod test {
         let to_topology = Topology::new(&to_material_map);
 
         let mut drawn_topology = from_topology.clone();
-        drawn_topology.draw(&mut from_material_map, diff.into_iter());
+        drawn_topology.update(&to_material_map, modified_pixels.iter().copied());
 
         check_structure(&drawn_topology);
 
-        assert_eq!(from_material_map, to_material_map);
         assert_eq!(to_topology.region_map(), drawn_topology.region_map());
         assert_eq!(to_topology, drawn_topology);
     }
@@ -1319,5 +1305,10 @@ pub mod test {
     #[test]
     fn draw_topology_fail_a0_to_fail_a1() {
         check_draw_topology("fail_a0.png", "fail_a1.png");
+    }
+
+    #[test]
+    fn draw_topology_clear0_to_clear0() {
+        check_draw_topology("clear0.png", "clear1.png");
     }
 }
