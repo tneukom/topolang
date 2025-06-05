@@ -1026,12 +1026,13 @@ impl TopologyStatistics {
 pub mod test {
     use crate::{
         material::Material,
+        math::{point::Point, rect::Rect},
         pixmap::MaterialMap,
         topology::{SeamIndex, Topology},
         utils::{KeyValueItertools, UndirectedEdge, UndirectedGraph},
     };
     use itertools::Itertools;
-    use std::collections::BTreeSet;
+    use std::{collections::BTreeSet, mem::swap};
 
     fn load_topology(filename: &str) -> Topology {
         let path = format!("test_resources/topology/{filename}");
@@ -1059,8 +1060,6 @@ pub mod test {
 
             let area_from_boundary: BTreeSet<_> =
                 region.boundary.interior_area().into_iter().collect();
-
-            println!("Region material: {:?}", region.material);
 
             assert_eq!(area_from_region_map, area_from_boundary);
         }
@@ -1218,15 +1217,8 @@ pub mod test {
         check_topology("4a.png", &expected_edges);
     }
 
-    /// Uses transparent as None color
-    fn check_draw_topology(from_filename: &str, to_filename: &str) {
-        let folder = "test_resources/topology/draw";
-        let from_material_map = MaterialMap::load(format!("{folder}/{from_filename}"))
-            .unwrap()
-            .without(Material::TRANSPARENT);
-        let to_material_map = MaterialMap::load(format!("{folder}/{to_filename}"))
-            .unwrap()
-            .without(Material::TRANSPARENT);
+    // fn check_draw_topology
+    fn check_draw_topology(from_material_map: &MaterialMap, to_material_map: &MaterialMap) {
         assert_eq!(
             from_material_map.bounding_rect(),
             to_material_map.bounding_rect()
@@ -1254,34 +1246,47 @@ pub mod test {
         assert_eq!(to_topology, drawn_topology);
     }
 
+    /// Uses transparent as None color
+    fn check_draw_topology_from_files(from_filename: &str, to_filename: &str) {
+        let folder = "test_resources/topology/draw";
+        let from_material_map = MaterialMap::load(format!("{folder}/{from_filename}"))
+            .unwrap()
+            .without(Material::TRANSPARENT);
+        let to_material_map = MaterialMap::load(format!("{folder}/{to_filename}"))
+            .unwrap()
+            .without(Material::TRANSPARENT);
+
+        check_draw_topology(&from_material_map, &to_material_map);
+    }
+
     #[test]
     fn draw_small0_to_small1() {
-        check_draw_topology("small0.png", "small1.png");
+        check_draw_topology_from_files("small0.png", "small1.png");
     }
 
     #[test]
     fn draw_topology_a0_to_a1() {
-        check_draw_topology("a0.png", "a1.png");
+        check_draw_topology_from_files("a0.png", "a1.png");
     }
 
     #[test]
     fn draw_topology_a1_to_a2() {
-        check_draw_topology("a1.png", "a2.png");
+        check_draw_topology_from_files("a1.png", "a2.png");
     }
 
     #[test]
     fn draw_topology_a2_to_a3() {
-        check_draw_topology("a2.png", "a3.png");
+        check_draw_topology_from_files("a2.png", "a3.png");
     }
 
     #[test]
     fn draw_topology_b0_to_b1() {
-        check_draw_topology("b0.png", "b1.png");
+        check_draw_topology_from_files("b0.png", "b1.png");
     }
 
     #[test]
     fn draw_topology_b1_to_b2() {
-        check_draw_topology("b1.png", "b2.png");
+        check_draw_topology_from_files("b1.png", "b2.png");
     }
 
     #[test]
@@ -1289,26 +1294,70 @@ pub mod test {
         // Approach does not work for this case.
         // Alternative approach: Calculate PreRegion { borders } for each touched Region, then
         // calculate seams in context of Topology.
-        check_draw_topology("c0.png", "c1.png");
+        check_draw_topology_from_files("c0.png", "c1.png");
     }
 
     #[test]
     fn draw_topology_hole0_to_hole1() {
-        check_draw_topology("hole0.png", "hole1.png");
+        check_draw_topology_from_files("hole0.png", "hole1.png");
     }
 
     #[test]
     fn draw_topology_bridge0_to_bridge1() {
-        check_draw_topology("bridge0.png", "bridge1.png");
+        check_draw_topology_from_files("bridge0.png", "bridge1.png");
     }
 
     #[test]
     fn draw_topology_fail_a0_to_fail_a1() {
-        check_draw_topology("fail_a0.png", "fail_a1.png");
+        check_draw_topology_from_files("fail_a0.png", "fail_a1.png");
     }
 
     #[test]
-    fn draw_topology_clear0_to_clear0() {
-        check_draw_topology("clear0.png", "clear1.png");
+    fn draw_topology_clear0_to_clear1() {
+        check_draw_topology_from_files("clear0.png", "clear1.png");
+    }
+
+    #[test]
+    fn draw_topology_merge0_to_merge1() {
+        check_draw_topology_from_files("merge0.png", "merge1.png");
+    }
+
+    #[test]
+    fn draw_topology_merge1_to_merge0() {
+        check_draw_topology_from_files("merge1.png", "merge0.png");
+    }
+
+    #[test]
+    fn draw_topology_color1_to_color1() {
+        check_draw_topology_from_files("color0.png", "color1.png");
+    }
+
+    #[test]
+    fn draw_random() {
+        let materials = [
+            Material::RED,
+            Material::BLUE,
+            Material::GREEN,
+            Material::WHITE,
+        ];
+        let size = 16;
+
+        let mut rng = fastrand::Rng::with_seed(42);
+
+        let mut material_map = MaterialMap::nones(Rect::low_size(Point(0, 0), Point(size, size)));
+
+        // Run in release mode for higher number of tries
+        for _ in 0..100 {
+            let mut drawn_material_map = material_map.clone();
+            // Randomly draw 32 pixels with a small choice of colors
+            for _ in 0..32 {
+                let pixel = Point(rng.i64(0..size), rng.i64(0..size));
+                let material = rng.choice(materials).unwrap();
+                drawn_material_map.set(pixel, material);
+            }
+
+            check_draw_topology(&material_map, &drawn_material_map);
+            swap(&mut material_map, &mut drawn_material_map);
+        }
     }
 }

@@ -50,7 +50,8 @@ cached = "0.55.1"
 tracy-client = { version = "0.18.1", default-features = false, features = ["system-tracing",
     "context-switch-tracing", "code-transfer", "callstack-inlines", "only-localhost"] }
 
-#[dev-dependencies]
+[dev-dependencies]
+fastrand = { version = "2.3.0", default-features = false }
 #rstest = "0.21.0"
 
 [profile.release]

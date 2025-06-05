@@ -39,7 +39,9 @@ impl Rgb<u8> {
         )
     }
 
-    pub const ZERO: Self = Rgb(0, 0, 0);
+    pub const ZERO: Self = Rgb(0x00, 0x00, 0x00);
+    pub const BLACK: Self = Rgb(0x00, 0x00, 0x00);
+    pub const WHITE: Self = Rgb(0xFF, 0xFF, 0xFF);
     pub const RED: Self = Rgb(0xFF, 0x00, 0x00);
     pub const BLUE: Self = Rgb(0x00, 0x00, 0xFF);
     pub const GREEN: Self = Rgb(0x00, 0xFF, 0x00);

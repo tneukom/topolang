@@ -122,12 +122,13 @@ impl Material {
 
     // Some opaque color materials
     pub const BLACK: Self = Self::normal(Rgba8::BLACK.rgb());
-    pub const RED: Self = Self::normal(Rgba8::RED.rgb());
-    pub const GREEN: Self = Self::normal(Rgba8::GREEN.rgb());
-    pub const BLUE: Self = Self::normal(Rgba8::BLUE.rgb());
-    pub const YELLOW: Self = Self::normal(Rgba8::YELLOW.rgb());
-    pub const CYAN: Self = Self::normal(Rgba8::CYAN.rgb());
-    pub const MAGENTA: Self = Self::normal(Rgba8::MAGENTA.rgb());
+    pub const WHITE: Self = Self::normal(Rgba8::WHITE.rgb());
+    pub const RED: Self = Self::normal(Rgb8::RED);
+    pub const GREEN: Self = Self::normal(Rgb8::GREEN);
+    pub const BLUE: Self = Self::normal(Rgb8::BLUE);
+    pub const YELLOW: Self = Self::normal(Rgb8::YELLOW);
+    pub const CYAN: Self = Self::normal(Rgb8::CYAN);
+    pub const MAGENTA: Self = Self::normal(Rgb8::MAGENTA);
 
     pub const TRANSPARENT: Self = Self::new(Rgba8::TRANSPARENT.rgb(), MaterialClass::Transparent);
 
