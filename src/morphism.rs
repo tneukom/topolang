@@ -172,6 +172,15 @@ impl Morphism {
         let region_key = region.key();
         let phi_region_key = phi_region.key();
 
+        debug_assert!(region
+            .boundary
+            .borders
+            .is_sorted_by_key(|border| border.min_side()));
+        debug_assert!(phi_region
+            .boundary
+            .borders
+            .is_sorted_by_key(|border| border.min_side()));
+
         for (i_border, (border, phi_border)) in region
             .boundary
             .borders

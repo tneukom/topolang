@@ -169,6 +169,10 @@ impl Constraint for PreservesSolid {
         for seam in self.region.iter_seams() {
             variables.push(seam.into());
         }
+        for i_border in 0..self.region.boundary.borders.len() {
+            let border_key = BorderKey::new(self.region_key, i_border);
+            variables.push(border_key.into());
+        }
         variables
     }
 

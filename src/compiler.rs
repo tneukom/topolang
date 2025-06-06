@@ -55,7 +55,7 @@ impl Symbol {
         let material_field = RgbaField::load_from_memory(png_bytes)
             .unwrap()
             .into_material();
-        let material_map = MaterialMap::from(material_field).without(Material::WILDCARD);
+        let material_map = MaterialMap::from(material_field).without(Material::TRANSPARENT);
 
         // Compile material map into pattern
         let topology = Topology::new(&material_map);
@@ -95,12 +95,13 @@ impl Symbol {
     ) -> Vec<RegionKey> {
         let mut tagged = Vec::new();
 
-        for phi in self
+        let solutions = self
             .pattern
             .search_strategy
             .main_plan
-            .solutions(&topology.into())
-        {
+            .solutions(&topology.into());
+
+        for phi in solutions {
             let phi_outer_border_key = phi[self.outer_border_key];
             let phi_outer_border = &topology[phi_outer_border_key];
 
@@ -323,13 +324,14 @@ mod test {
             .compile_pattern(material_map, &guess_chooser)
             .unwrap();
 
-        let expected = MaterialMap::load(format!("{folder}/a_result.png")).unwrap();
-        assert_eq!(pattern.material_map, expected);
-
+        // For debugging
         // pattern
         //     .material_map
         //     .save(format!("{folder}/a_result.png"))
         //     .unwrap();
+
+        let expected = MaterialMap::load(format!("{folder}/a_result.png")).unwrap();
+        assert_eq!(pattern.material_map, expected);
 
         let event_to_region: HashMap<_, _> = pattern
             .input_conditions

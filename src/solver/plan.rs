@@ -641,7 +641,6 @@ mod test {
 
         let solutions = plan.solutions(&MaskedTopology::whole(&codom));
 
-        println!("Number of solutions found: {}", solutions.len());
         for phi in &solutions {
             assert!(phi.is_homomorphism(&dom, &codom));
             // println!("{phi}");
@@ -769,6 +768,12 @@ mod test {
     fn pattern_matches_solid_c() {
         assert_solve("solid/c/pattern.png", "solid/c/match_1.png", 1);
         assert_solve("solid/c/pattern.png", "solid/c/miss_1.png", 0);
+    }
+
+    #[test]
+    fn pattern_matches_solid_symbol() {
+        assert_solve("solid/symbol/pattern.png", "solid/symbol/match_1.png", 1);
+        assert_solve("solid/symbol/pattern.png", "solid/symbol/match_2.png", 1);
     }
 
     #[test]

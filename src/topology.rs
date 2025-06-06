@@ -880,6 +880,16 @@ impl Topology {
             self.modifications.insert(region.modified_time, region_key);
             self.regions.insert(region_key, region);
         }
+
+        // For debugging, reset all modified times
+        // self.modifications.clear();
+        // for (&region_key, region) in &mut self.regions {
+        //     region.modified_time = modification_time_counter();
+        //     self.modifications.insert(region.modified_time, region_key);
+        // }
+
+        // For debugging, fully recreate Topology
+        // *self = Topology::new(material_map);
     }
 }
 
