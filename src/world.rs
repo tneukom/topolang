@@ -2,7 +2,7 @@ use crate::{
     field::RgbaField,
     material::Material,
     material_effects::paint_material_map_effects,
-    math::{rect::Rect, rgba8::Rgba8},
+    math::{pixel::Pixel, rect::Rect, rgba8::Rgba8},
     pixmap::MaterialMap,
     topology::{RegionKey, Topology},
     view::Selection,
@@ -98,6 +98,26 @@ impl World {
                 .update(&self.material_map, region_area.into_iter());
         }
 
+        true
+    }
+
+    /// Returns true if any pixels material was changed.
+    #[inline(never)]
+    pub fn draw(&mut self, pixel_materials: impl Iterator<Item = (Pixel, Material)>) -> bool {
+        let mut changed_pixels = Vec::new();
+        for (pixel, material) in pixel_materials {
+            let previous_material = self.material_map.set(pixel, material);
+            if previous_material != Some(material) {
+                changed_pixels.push(pixel);
+            }
+        }
+
+        if changed_pixels.is_empty() {
+            return false;
+        }
+
+        self.topology
+            .update(&self.material_map, changed_pixels.into_iter());
         true
     }
 

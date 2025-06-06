@@ -1,9 +1,10 @@
 use crate::{
-    math::point::Point,
+    material::Material,
+    math::{pixel::Pixel, point::Point},
     morphism::Morphism,
     pixmap::MaterialMap,
     solver::plan::SearchStrategy,
-    topology::{FillRegion, MaskedTopology, RegionKey, StrongRegionKey, Topology},
+    topology::{MaskedTopology, RegionKey, StrongRegionKey, Topology},
     world::World,
 };
 use itertools::Itertools;
@@ -100,6 +101,23 @@ impl Pattern {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct FillRegion {
+    /// Region key in the pattern, the matched region is filled with `material`
+    pub region_key: RegionKey,
+    pub material: Material,
+}
+
+/// Draw operation on a matched Region. Assumes the matched Region has the same shape as the pattern
+/// Region.
+#[derive(Debug, Clone)]
+pub struct DrawRegion {
+    pub region_key: RegionKey,
+
+    // Pixels are relative to the top-left pixel of the region
+    pub pixel_materials: Vec<(Pixel, Material)>,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct RuleApplicationContext<'a> {
     pub contained: Option<RegionKey>,
     pub excluded: &'a BTreeSet<StrongRegionKey>,
@@ -112,6 +130,10 @@ pub struct Rule {
 
     /// The substitution
     pub after: Topology,
+
+    pub fills: Vec<FillRegion>,
+
+    pub draws: Vec<DrawRegion>,
 }
 
 impl Rule {
@@ -134,43 +156,92 @@ impl Rule {
     }
 
     #[inline(never)]
-    pub fn new(before: Pattern, after: Topology) -> anyhow::Result<Self> {
-        // Make sure after region map is constant on each region in `before` and `holes`.
-        for &region_key in before.topology.regions.keys() {
-            Self::assert_phi_region_constant(&before.topology, &after, region_key)?
+    pub fn new(
+        before: Pattern,
+        after: Topology,
+        after_material_map: &MaterialMap,
+    ) -> anyhow::Result<Self> {
+        // Compute fill operations to be applied
+        let mut fills = Vec::new();
+        let mut draws = Vec::new();
+        for (&before_region_key, before_region) in &before.topology.regions {
+            if before_region.material.is_solid() {
+                let mut pixel_materials = Vec::new();
+                for pixel in before_region.boundary.interior_area() {
+                    let before_material = before.material_map.get(pixel).unwrap();
+                    let after_material = after_material_map.get(pixel).unwrap();
+                    if before_material != after_material {
+                        pixel_materials.push((pixel, after_material));
+                    }
+                }
+
+                if pixel_materials.is_empty() {
+                    continue;
+                }
+
+                let draw = DrawRegion {
+                    region_key: before_region_key,
+                    pixel_materials,
+                };
+                draws.push(draw);
+
+                continue;
+            }
+
+            // Make sure after region map is constant on each region except solid regions.
+            // TODO: Write function instead that returns the constant color over a region or
+            //   an error.
+            Self::assert_phi_region_constant(&before.topology, &after, before_region_key)?;
+
+            let after_material = after
+                .material_at(before_region.top_left_interior_pixel())
+                .unwrap();
+
+            if before_region.material == after_material {
+                continue;
+            }
+
+            let fill_region = FillRegion {
+                region_key: before_region_key,
+                material: after_material,
+            };
+
+            fills.push(fill_region);
         }
 
-        Ok(Rule { before, after })
+        // Compute draw operations to be applied
+
+        Ok(Rule {
+            before,
+            after,
+            fills,
+            draws,
+        })
     }
 
     /// Given a match for the pattern `self.before` and the world, apply the substitution determined
     /// by `self.before` and `self.after`
     /// Returns true if there were any changes to the world
     pub fn substitute(&self, phi: &Morphism, world: &mut World) -> bool {
-        // TODO: The first part can be done without `world` so we could precompute it!
-        let mut fill_regions = Vec::new();
-        for (region_key, before_region) in &self.before.topology.regions {
-            let after_material = self
-                .after
-                .material_at(before_region.top_left_interior_pixel())
-                .unwrap();
-            if before_region.material == after_material {
-                continue;
-            }
-
-            let phi_region_key = phi.region_map[region_key];
-            let fill_region = FillRegion {
-                region_key: phi_region_key,
-                material: after_material,
-            };
-
-            fill_regions.push(fill_region);
-        }
-
         let mut modified = false;
-        for fill_region in fill_regions {
-            modified |= world.fill_region(fill_region.region_key, fill_region.material);
+
+        for fill_region in &self.fills {
+            let phi_region_key = phi[fill_region.region_key];
+            modified |= world.fill_region(phi_region_key, fill_region.material);
         }
+
+        for draw_region in &self.draws {
+            let phi_region_key = phi[draw_region.region_key];
+            // RegionKey is the minimal side of the outer cycle, so left side is the minimal pixel.
+            let offset = phi_region_key.left_pixel;
+            let offset_material_pixels: Vec<_> = draw_region
+                .pixel_materials
+                .iter()
+                .map(|&(pixel, material)| (pixel + offset, material))
+                .collect();
+            modified |= world.draw(offset_material_pixels.into_iter());
+        }
+
         modified
     }
 
@@ -238,7 +309,7 @@ mod test {
             search_strategy,
             input_conditions: Vec::new(),
         };
-        let rule = Rule::new(pattern, after).unwrap();
+        let rule = Rule::new(pattern, after, &after_material_map).unwrap();
 
         let world_material_map = MaterialMap::load(format!("{folder}/world.png")).unwrap();
         let mut world = World::from_material_map(world_material_map);
@@ -258,8 +329,7 @@ mod test {
 
             // Save world to image for debugging!
             // world
-            //     .topology()
-            //     .material_map
+            //     .material_map()
             //     .save(format!("{folder}/run_{application_count}.png"))
             //     .unwrap();
 
@@ -339,5 +409,10 @@ mod test {
     #[test]
     fn disjoint() {
         assert_rule_application("disjoint", 1)
+    }
+
+    #[test]
+    fn solid_draw_1() {
+        assert_rule_application("solid_draw_1", 3)
     }
 }

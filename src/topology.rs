@@ -99,6 +99,8 @@ impl Seam {
 
     // self + offset == other
     pub fn translated_eq(&self, offset: Point<i64>, other: &Seam) -> bool {
+        // If other is a non-atomic seam it's a much harder problem
+        assert!(!self.is_loop());
         &self.translated(offset) == other
     }
 }
@@ -142,6 +144,7 @@ pub struct SeamMaterials {
 // TODO: RegionKey should be Pixel
 pub type RegionKey = Side;
 
+// TODO: Remove, normal RegionKey is strong
 pub type StrongRegionKey = Pixel;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -317,18 +320,6 @@ impl Boundary {
         first_border.sides[0].left_pixel
     }
 
-    /// self + offset == other
-    pub fn translated_eq(&self, offset: Point<i64>, other: &Self) -> bool {
-        if self.borders.len() != other.borders.len() {
-            return false;
-        }
-
-        self.borders
-            .iter()
-            .zip(&other.borders)
-            .all(|(self_border, other_border)| self_border.translated_eq(offset, other_border))
-    }
-
     pub fn iter_sides(&self) -> impl Iterator<Item = Side> + Clone + use<'_> {
         self.borders.iter().flat_map(|border| border.iter_sides())
     }
@@ -386,6 +377,10 @@ impl Region {
 
     pub fn strong_key(&self) -> StrongRegionKey {
         self.top_left_interior_pixel()
+    }
+
+    pub fn key(&self) -> RegionKey {
+        self.boundary.outer_border().min_side()
     }
 
     pub fn bounds(&self) -> Rect<i64> {
@@ -457,13 +452,6 @@ impl BorderKey {
             i_border,
         }
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct FillRegion {
-    /// Region key in the pattern, the matched region is filled with `material`
-    pub region_key: RegionKey,
-    pub material: Material,
 }
 
 #[derive(Debug, Clone)]

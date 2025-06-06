@@ -272,7 +272,7 @@ impl Compiler {
 
             let pattern = self.compile_pattern(before_material_map, &guess_chooser)?;
 
-            let rule = Rule::new(pattern, after)?;
+            let rule = Rule::new(pattern, after, &after_material_map)?;
             let compiled_rule = CompiledRule {
                 rule,
                 source,

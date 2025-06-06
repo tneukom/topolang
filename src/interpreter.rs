@@ -1,7 +1,7 @@
 use crate::{
     compiler::CompiledRules,
-    rule::{CanvasInput, Rule, RuleApplicationContext},
-    topology::{FillRegion, ModificationTime, StrongRegionKey},
+    rule::{CanvasInput, FillRegion, Rule, RuleApplicationContext},
+    topology::{ModificationTime, StrongRegionKey},
     world::World,
 };
 use itertools::Itertools;
@@ -148,6 +148,7 @@ impl Ticked {
 pub fn wake_up(world: &mut World, excluded: &BTreeSet<StrongRegionKey>) -> usize {
     let topology = world.topology();
 
+    // Collect fill region operations before applying them
     let mut fill_regions = Vec::new();
     for (&region_key, region) in &topology.regions {
         if region.material.is_sleeping() {

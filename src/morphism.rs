@@ -151,6 +151,10 @@ impl Morphism {
     /// Check if `self.seam_map` is rigid for all seams of `region` and if the boundary of `region`
     /// is a rigid transformation of the boundary of `phi_region`.
     pub fn is_rigid_on_region(&self, region: &Region, phi_region: &Region) -> bool {
+        // Examples to consider:
+        // - Single seam but different shapes
+        // - Same shape but seam mapping is a rotation.
+
         // We check if region + offset == phi_region
         let offset = phi_region.top_left_interior_pixel() - region.top_left_interior_pixel();
 
@@ -165,24 +169,43 @@ impl Morphism {
             return false;
         }
 
-        // We have to check if the seam map is rigid and if the phi_border is a rigid transformation
-        // of border. Either alone is not sufficient.
-        // Counterexamples:
-        // - Single seam but different shapes
-        // - Same shape but seam mapping is a rotation.
+        let region_key = region.key();
+        let phi_region_key = phi_region.key();
+
+        for (i_border, (border, phi_border)) in region
+            .boundary
+            .borders
+            .iter()
+            .zip_eq(&phi_region.boundary.borders)
+            .enumerate()
+        {
+            let border_key = BorderKey::new(region_key, i_border);
+            let expected_phi_border_key = BorderKey::new(phi_region_key, i_border);
+            if let Some(&phi_border_key) = self.border_map.get(&border_key) {
+                if phi_border_key != expected_phi_border_key {
+                    return false;
+                }
+            }
+
+            if !border.translated_eq(offset, phi_border) {
+                return false;
+            }
+        }
 
         // Check if seam mapping is rigid
         for seam in region.iter_seams() {
+            if seam.is_loop() {
+                // Loop seam are guaranteed to be mapped correctly because the borders are mapped
+                // correctly.
+                continue;
+            }
+
             if let Some(phi_seam) = &self.seam_map.get(&seam) {
+                // Only checks if start and stop are equal
                 if !seam.translated_eq(offset, phi_seam) {
                     return false;
                 }
             }
-        }
-
-        // Check if boundary mapping is rigid
-        if !region.boundary.translated_eq(offset, &phi_region.boundary) {
-            return false;
         }
 
         true
