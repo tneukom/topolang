@@ -171,7 +171,8 @@ impl Rule {
                     let before_material = before.material_map.get(pixel).unwrap();
                     let after_material = after_material_map.get(pixel).unwrap();
                     if before_material != after_material {
-                        pixel_materials.push((pixel, after_material));
+                        pixel_materials
+                            .push((pixel - before_region_key.left_pixel, after_material));
                     }
                 }
 
@@ -419,5 +420,10 @@ mod test {
     #[test]
     fn solid_draw_2() {
         assert_rule_application("solid_draw_2", 2)
+    }
+
+    #[test]
+    fn solid_draw_3() {
+        assert_rule_application("solid_draw_3", 1)
     }
 }
