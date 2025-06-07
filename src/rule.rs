@@ -415,4 +415,9 @@ mod test {
     fn solid_draw_1() {
         assert_rule_application("solid_draw_1", 3)
     }
+
+    #[test]
+    fn solid_draw_2() {
+        assert_rule_application("solid_draw_2", 2)
+    }
 }
