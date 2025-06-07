@@ -144,9 +144,6 @@ pub struct SeamMaterials {
 // TODO: RegionKey should be Pixel
 pub type RegionKey = Side;
 
-// TODO: Remove, normal RegionKey is strong
-pub type StrongRegionKey = Pixel;
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Border {
     /// Vec of (side, right region key), first side is minimum side of cycle,
@@ -373,10 +370,6 @@ impl Region {
 
     pub fn top_left_interior_pixel(&self) -> Pixel {
         self.boundary.top_left_interior_pixel()
-    }
-
-    pub fn strong_key(&self) -> StrongRegionKey {
-        self.top_left_interior_pixel()
     }
 
     pub fn key(&self) -> RegionKey {
@@ -953,11 +946,11 @@ pub fn modification_time_counter() -> ModificationTime {
 // assigned.
 pub struct MaskedTopology<'a> {
     pub inner: &'a Topology,
-    pub hidden: Option<&'a BTreeSet<StrongRegionKey>>,
+    pub hidden: Option<&'a HashSet<RegionKey>>,
 }
 
 impl<'a> MaskedTopology<'a> {
-    pub fn new(topology: &'a Topology, hidden: &'a BTreeSet<StrongRegionKey>) -> Self {
+    pub fn new(topology: &'a Topology, hidden: &'a HashSet<RegionKey>) -> Self {
         Self {
             inner: topology,
             hidden: Some(hidden),
@@ -971,16 +964,11 @@ impl<'a> MaskedTopology<'a> {
         }
     }
 
-    pub fn is_hidden(&self, region: &Region) -> bool {
+    pub fn is_hidden(&self, region_key: RegionKey) -> bool {
         match self.hidden {
             None => false,
-            Some(hidden) => hidden.contains(&region.strong_key()),
+            Some(hidden) => hidden.contains(&region_key),
         }
-    }
-
-    pub fn is_hidden_by_key(&self, region_key: RegionKey) -> bool {
-        let region = &self.inner[region_key];
-        self.is_hidden(region)
     }
 
     pub fn visible_regions(
@@ -988,7 +976,7 @@ impl<'a> MaskedTopology<'a> {
     ) -> impl Iterator<Item = (RegionKey, &'a Region)> + Clone + use<'a> {
         self.inner
             .iter_regions()
-            .filter(|(_, region)| !self.is_hidden(region))
+            .filter(|(region_key, _)| !self.is_hidden(*region_key))
     }
 
     pub fn visible_region_keys(&'a self) -> impl Iterator<Item = RegionKey> + Clone + use<'a> {

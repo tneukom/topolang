@@ -236,7 +236,7 @@ impl SearchBranch {
                         Ok(phi_derived) => {
                             // Make sure we're not assigning hidden elements
                             if let Element::Region(phi_derived) = phi_derived {
-                                if codom.is_hidden_by_key(phi_derived) {
+                                if codom.is_hidden(phi_derived) {
                                     return Err(SearchError::PropagationFailed);
                                 }
                             }
@@ -530,19 +530,19 @@ impl SearchStrategy {
         // lifetime it derives for phi is wrong.
         let mut on_solution_found = |phi: &Morphism| {
             for &phi_region_key in phi.region_map.values() {
-                assert!(!codom.is_hidden_by_key(phi_region_key));
+                assert!(!codom.is_hidden(phi_region_key));
             }
 
             solutions.push(phi.clone());
         };
 
         if let Some(contained) = contained {
-            let region = &codom.inner[contained];
             // If `contained` is hidden there are no solutions
-            if codom.is_hidden(region) {
+            if codom.is_hidden(contained) {
                 return Vec::new();
             }
 
+            let region = &codom.inner[contained];
             for pair in &self.plans {
                 let (first_material, plan) = pair;
                 if first_material.matches(region.material) {

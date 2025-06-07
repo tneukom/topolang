@@ -4,11 +4,11 @@ use crate::{
     morphism::Morphism,
     pixmap::MaterialMap,
     solver::plan::SearchStrategy,
-    topology::{MaskedTopology, RegionKey, StrongRegionKey, Topology},
+    topology::{MaskedTopology, RegionKey, Topology},
     world::World,
 };
+use ahash::HashSet;
 use itertools::Itertools;
-use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InputEvent {
@@ -120,7 +120,7 @@ pub struct DrawRegion {
 #[derive(Debug, Clone, Copy)]
 pub struct RuleApplicationContext<'a> {
     pub contained: Option<RegionKey>,
-    pub excluded: &'a BTreeSet<StrongRegionKey>,
+    pub excluded: &'a HashSet<RegionKey>,
     pub input: &'a CanvasInput,
 }
 

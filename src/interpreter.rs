@@ -1,11 +1,11 @@
 use crate::{
     compiler::CompiledRules,
     rule::{CanvasInput, FillRegion, Rule, RuleApplicationContext},
-    topology::{ModificationTime, StrongRegionKey},
+    topology::{ModificationTime, RegionKey},
     world::World,
 };
+use ahash::HashSet;
 use itertools::Itertools;
-use std::collections::BTreeSet;
 
 pub struct Interpreter {
     pub rules: CompiledRules,
@@ -145,15 +145,14 @@ impl Ticked {
 
 /// Wake up all sleeping regions (replace them with normal material). Returns number of regions
 /// that were woken up.
-pub fn wake_up(world: &mut World, excluded: &BTreeSet<StrongRegionKey>) -> usize {
+pub fn wake_up(world: &mut World, excluded: &HashSet<RegionKey>) -> usize {
     let topology = world.topology();
 
     // Collect fill region operations before applying them
     let mut fill_regions = Vec::new();
     for (&region_key, region) in &topology.regions {
         if region.material.is_sleeping() {
-            let strong_region_key = region.top_left_interior_pixel();
-            if excluded.contains(&strong_region_key) {
+            if excluded.contains(&region_key) {
                 continue;
             }
 

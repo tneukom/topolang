@@ -10,20 +10,17 @@ use crate::{
     solver::plan::{
         GuessChooser, GuessChooserUsingStatistics, SearchPlan, SearchStrategy, SimpleGuessChooser,
     },
-    topology::{
-        BorderKey, MaskedTopology, Region, RegionKey, StrongRegionKey, Topology, TopologyStatistics,
-    },
+    topology::{BorderKey, MaskedTopology, RegionKey, Topology, TopologyStatistics},
     world::World,
 };
-use ahash::HashMap;
+use ahash::{HashMap, HashSet};
 use itertools::Itertools;
-use std::collections::BTreeSet;
 
 #[derive(Debug, Clone)]
 pub struct CompiledRule {
     /// All regions in the Rule frame, before and after. These elements should be hidden during Rule
     /// execution. Contains an arbitrary pixel of each region.
-    pub source: BTreeSet<StrongRegionKey>,
+    pub source: HashSet<RegionKey>,
 
     pub source_bounds: Rect<i64>,
 
@@ -33,7 +30,7 @@ pub struct CompiledRule {
 #[derive(Debug, Clone)]
 pub struct CompiledRules {
     pub rules: Vec<CompiledRule>,
-    pub source_region_keys: BTreeSet<StrongRegionKey>,
+    pub source_region_keys: HashSet<RegionKey>,
 }
 
 /// ┌────────────────┐
@@ -179,24 +176,19 @@ impl Compiler {
         let topology = Topology::new(&material_map);
 
         // Extract symbols from pattern and add InputCondition for each tagged area.
-        let mut extracted_symbols = Vec::new();
+        let mut input_conditions = Vec::new();
         for (&event, symbol) in &self.input_event_symbols {
             for tagged_region_key in symbol.extract_symbols(&topology, &mut material_map) {
-                let tagged_strong_region_key = topology[tagged_region_key].strong_key();
-                extracted_symbols.push((event, tagged_strong_region_key));
+                let input_condition = InputCondition {
+                    event,
+                    region_key: tagged_region_key,
+                };
+                input_conditions.push(input_condition);
             }
         }
 
         // Update `before` Topology after extracting symbols
         let topology = Topology::new(&material_map);
-
-        let input_conditions = extracted_symbols
-            .into_iter()
-            .map(|(event, strong_region_key)| InputCondition {
-                event,
-                region_key: topology.region_key_at(strong_region_key).unwrap(),
-            })
-            .collect();
 
         let search_strategy = SearchStrategy::for_morphism(&topology, guess_chooser);
 
@@ -246,21 +238,17 @@ impl Compiler {
             let after = Topology::new(&after_material_map);
 
             // Collect regions that are part of the source for this Rule.
-            let mut source: BTreeSet<StrongRegionKey> = BTreeSet::new();
+            let mut source = HashSet::default();
             // Before and after regions
-            source.extend(before.regions.values().map(Region::strong_key));
-            source.extend(after.regions.values().map(Region::strong_key));
+            source.extend(before.regions.keys());
+            source.extend(after.regions.keys());
             // Rule frame regions
             for region_key in self.rule_frame.iter_region_keys() {
                 let phi_region_key = phi[region_key];
-                source.insert(topology[phi_region_key].strong_key());
+                source.insert(phi_region_key);
             }
 
-            let source_bounds = Rect::iter_bounds(
-                source
-                    .iter()
-                    .map(|&key| topology.region_at(key).unwrap().bounds()),
-            );
+            let source_bounds = Rect::iter_bounds(source.iter().map(|&key| topology[key].bounds()));
 
             // Find translation from after to before
             let before_bounds = before_material_map.bounding_rect();
@@ -285,9 +273,9 @@ impl Compiler {
         // Sort rules by y coordinates of bounding box
         rules.sort_by_key(|rule| rule.source_bounds.top());
 
-        let source_region_keys: BTreeSet<_> = rules
+        let source_region_keys: HashSet<_> = rules
             .iter()
-            .flat_map(|compiled_rule| compiled_rule.source.iter())
+            .flat_map(|compiled_rule| &compiled_rule.source)
             .copied()
             .collect();
 
