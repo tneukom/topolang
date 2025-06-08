@@ -22,11 +22,11 @@ pub fn is_inner_border(min_side: Side) -> bool {
     !is_outer_border(min_side)
 }
 
-fn is_boundary_side(side: Side, material_map: &MaterialMap) -> bool {
-    let Some(left_material) = material_map.get(side.left_pixel) else {
+fn is_boundary_side<T: Copy + Eq>(side: Side, map: &Pixmap<T>) -> bool {
+    let Some(left_material) = map.get(side.left_pixel) else {
         return false;
     };
-    let right_material = material_map.get(side.right_pixel());
+    let right_material = map.get(side.right_pixel());
     Some(left_material) != right_material
 }
 
@@ -77,12 +77,12 @@ impl Sides {
         }
     }
 
-    pub fn boundary_sides(material_map: &MaterialMap) -> Self {
+    pub fn boundary_sides<T: Eq + Copy>(map: &Pixmap<T>) -> Self {
         let _tracy_span = tracy_client::span!("Sides::boundary_sides");
 
-        // Collect boundary sides of `material_map`
+        // Collect boundary sides of `map`
         let mut sides = HashSet::default();
-        for (side, left, right) in iter_pixmap_sides(material_map) {
+        for (side, left, right) in iter_pixmap_sides(map) {
             if Some(left) != right {
                 sides.insert(side);
             }
@@ -90,7 +90,7 @@ impl Sides {
 
         Self {
             sides,
-            bounds: material_map.bounding_rect(),
+            bounds: map.bounding_rect(),
         }
     }
 
@@ -381,6 +381,13 @@ impl ConnectedCycleGroups {
         let cycle_min_side = cycles.walk_to_boundary_cycle(pixel)?;
         Some(self.cycle_to_outer_cycle[&cycle_min_side])
     }
+}
+/// Returns a mapping from pixel to the minimal side of the outer cycle of the pixel's region.
+pub fn region_map<T: Copy + Eq>(map: &Pixmap<T>) -> Pixmap<CycleMinSide> {
+    let sides = Sides::boundary_sides(map);
+    let cycles = BoundaryCycles::new(&sides);
+    let cycle_groups = ConnectedCycleGroups::from_cycles(&cycles);
+    cycle_groups.region_map(&cycles)
 }
 
 // fn compute_topology(material_map: &MaterialMap) {

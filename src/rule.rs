@@ -2,12 +2,13 @@ use crate::{
     material::Material,
     math::{pixel::Pixel, point::Point},
     morphism::Morphism,
-    pixmap::MaterialMap,
+    new_regions::{region_map, BoundaryCycles, ConnectedCycleGroups, CycleMinSide, Sides},
+    pixmap::{MaterialMap, Pixmap},
     solver::plan::SearchStrategy,
-    topology::{MaskedTopology, RegionKey, Topology},
+    topology::{MaskedTopology, Region, RegionKey, Topology},
     world::World,
 };
-use ahash::HashSet;
+use ahash::{HashMap, HashSet};
 use itertools::Itertools;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -111,10 +112,19 @@ pub struct FillRegion {
 /// Region.
 #[derive(Debug, Clone)]
 pub struct DrawRegion {
-    pub region_key: RegionKey,
+    pub anchor_region_key: RegionKey,
 
-    // Pixels are relative to the top-left pixel of the region
+    // Pixels are relative to the top-left pixel of the anchor region
     pub pixel_materials: Vec<(Pixel, Material)>,
+}
+
+impl DrawRegion {
+    pub fn empty(anchor_region_key: RegionKey) -> Self {
+        Self {
+            anchor_region_key,
+            pixel_materials: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -128,93 +138,132 @@ pub struct RuleApplicationContext<'a> {
 pub struct Rule {
     pub before: Pattern,
 
-    /// The substitution
-    pub after: Topology,
-
     pub fills: Vec<FillRegion>,
 
     pub draws: Vec<DrawRegion>,
 }
 
 impl Rule {
-    pub fn assert_phi_region_constant(
-        dom: &Topology,
-        codom: &Topology,
-        region_key: RegionKey,
-    ) -> anyhow::Result<()> {
-        // REVISIT: Could be faster by iterating over both before.region_map and
-        //   after.region_map in parallel.
-        let all_equal = dom
-            .iter_region_interior(region_key)
-            .map(|pixel| codom.material_at(pixel).unwrap())
-            .all_equal();
-        if !all_equal {
-            anyhow::bail!("Invalid rule, substitution region not constant.")
+    pub fn constant_pixmap_over_area<T: Eq + Copy>(
+        map: &Pixmap<T>,
+        area: impl IntoIterator<Item = Pixel>,
+    ) -> anyhow::Result<Option<T>> {
+        let Ok(constant) = area
+            .into_iter()
+            .filter_map(|pixel| map.get(pixel))
+            .dedup()
+            .at_most_one()
+        else {
+            anyhow::bail!("map not constant over given region");
+        };
+        Ok(constant)
+    }
+
+    /// Returns
+    /// - None if the material_map is not defined anywhere on `region`
+    /// - Some(material) if material_map is the same material over the whole `region`
+    /// - An error otherwise
+    pub fn constant_material_map_over_region(
+        material_map: &MaterialMap,
+        region: &Region,
+    ) -> anyhow::Result<Option<Material>> {
+        let area = region.boundary.interior_area();
+        Self::constant_pixmap_over_area(material_map, area)
+    }
+
+    fn solid_region_areas(material_map: &MaterialMap) -> HashMap<CycleMinSide, Vec<Pixel>> {
+        let solid_map = material_map.filter_map(|_, material| material.is_solid().then_some(()));
+
+        let sides = Sides::boundary_sides(&solid_map);
+        let cycles = BoundaryCycles::new(&sides);
+        let cycle_groups = ConnectedCycleGroups::from_cycles(&cycles);
+
+        cycle_groups
+            .outer_cycle_to_group
+            .into_iter()
+            .map(|(region_key, cycle_group)| (region_key, cycle_group.area(&cycles)))
+            .collect()
+    }
+
+    fn solid_region_map(material_map: &MaterialMap) -> Pixmap<CycleMinSide> {
+        let mut region_map = Pixmap::nones(material_map.bounding_rect());
+        for (region_key, area) in Self::solid_region_areas(material_map) {
+            for pixel in area {
+                region_map.set(pixel, region_key);
+            }
+        }
+        region_map
+    }
+
+    /// Removes all solid pixels from `after_material_map`
+    fn extract_draw_region_operations(
+        before_material_map: &MaterialMap,
+        after_material_map: &mut MaterialMap,
+    ) -> anyhow::Result<Vec<DrawRegion>> {
+        // Create one DrawRegion operation for each solid region in after_solid_region_map
+        let mut draws = Vec::new();
+
+        let before_solid_map = Self::solid_region_map(before_material_map);
+
+        for (region_key, area) in Self::solid_region_areas(after_material_map) {
+            let Some(anchor_region_key) =
+                Self::constant_pixmap_over_area(&before_solid_map, area.iter().copied())?
+            else {
+                anyhow::bail!(
+                    "Each after side solid region must overlap a solid region in the before side"
+                );
+            };
+
+            let top_left = region_key.left_pixel;
+            let pixel_materials: Vec<_> = area
+                .into_iter()
+                .map(|pixel| {
+                    (
+                        pixel - top_left,
+                        after_material_map.remove(pixel).unwrap().as_normal(),
+                    )
+                })
+                .collect();
+
+            let draw = DrawRegion {
+                anchor_region_key,
+                pixel_materials,
+            };
+            draws.push(draw);
         }
 
-        Ok(())
+        Ok(draws)
     }
 
     #[inline(never)]
-    pub fn new(
-        before: Pattern,
-        after: Topology,
-        after_material_map: &MaterialMap,
-    ) -> anyhow::Result<Self> {
+    pub fn new(before: Pattern, mut after_material_map: MaterialMap) -> anyhow::Result<Self> {
+        // Compute draw operations to be applied
+
+        let draws =
+            Self::extract_draw_region_operations(&before.material_map, &mut after_material_map)?;
+
         // Compute fill operations to be applied
         let mut fills = Vec::new();
-        let mut draws = Vec::new();
         for (&before_region_key, before_region) in &before.topology.regions {
-            if before_region.material.is_solid() {
-                let mut pixel_materials = Vec::new();
-                for pixel in before_region.boundary.interior_area() {
-                    let before_material = before.material_map.get(pixel).unwrap();
-                    let after_material = after_material_map.get(pixel).unwrap();
-                    if before_material != after_material {
-                        pixel_materials
-                            .push((pixel - before_region_key.left_pixel, after_material));
-                    }
-                }
-
-                if pixel_materials.is_empty() {
-                    continue;
-                }
-
-                let draw = DrawRegion {
-                    region_key: before_region_key,
-                    pixel_materials,
-                };
-                draws.push(draw);
-
-                continue;
-            }
-
             // Make sure after region map is constant on each region except solid regions.
-            // TODO: Write function instead that returns the constant color over a region or
-            //   an error.
-            Self::assert_phi_region_constant(&before.topology, &after, before_region_key)?;
+            if let Some(after_material) =
+                Self::constant_material_map_over_region(&after_material_map, before_region)?
+            {
+                if before_region.material != after_material {
+                    let fill_region = FillRegion {
+                        region_key: before_region_key,
+                        material: after_material,
+                    };
 
-            let after_material = after
-                .material_at(before_region.top_left_interior_pixel())
-                .unwrap();
-
-            if before_region.material == after_material {
-                continue;
+                    fills.push(fill_region);
+                }
             }
-
-            let fill_region = FillRegion {
-                region_key: before_region_key,
-                material: after_material,
-            };
-
-            fills.push(fill_region);
         }
 
         // Compute draw operations to be applied
 
         Ok(Rule {
             before,
-            after,
             fills,
             draws,
         })
@@ -232,9 +281,9 @@ impl Rule {
         }
 
         for draw_region in &self.draws {
-            let phi_region_key = phi[draw_region.region_key];
+            let phi_anchor_region_key = phi[draw_region.anchor_region_key];
             // RegionKey is the minimal side of the outer cycle, so left side is the minimal pixel.
-            let offset = phi_region_key.left_pixel;
+            let offset = phi_anchor_region_key.left_pixel;
             let offset_material_pixels: Vec<_> = draw_region
                 .pixel_materials
                 .iter()
@@ -300,7 +349,6 @@ mod test {
         let before = Topology::new(&before_material_map);
 
         let after_material_map = MaterialMap::load(format!("{folder}/after.png")).unwrap();
-        let after = Topology::new(&after_material_map);
 
         let guess_chooser = SimpleGuessChooser::default();
         let search_strategy = SearchStrategy::for_morphism(&before, &guess_chooser);
@@ -310,7 +358,7 @@ mod test {
             search_strategy,
             input_conditions: Vec::new(),
         };
-        let rule = Rule::new(pattern, after, &after_material_map).unwrap();
+        let rule = Rule::new(pattern, after_material_map).unwrap();
 
         let world_material_map = MaterialMap::load(format!("{folder}/world.png")).unwrap();
         let mut world = World::from_material_map(world_material_map);
@@ -329,10 +377,10 @@ mod test {
             }
 
             // Save world to image for debugging!
-            // world
-            //     .material_map()
-            //     .save(format!("{folder}/run_{application_count}.png"))
-            //     .unwrap();
+            world
+                .material_map()
+                .save(format!("{folder}/run_{application_count}.png"))
+                .unwrap();
 
             application_count += 1;
             assert!(application_count <= expected_application_count);

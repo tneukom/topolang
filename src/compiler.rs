@@ -257,11 +257,10 @@ impl Compiler {
 
             let offset = before_bounds.low() - after_bounds.low();
             let after_material_map = after_material_map.translated(offset);
-            let after = Topology::new(&after_material_map);
 
             let pattern = self.compile_pattern(before_material_map, &guess_chooser)?;
 
-            let rule = Rule::new(pattern, after, &after_material_map)?;
+            let rule = Rule::new(pattern, after_material_map)?;
             let compiled_rule = CompiledRule {
                 rule,
                 source,

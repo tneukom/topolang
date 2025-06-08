@@ -674,15 +674,6 @@ impl Topology {
         lhs.is_loop() && rhs.is_loop() && self.seam_border(lhs) == self.seam_border(rhs)
     }
 
-    // TODO: Slow
-    pub fn iter_region_interior<'a>(
-        &'a self,
-        region_key: RegionKey,
-    ) -> impl Iterator<Item = Pixel> + Clone + 'a {
-        let region = &self.regions[&region_key];
-        region.boundary.interior_area().into_iter()
-    }
-
     pub fn region_key_at(&self, pixel: Pixel) -> Option<RegionKey> {
         self.cycle_groups
             .outer_cycle_of_region_at(&self.boundary_cycles, pixel)
