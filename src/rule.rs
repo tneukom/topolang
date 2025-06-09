@@ -205,7 +205,7 @@ impl Rule {
 
         let before_solid_map = Self::solid_region_map(before_material_map);
 
-        for (region_key, area) in Self::solid_region_areas(after_material_map) {
+        for area in Self::solid_region_areas(after_material_map).into_values() {
             let Some(anchor_region_key) =
                 Self::constant_pixmap_over_area(&before_solid_map, area.iter().copied())?
             else {
@@ -214,7 +214,7 @@ impl Rule {
                 );
             };
 
-            let top_left = region_key.left_pixel;
+            let top_left = anchor_region_key.left_pixel;
             let pixel_materials: Vec<_> = area
                 .into_iter()
                 .map(|pixel| {
@@ -377,10 +377,10 @@ mod test {
             }
 
             // Save world to image for debugging!
-            world
-                .material_map()
-                .save(format!("{folder}/run_{application_count}.png"))
-                .unwrap();
+            // world
+            //     .material_map()
+            //     .save(format!("{folder}/run_{application_count}.png"))
+            //     .unwrap();
 
             application_count += 1;
             assert!(application_count <= expected_application_count);
@@ -473,5 +473,15 @@ mod test {
     #[test]
     fn solid_draw_3() {
         assert_rule_application("solid_draw_3", 1)
+    }
+
+    #[test]
+    fn solid_overdraw_1() {
+        assert_rule_application("solid_overdraw_1", 5)
+    }
+
+    #[test]
+    fn solid_overdraw_2() {
+        assert_rule_application("solid_overdraw_2", 4)
     }
 }
