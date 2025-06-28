@@ -111,20 +111,22 @@ pub fn rule_effect(material_map: &MaterialMap, pixel: Point<i64>, material: Mate
     Rgba8::from_rgb_a(material.rgb, alpha)
 }
 
-pub fn sleep_effect(pixel: Point<i64>, rgb: Rgb8) -> Rgba8 {
-    // ███ ███ ███ ███
-    // █ █ █ █ █ █ █ █
-    // █ ███ ███ ███ ██
-    //
-    // const PATTERN_WIDTH: usize = 4;
-    // const PATTERN_HEIGHT: usize = 4;
-    // const PATTERN: [[bool; 4]; 4] = [
-    //     [true, true, true, false],
-    //     [true, false, true, false],
-    //     [true, false, true, true],
-    //     [false, false, false, false],
-    // ];
+pub fn repeating_effect<T, const PATTERN_WIDTH: usize, const PATTERN_HEIGHT: usize>(
+    pixel: Point<i64>,
+    on: T,
+    off: T,
+    pattern: &[[bool; PATTERN_WIDTH]; PATTERN_HEIGHT],
+) -> T {
+    let pattern_offset = pixel.cwise_rem_euclid(Point(PATTERN_WIDTH as i64, PATTERN_HEIGHT as i64));
+    let alternative = pattern[pattern_offset.y as usize][pattern_offset.x as usize];
+    if alternative {
+        on
+    } else {
+        off
+    }
+}
 
+pub fn sleep_effect(pixel: Point<i64>, rgb: Rgb8) -> Rgba8 {
     // ██ ███ ███ █
     //  ███ ███ ███
     //
@@ -173,13 +175,12 @@ pub fn sleep_effect(pixel: Point<i64>, rgb: Rgb8) -> Rgba8 {
     //     [false, false, true, false],
     // ];
 
-    let pattern_offset = pixel.cwise_rem_euclid(Point(PATTERN_WIDTH as i64, PATTERN_HEIGHT as i64));
-    let alternative = PATTERN[pattern_offset.y as usize][pattern_offset.x as usize];
-    let alpha = if alternative {
-        Material::SLEEPING_ALT_ALPHA
-    } else {
-        Material::SLEEPING_ALPHA
-    };
+    let alpha = repeating_effect(
+        pixel,
+        Material::SLEEPING_ALT_ALPHA,
+        Material::SLEEPING_ALPHA,
+        &PATTERN,
+    );
     Rgba8::from_rgb_a(rgb, alpha)
 }
 
