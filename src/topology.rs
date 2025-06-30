@@ -88,21 +88,6 @@ impl Seam {
     pub fn is_loop(&self) -> bool {
         self.start_corner() == self.stop_corner()
     }
-
-    pub fn translated(self, offset: Point<i64>) -> Self {
-        Self {
-            start: self.start + offset,
-            stop: self.stop + offset,
-            atoms: self.atoms,
-        }
-    }
-
-    // self + offset == other
-    pub fn translated_eq(&self, offset: Point<i64>, other: &Seam) -> bool {
-        // If other is a non-atomic seam it's a much harder problem
-        assert!(!self.is_loop());
-        &self.translated(offset) == other
-    }
 }
 
 impl Display for Seam {

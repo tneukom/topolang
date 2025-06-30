@@ -210,8 +210,9 @@ impl Morphism {
             }
 
             if let Some(phi_seam) = &self.seam_map.get(&seam) {
-                // Only checks if start and stop are equal
-                if !seam.translated_eq(offset, phi_seam) {
+                // We already know the two borders are equal, so checking if the start and
+                // stop side are equal is enough.
+                if seam.start + offset != phi_seam.start || seam.stop + offset != phi_seam.stop {
                     return false;
                 }
             }

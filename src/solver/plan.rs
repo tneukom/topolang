@@ -777,6 +777,13 @@ mod test {
     }
 
     #[test]
+    fn pattern_matches_solid_void() {
+        assert_solve("solid/void/pattern.png", "solid/void/match_1.png", 1);
+        assert_solve("solid/void/pattern.png", "solid/void/match_2.png", 1);
+        assert_solve("solid/void/pattern.png", "solid/void/miss_1.png", 0);
+    }
+
+    #[test]
     fn wildcard_a() {
         assert_solve("wildcard_a/pattern.png", "wildcard_a/match_1.png", 1);
         assert_solve("wildcard_a/pattern.png", "wildcard_a/match_2.png", 1);
