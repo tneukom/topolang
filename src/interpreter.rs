@@ -1,5 +1,5 @@
 use crate::{
-    compiler::CompiledRules,
+    compiler::Program,
     rule::{CanvasInput, FillRegion, Rule, RuleApplicationContext},
     topology::{ModificationTime, RegionKey},
     world::World,
@@ -8,7 +8,7 @@ use ahash::HashSet;
 use itertools::Itertools;
 
 pub struct Interpreter {
-    pub rules: CompiledRules,
+    pub program: Program,
 
     /// Modification time that each rule has been stabilized up to (inclusive bound).
     pub cursors: Vec<ModificationTime>,
@@ -20,9 +20,9 @@ pub enum InterpreterError {
 }
 
 impl Interpreter {
-    pub fn new(rules: CompiledRules) -> Self {
-        let cursors = vec![-1; rules.rules.len()];
-        Self { rules, cursors }
+    pub fn new(program: Program) -> Self {
+        let cursors = vec![-1; program.rule_instances_len()];
+        Self { program, cursors }
     }
 
     /// Apply rule at any modified region after `cursor` and move `cursor` forward.
@@ -67,7 +67,7 @@ impl Interpreter {
 
         let ctx = RuleApplicationContext {
             contained: None,
-            excluded: &self.rules.source_region_keys,
+            excluded: &self.program.source,
             input,
         };
 
@@ -79,19 +79,23 @@ impl Interpreter {
             }
 
             // Stabilize each rule
-            for (rule, cursor) in self.rules.rules.iter().zip_eq(&mut self.cursors) {
-                let modified = if !rule.rule.before.input_conditions.is_empty() {
+            for (rule_instance, cursor) in
+                self.program.iter_rule_instances().zip_eq(&mut self.cursors)
+            {
+                let rule = &rule_instance.rule;
+
+                let modified = if !rule.before.input_conditions.is_empty() {
                     // Modification tracking does not work when rule has input conditions. A rule
                     // can become active even though the Topology hasn't changed.
                     let tracy_span = tracy_client::span!("apply input rule");
-                    tracy_span.emit_text(&rule.rule.before.debug_id_str());
+                    tracy_span.emit_text(&rule.before.debug_id_str());
 
-                    rule.rule.apply(world, &ctx)
+                    rule.apply(world, &ctx)
                 } else {
                     let tracy_span = tracy_client::span!("apply cursor rule");
-                    tracy_span.emit_text(&rule.rule.before.debug_id_str());
+                    tracy_span.emit_text(&rule.before.debug_id_str());
 
-                    Self::apply_rule_with_cursor(world, &rule.rule, &ctx, cursor)
+                    Self::apply_rule_with_cursor(world, rule, &ctx, cursor)
                 };
 
                 if modified {
@@ -107,7 +111,7 @@ impl Interpreter {
     }
 
     pub fn wake_up(&mut self, world: &mut World) -> usize {
-        wake_up(world, &self.rules.source_region_keys)
+        wake_up(world, &self.program.source)
     }
 
     /// Apply rules (at most max_applications) and if world becomes stable under rules wake up
@@ -173,14 +177,13 @@ pub fn wake_up(world: &mut World, excluded: &HashSet<RegionKey>) -> usize {
 #[cfg(test)]
 mod test {
     use crate::{
-        compiler::Compiler, field::RgbaField, interpreter::Interpreter, pixmap::MaterialMap,
+        compiler::Compiler, field::RgbaField, interpreter::Interpreter,
         rule::CanvasInput, world::World,
     };
 
     fn assert_execute_world(name: &str, expected_modifications: usize) {
         let folder = format!("test_resources/compiler/{name}/");
-        let material_map = MaterialMap::load(format!("{folder}/world.png")).unwrap();
-        let mut world = World::from_material_map(material_map);
+        let mut world = World::load(format!("{folder}/world.png")).unwrap();
 
         let compiler = Compiler::new();
         let rules = compiler.compile(&mut world).unwrap();

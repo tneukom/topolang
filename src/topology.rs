@@ -126,7 +126,6 @@ pub struct SeamMaterials {
 //     }
 // }
 
-// TODO: RegionKey should be Pixel
 pub type RegionKey = Side;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -135,10 +134,9 @@ pub struct Border {
     /// contains at least one item.
     pub sides: Vec<Side>,
 
-    // /// Start side of first seam is first side in cycle, contains at least one item
-    // pub seams: Vec<Seam>,
     pub cycle_segments: CycleSegments,
 
+    /// Means min side of cycle is left side
     pub is_outer: bool,
 }
 
@@ -357,6 +355,7 @@ impl Region {
         self.boundary.top_left_interior_pixel()
     }
 
+    // Min side of the outer border, is always a left side
     pub fn key(&self) -> RegionKey {
         self.boundary.outer_border().min_side()
     }
@@ -659,11 +658,13 @@ impl Topology {
         lhs.is_loop() && rhs.is_loop() && self.seam_border(lhs) == self.seam_border(rhs)
     }
 
+    // Warning: Medium slow
     pub fn region_key_at(&self, pixel: Pixel) -> Option<RegionKey> {
         self.cycle_groups
             .outer_cycle_of_region_at(&self.boundary_cycles, pixel)
     }
 
+    // Warning: Medium slow
     pub fn region_at(&self, pixel: Pixel) -> Option<&Region> {
         let region_key = self.region_key_at(pixel)?;
         Some(&self.regions[&region_key])
@@ -859,6 +860,32 @@ impl Topology {
 
         // For debugging, fully recreate Topology
         // *self = Topology::new(material_map);
+    }
+
+    /// Assumes border is a boundary in `self`. Warning: Current implementation is very slow, only
+    /// suitable for boundaries with small interiors.
+    pub fn regions_left_of_boundary(
+        &self,
+        boundary: impl Iterator<Item = Side>,
+    ) -> impl Iterator<Item = &Region> {
+        // TODO: There must be a faster way of doing this
+        area_left_of_boundary(boundary)
+            .into_iter()
+            .filter_map(|pixel| self.regions.get(&pixel.left_side()))
+    }
+
+    pub fn regions_left_of_border<'a>(
+        &'a self,
+        border: &'a Border,
+    ) -> impl Iterator<Item = &'a Region> + use<'a> {
+        self.regions_left_of_boundary(border.sides.iter().copied())
+    }
+
+    pub fn regions_right_of_border<'a>(
+        &'a self,
+        border: &'a Border,
+    ) -> impl Iterator<Item = &'a Region> + use<'a> {
+        self.regions_left_of_boundary(border.sides.iter().copied().map(Side::reversed))
     }
 }
 

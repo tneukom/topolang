@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+#![allow(unsafe_op_in_unsafe_fn)]
+
 extern crate core;
 
 #[cfg(target_arch = "wasm32")]

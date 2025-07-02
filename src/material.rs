@@ -99,6 +99,12 @@ impl Material {
     pub const RULE_AFTER_RGB: Rgb8 = Rgb(0xFF, 0x6E, 0x00);
     pub const RULE_AFTER: Self = Self::new(Self::RULE_AFTER_RGB, MaterialClass::Rule);
 
+    pub const RULE_PLACEHOLDER_RGB: Rgb8 = Rgb(0x17, 0x95, 0xe8);
+    pub const RULE_PLACEHOLDER: Self = Self::new(Self::RULE_PLACEHOLDER_RGB, MaterialClass::Rule);
+
+    pub const RULE_CHOICE_RGB: Rgb8 = Rgb(0x0f, 0x5f, 0x94);
+    pub const RULE_CHOICE: Self = Self::new(Self::RULE_CHOICE_RGB, MaterialClass::Rule);
+
     // Wildcard material
     pub const WILDCARD_ALPHA: u8 = 230;
 
@@ -233,6 +239,8 @@ impl From<Rgba8> for Material {
             match rgb {
                 Self::RULE_BEFORE_RGB => Self::RULE_BEFORE,
                 Self::RULE_AFTER_RGB => Self::RULE_AFTER,
+                Self::RULE_PLACEHOLDER_RGB => Self::RULE_PLACEHOLDER,
+                Self::RULE_CHOICE_RGB => Self::RULE_CHOICE,
                 _ => unimplemented!(),
             }
         } else if Self::SOLID_DARKEN_ALPHA_RANGE.contains(&a) {

@@ -159,20 +159,35 @@ pub fn system_material_widget(ui: &mut egui::Ui, material: &mut Material) -> boo
         ("Wildcard", Material::WILDCARD),
     ];
 
+    let placeholder_materials = [
+        ("Placeholder", Material::RULE_PLACEHOLDER),
+        ("Choice", Material::RULE_CHOICE),
+    ];
+
     let mut color_set = false;
     ui.scope(|ui| {
         ui.style_mut().spacing.button_padding =
             egui::Vec2::new(COLOR_BUTTON_MARGIN, COLOR_BUTTON_MARGIN);
 
-        for (name, system_material) in system_materials {
+        for (name, choice) in system_materials {
             ui.horizontal(|ui| {
-                if material_button(ui, system_material, system_material == *material).clicked() {
-                    *material = system_material;
+                if material_button(ui, choice, choice == *material).clicked() {
+                    *material = choice;
                     color_set = true;
                 }
                 ui.label(name);
             });
         }
+
+        ui.horizontal(|ui| {
+            for (name, choice) in placeholder_materials {
+                if material_button(ui, choice, choice == *material).clicked() {
+                    *material = choice;
+                    color_set = true;
+                }
+                ui.label(name);
+            }
+        })
     });
 
     color_set

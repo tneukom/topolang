@@ -9,6 +9,7 @@ use crate::{
 };
 use std::{
     cell::Cell,
+    path::Path,
     sync::{Arc, RwLock},
 };
 
@@ -64,6 +65,12 @@ impl World {
             topology,
             rgba_field,
         }
+    }
+
+    pub fn load(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let material_map = MaterialMap::load(path)?;
+        let world = Self::from_material_map(material_map);
+        Ok(world)
     }
 
     pub fn topology(&self) -> &Topology {

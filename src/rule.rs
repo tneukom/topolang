@@ -2,7 +2,7 @@ use crate::{
     material::Material,
     math::{pixel::Pixel, point::Point},
     morphism::Morphism,
-    new_regions::{region_map, BoundaryCycles, ConnectedCycleGroups, CycleMinSide, Sides},
+    new_regions::{BoundaryCycles, ConnectedCycleGroups, CycleMinSide, Sides},
     pixmap::{MaterialMap, Pixmap},
     solver::plan::SearchStrategy,
     topology::{MaskedTopology, Region, RegionKey, Topology},
@@ -360,8 +360,7 @@ mod test {
         };
         let rule = Rule::new(pattern, after_material_map).unwrap();
 
-        let world_material_map = MaterialMap::load(format!("{folder}/world.png")).unwrap();
-        let mut world = World::from_material_map(world_material_map);
+        let mut world = World::load(format!("{folder}/world.png")).unwrap();
 
         let mut application_count: usize = 0;
 

@@ -127,6 +127,12 @@ impl<T: Copy> Pixmap<T> {
         }
     }
 
+    /// Same as `self.blit(other.translated(offset))`
+    pub fn blit_translated(&mut self, other: &Self, offset: Point<i64>) {
+        // TODO: Implement without cloning
+        self.blit(&other.clone().translated(offset));
+    }
+
     pub fn fill_rect(&mut self, rect: Rect<i64>, fill: T) {
         for pixel in rect.intersect(self.bounding_rect()).iter_indices() {
             self.set(pixel, fill);
@@ -147,6 +153,11 @@ impl<T: Copy> Pixmap<T> {
         Self {
             field: self.field.translated(offset),
         }
+    }
+
+    pub fn translated_to_zero(self) -> Self {
+        let bounds = self.bounding_rect();
+        self.translated(-bounds.low())
     }
 
     pub fn left_of_boundary(&self, sides: impl Iterator<Item = Side> + Clone) -> Self {
@@ -218,6 +229,12 @@ impl<T: Copy + Eq> Pixmap<T> {
     // of `self` and `other` are the same, but not that their bounds are equal.
     pub fn defined_equals(&self, other: &Self) -> bool {
         self.defined_subset_of(other) && other.defined_subset_of(self)
+    }
+
+    /// `self.translated(offset) == other`
+    pub fn translated_eq(&self, offset: Point<i64>, other: &Self) -> bool {
+        // TODO: Implement without allocation, maybe with FieldView
+        &self.clone().translated(offset) == other
     }
 }
 

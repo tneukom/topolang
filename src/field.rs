@@ -96,7 +96,7 @@ impl<T> Field<T> {
         (self.bounds.width() * self.bounds().height()) as usize
     }
 
-    pub fn indices(&self) -> impl Iterator<Item = Point<i64>> + Clone {
+    pub fn indices(&self) -> impl Iterator<Item = Point<i64>> + Clone + use<T> {
         self.bounds.iter_indices()
     }
 
@@ -104,8 +104,11 @@ impl<T> Field<T> {
         self.indices().zip(self.iter())
     }
 
-    pub fn enumerate_mut(&mut self) -> impl Iterator<Item = (Point<i64>, &mut T)> {
-        self.indices().zip(self.iter_mut())
+    pub fn enumerate_mut<'a>(
+        &'a mut self,
+    ) -> impl Iterator<Item = (Point<i64>, &'a mut T)> + use<'a, T> {
+        let indices = self.indices();
+        indices.zip(self.iter_mut())
     }
 
     pub fn contains_index(&self, index: impl FieldIndex) -> bool {
