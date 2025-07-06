@@ -1,3 +1,4 @@
+use crate::math::pixel::Corner;
 /// Do we need the following Propagations?
 /// - Derive border from seam, not needed if we guess border before seam
 /// - Derive right side region of seam, not needed since we can derive the left side of the  reverse
@@ -15,7 +16,7 @@ use itertools::Itertools;
 use std::{fmt::Debug, hash::Hash};
 
 pub trait Propagation: Debug {
-    fn require(&self) -> Vec<Element>;
+    fn require(&self) -> &[Element];
     fn derives(&self) -> Element;
     fn derive(&self, phi: &Morphism, codom: &Topology) -> anyhow::Result<Element>;
 
@@ -33,11 +34,24 @@ pub struct BothSidedSeamFromCorner {
 
     /// phi(seam.corner(corner_name)) already defined
     seam: Seam,
+
+    require: [Element; 2],
+}
+
+impl BothSidedSeamFromCorner {
+    pub fn new(border_key: BorderKey, corner: SeamCorner, seam: Seam) -> Self {
+        Self {
+            border_key,
+            corner,
+            seam,
+            require: [border_key.into(), seam.corner(corner).into()],
+        }
+    }
 }
 
 impl Propagation for BothSidedSeamFromCorner {
-    fn require(&self) -> Vec<Element> {
-        vec![self.border_key.into(), self.seam.corner(self.corner).into()]
+    fn require(&self) -> &[Element] {
+        &self.require
     }
 
     fn derives(&self) -> Element {
@@ -77,11 +91,23 @@ pub struct SoleSeamOnBorder {
 
     /// border only contains a single seam
     seam: Seam,
+
+    require: [Element; 1],
+}
+
+impl SoleSeamOnBorder {
+    pub fn new(border_key: BorderKey, seam: Seam) -> Self {
+        Self {
+            border_key,
+            seam,
+            require: [border_key.into()],
+        }
+    }
 }
 
 impl Propagation for SoleSeamOnBorder {
-    fn require(&self) -> Vec<Element> {
-        vec![self.border_key.into()]
+    fn require(&self) -> &[Element] {
+        &self.require
     }
 
     fn derives(&self) -> Element {
@@ -108,15 +134,27 @@ pub struct SeamFromBothCorners {
     border_key: BorderKey,
 
     seam: Seam,
+
+    require: [Element; 3],
+}
+
+impl SeamFromBothCorners {
+    pub fn new(border_key: BorderKey, seam: Seam) -> Self {
+        Self {
+            border_key,
+            seam,
+            require: [
+                seam.start_corner().into(),
+                seam.stop_corner().into(),
+                border_key.into(),
+            ],
+        }
+    }
 }
 
 impl Propagation for SeamFromBothCorners {
-    fn require(&self) -> Vec<Element> {
-        vec![
-            self.seam.start_corner().into(),
-            self.seam.stop_corner().into(),
-            self.border_key.into(),
-        ]
+    fn require(&self) -> &[Element] {
+        &self.require
     }
 
     fn derives(&self) -> Element {
@@ -147,11 +185,22 @@ impl Propagation for SeamFromBothCorners {
 pub struct SeamReverse {
     /// phi(seam) is already defined
     seam: Seam,
+
+    require: [Element; 1],
+}
+
+impl SeamReverse {
+    pub fn new(seam: Seam) -> Self {
+        Self {
+            seam,
+            require: [seam.into()],
+        }
+    }
 }
 
 impl Propagation for SeamReverse {
-    fn require(&self) -> Vec<Element> {
-        vec![self.seam.into()]
+    fn require(&self) -> &[Element] {
+        &self.require
     }
 
     fn derives(&self) -> Element {
@@ -185,11 +234,23 @@ pub struct LeftRegionOfSeam {
     seam: Seam,
 
     region_key: RegionKey,
+
+    require: [Element; 1],
+}
+
+impl LeftRegionOfSeam {
+    pub fn new(seam: Seam, region_key: RegionKey) -> Self {
+        Self {
+            seam,
+            region_key,
+            require: [seam.into()],
+        }
+    }
 }
 
 impl Propagation for LeftRegionOfSeam {
-    fn require(&self) -> Vec<Element> {
-        vec![self.seam.into()]
+    fn require(&self) -> &[Element] {
+        &self.require
     }
 
     fn derives(&self) -> Element {
@@ -215,11 +276,23 @@ pub struct CornerFromSeam {
     seam: Seam,
 
     corner: SeamCorner,
+
+    require: [Element; 1],
+}
+
+impl CornerFromSeam {
+    pub fn new(seam: Seam, corner: SeamCorner) -> Self {
+        Self {
+            seam,
+            corner,
+            require: [seam.into()],
+        }
+    }
 }
 
 impl Propagation for CornerFromSeam {
-    fn require(&self) -> Vec<Element> {
-        vec![self.seam.into()]
+    fn require(&self) -> &[Element] {
+        &self.require
     }
 
     fn derives(&self) -> Element {
@@ -243,17 +316,26 @@ impl Propagation for CornerFromSeam {
 pub struct OuterBorder {
     /// phi(region_key) is already defined
     region_key: RegionKey,
+
+    require: [Element; 1],
 }
 
 impl OuterBorder {
+    pub fn new(region_key: RegionKey) -> Self {
+        Self {
+            region_key,
+            require: [region_key.into()],
+        }
+    }
+
     fn outer_border(&self) -> BorderKey {
         BorderKey::new(self.region_key, 0)
     }
 }
 
 impl Propagation for OuterBorder {
-    fn require(&self) -> Vec<Element> {
-        vec![self.region_key.into()]
+    fn require(&self) -> &[Element] {
+        &self.require
     }
 
     fn derives(&self) -> Element {
@@ -273,7 +355,7 @@ impl Propagation for OuterBorder {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct LastInnerBorder {
     /// phi(region_key) is already defined
     region_key: RegionKey,
@@ -281,29 +363,43 @@ pub struct LastInnerBorder {
     borders_len: usize,
 
     inner_border_index: usize,
+
+    require: Vec<Element>,
 }
 
 impl LastInnerBorder {
+    pub fn new(region_key: RegionKey, borders_len: usize, inner_border_index: usize) -> Self {
+        let mut require: Vec<_> =
+            Self::other_inner_border_keys(region_key, borders_len, inner_border_index)
+                .map(|border_key| border_key.into())
+                .collect();
+        require.push(region_key.into());
+        Self {
+            region_key,
+            borders_len,
+            inner_border_index,
+            require,
+        }
+    }
+
     fn inner_border_key(&self) -> BorderKey {
         BorderKey::new(self.region_key, self.inner_border_index)
     }
 
-    fn other_inner_border_keys(&self) -> impl Iterator<Item = BorderKey> + '_ {
-        (1..self.borders_len).filter_map(|i_border| {
-            (i_border != self.inner_border_index)
-                .then_some(BorderKey::new(self.region_key, i_border))
+    fn other_inner_border_keys(
+        region_key: RegionKey,
+        borders_len: usize,
+        inner_border_index: usize,
+    ) -> impl Iterator<Item = BorderKey> {
+        (1..borders_len).filter_map(move |i_border| {
+            (i_border != inner_border_index).then_some(BorderKey::new(region_key, i_border))
         })
     }
 }
 
 impl Propagation for LastInnerBorder {
-    fn require(&self) -> Vec<Element> {
-        let mut require: Vec<_> = self
-            .other_inner_border_keys()
-            .map(|border_key| border_key.into())
-            .collect();
-        require.push(self.region_key.into());
-        require
+    fn require(&self) -> &[Element] {
+        &self.require
     }
 
     fn derives(&self) -> Element {
@@ -325,7 +421,11 @@ impl Propagation for LastInnerBorder {
             .map(|i| BorderKey::new(phi_region_key, i))
             .collect();
 
-        for other_inner_border_key in self.other_inner_border_keys() {
+        for other_inner_border_key in Self::other_inner_border_keys(
+            self.region_key,
+            self.borders_len,
+            self.inner_border_index,
+        ) {
             let phi_other_inner_border_key = phi.border_map[&other_inner_border_key];
             available_phi_inner_border_keys.remove(&phi_other_inner_border_key);
         }
@@ -351,16 +451,16 @@ pub fn morphism_propagations(dom: &Topology) -> Vec<AnyPropagation> {
 
     for (&region_key, region) in &dom.regions {
         // OuterBorder
-        let outer_border = OuterBorder { region_key };
+        let outer_border = OuterBorder::new(region_key);
         propagations.push(AnyPropagation::OuterBorder(outer_border));
 
         // LastInnerBorder
         for inner_border_index in 1..region.boundary.borders.len() {
-            let last_inner_border = LastInnerBorder {
+            let last_inner_border = LastInnerBorder::new(
                 region_key,
-                borders_len: region.boundary.borders.len(),
+                region.boundary.borders.len(),
                 inner_border_index,
-            };
+            );
             propagations.push(AnyPropagation::LastInnerBorder(last_inner_border));
         }
 
@@ -369,23 +469,20 @@ pub fn morphism_propagations(dom: &Topology) -> Vec<AnyPropagation> {
 
             if border.seams_len() == 1 {
                 let seam = border.atomic_seam(0);
-                let sole_seam_on_border = SoleSeamOnBorder { border_key, seam };
+                let sole_seam_on_border = SoleSeamOnBorder::new(border_key, seam);
                 propagations.push(AnyPropagation::SoleSeamOnBorder(sole_seam_on_border));
             }
 
             for seam in border.atomic_seams() {
                 // SeamFromBothCorners
-                let seam_from_both_corners = SeamFromBothCorners { border_key, seam };
+                let seam_from_both_corners = SeamFromBothCorners::new(border_key, seam);
                 propagations.push(AnyPropagation::SeamFromBothCorners(seam_from_both_corners));
 
                 if dom.contains_seam(seam.atom_reversed()) {
                     // BothSidedSeamFromCorner
                     for seam_corner in SeamCorner::ALL {
-                        let seam_from_corner = BothSidedSeamFromCorner {
-                            border_key,
-                            corner: seam_corner,
-                            seam,
-                        };
+                        let seam_from_corner =
+                            BothSidedSeamFromCorner::new(border_key, seam_corner, seam);
                         propagations
                             .push(AnyPropagation::BothSidedSeamFromCorner(seam_from_corner));
                     }
@@ -396,17 +493,17 @@ pub fn morphism_propagations(dom: &Topology) -> Vec<AnyPropagation> {
         for seam in region.iter_seams() {
             // CornerFromSeam
             for corner in SeamCorner::ALL {
-                let corner_from_seam = CornerFromSeam { seam, corner };
+                let corner_from_seam = CornerFromSeam::new(seam, corner);
                 propagations.push(AnyPropagation::CornerFromSeam(corner_from_seam));
             }
 
             // LeftRegionOfSeam
-            let left_region_of_seam = LeftRegionOfSeam { region_key, seam };
+            let left_region_of_seam = LeftRegionOfSeam::new(seam, region_key);
             propagations.push(AnyPropagation::LeftRegionOfSeam(left_region_of_seam));
 
             // SeamReverse
             if dom.contains_seam(seam.atom_reversed()) {
-                let seam_reverse = SeamReverse { seam };
+                let seam_reverse = SeamReverse::new(seam);
                 propagations.push(AnyPropagation::SeamReverse(seam_reverse));
             }
         }
@@ -415,7 +512,7 @@ pub fn morphism_propagations(dom: &Topology) -> Vec<AnyPropagation> {
     propagations
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AnyPropagation {
     BothSidedSeamFromCorner(BothSidedSeamFromCorner),
     SeamFromBothCorners(SeamFromBothCorners),
@@ -443,7 +540,7 @@ impl AnyPropagation {
 }
 
 impl Propagation for AnyPropagation {
-    fn require(&self) -> Vec<Element> {
+    fn require(&self) -> &[Element] {
         self.as_propagation().require()
     }
 

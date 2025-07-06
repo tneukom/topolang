@@ -7,7 +7,7 @@ use crate::{
 use std::fmt::Debug;
 
 pub trait Constraint: Debug {
-    fn variables(&self) -> Vec<Element>;
+    fn variables(&self) -> &[Element];
 
     fn is_satisfied(&self, phi: &Morphism, codom: &Topology) -> bool;
 }
@@ -26,27 +26,34 @@ pub struct PreservesSeam {
     left_of_seam_key: RegionKey,
 
     on_border_key: BorderKey,
+
+    variables: [Element; 5],
 }
 
 impl PreservesSeam {
     pub fn new(dom: &Topology, seam: Seam) -> Self {
+        let left_of_seam_key = dom.left_of(seam);
+        let on_border_key = dom.seam_border(seam);
+        let variables = [
+            seam.into(),
+            seam.start_corner().into(),
+            seam.stop_corner().into(),
+            left_of_seam_key.into(),
+            on_border_key.into(),
+        ];
+
         Self {
-            left_of_seam_key: dom.left_of(seam),
-            on_border_key: dom.seam_border(seam),
+            left_of_seam_key,
+            on_border_key,
             seam,
+            variables,
         }
     }
 }
 
 impl Constraint for PreservesSeam {
-    fn variables(&self) -> Vec<Element> {
-        vec![
-            self.seam.into(),
-            self.seam.start_corner().into(),
-            self.seam.stop_corner().into(),
-            self.left_of_seam_key.into(),
-            self.on_border_key.into(),
-        ]
+    fn variables(&self) -> &[Element] {
+        &self.variables
     }
 
     #[inline(never)]
@@ -61,20 +68,24 @@ impl Constraint for PreservesSeam {
 }
 
 /// Only applicable if reverse of seam is in domain of phi
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PreservesSeamReverse {
     seam: Seam,
+    variables: [Element; 2],
 }
 
 impl PreservesSeamReverse {
     pub fn new(seam: Seam) -> Self {
-        Self { seam }
+        Self {
+            seam,
+            variables: [seam.into(), seam.atom_reversed().into()],
+        }
     }
 }
 
 impl Constraint for PreservesSeamReverse {
-    fn variables(&self) -> Vec<Element> {
-        vec![self.seam.into(), self.seam.atom_reversed().into()]
+    fn variables(&self) -> &[Element] {
+        &self.variables
     }
 
     #[inline(never)]
@@ -87,11 +98,13 @@ impl Constraint for PreservesSeamReverse {
 }
 
 /// region material must match phi(region) material
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PreservesMaterial {
     region_key: RegionKey,
 
     material: Material,
+
+    variables: [Element; 1],
 }
 
 impl PreservesMaterial {
@@ -99,13 +112,14 @@ impl PreservesMaterial {
         Self {
             region_key,
             material,
+            variables: [region_key.into()],
         }
     }
 }
 
 impl Constraint for PreservesMaterial {
-    fn variables(&self) -> Vec<Element> {
-        vec![self.region_key.into()]
+    fn variables(&self) -> &[Element] {
+        &self.variables
     }
 
     #[inline(never)]
@@ -121,6 +135,8 @@ pub struct PreservesBorderCount {
     region_key: RegionKey,
 
     border_count: usize,
+
+    variables: [Element; 1],
 }
 
 impl PreservesBorderCount {
@@ -128,13 +144,14 @@ impl PreservesBorderCount {
         Self {
             region_key,
             border_count,
+            variables: [region_key.into()],
         }
     }
 }
 
 impl Constraint for PreservesBorderCount {
-    fn variables(&self) -> Vec<Element> {
-        vec![self.region_key.into()]
+    fn variables(&self) -> &[Element] {
+        &self.variables
     }
 
     #[inline(never)]
@@ -153,27 +170,35 @@ pub struct PreservesSolid {
     region_key: RegionKey,
 
     region: Region,
+
+    variables: Vec<Element>,
 }
 
 impl PreservesSolid {
     pub fn new(dom: &Topology, region_key: RegionKey) -> Self {
         let region = dom[region_key].clone();
         assert!(region.material.is_solid());
-        Self { region_key, region }
+
+        let mut variables = vec![region_key.into()];
+        for seam in region.iter_seams() {
+            variables.push(seam.into());
+        }
+        for i_border in 0..region.boundary.borders.len() {
+            let border_key = BorderKey::new(region_key, i_border);
+            variables.push(border_key.into());
+        }
+
+        Self {
+            region_key,
+            region,
+            variables,
+        }
     }
 }
 
 impl Constraint for PreservesSolid {
-    fn variables(&self) -> Vec<Element> {
-        let mut variables = vec![self.region_key.into()];
-        for seam in self.region.iter_seams() {
-            variables.push(seam.into());
-        }
-        for i_border in 0..self.region.boundary.borders.len() {
-            let border_key = BorderKey::new(self.region_key, i_border);
-            variables.push(border_key.into());
-        }
-        variables
+    fn variables(&self) -> &[Element] {
+        &self.variables
     }
 
     #[inline(never)]
@@ -190,6 +215,8 @@ pub struct PreservesBorderOrientation {
     border_key: BorderKey,
 
     is_outer: bool,
+
+    variables: [Element; 1],
 }
 
 impl PreservesBorderOrientation {
@@ -197,13 +224,14 @@ impl PreservesBorderOrientation {
         Self {
             border_key,
             is_outer,
+            variables: [border_key.into()],
         }
     }
 }
 
 impl Constraint for PreservesBorderOrientation {
-    fn variables(&self) -> Vec<Element> {
-        vec![self.border_key.into()]
+    fn variables(&self) -> &[Element] {
+        &self.variables
     }
 
     #[inline(never)]
@@ -219,17 +247,22 @@ impl Constraint for PreservesBorderOrientation {
 pub struct NonOverlappingSeams {
     seam_a: Seam,
     seam_b: Seam,
+    variables: [Element; 2],
 }
 
 impl NonOverlappingSeams {
     pub fn new(seam_a: Seam, seam_b: Seam) -> Self {
-        Self { seam_a, seam_b }
+        Self {
+            seam_a,
+            seam_b,
+            variables: [seam_a.into(), seam_b.into()],
+        }
     }
 }
 
 impl Constraint for NonOverlappingSeams {
-    fn variables(&self) -> Vec<Element> {
-        vec![self.seam_a.into(), self.seam_b.into()]
+    fn variables(&self) -> &[Element] {
+        &self.variables
     }
 
     #[inline(never)]
@@ -246,6 +279,7 @@ impl Constraint for NonOverlappingSeams {
 pub struct DistinctRegions {
     region_a_key: RegionKey,
     region_b_key: RegionKey,
+    variables: [Element; 2],
 }
 
 impl DistinctRegions {
@@ -253,13 +287,14 @@ impl DistinctRegions {
         Self {
             region_a_key,
             region_b_key,
+            variables: [region_a_key.into(), region_b_key.into()],
         }
     }
 }
 
 impl Constraint for DistinctRegions {
-    fn variables(&self) -> Vec<Element> {
-        vec![self.region_a_key.into(), self.region_b_key.into()]
+    fn variables(&self) -> &[Element] {
+        &self.variables
     }
 
     #[inline(never)]
@@ -298,7 +333,7 @@ impl AnyConstraint {
 }
 
 impl Constraint for AnyConstraint {
-    fn variables(&self) -> Vec<Element> {
+    fn variables(&self) -> &[Element] {
         self.as_constraint().variables()
     }
 
