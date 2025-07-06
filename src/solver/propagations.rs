@@ -1,4 +1,4 @@
-use crate::math::pixel::Corner;
+use crate::{math::pixel::Corner, solver::constraints::Variables};
 /// Do we need the following Propagations?
 /// - Derive border from seam, not needed if we guess border before seam
 /// - Derive right side region of seam, not needed since we can derive the left side of the  reverse
@@ -15,9 +15,9 @@ use ahash::HashSet;
 use itertools::Itertools;
 use std::{fmt::Debug, hash::Hash};
 
-pub trait Propagation: Debug {
-    fn require(&self) -> &[Element];
+pub trait Propagation: Debug + Variables {
     fn derives(&self) -> Element;
+
     fn derive(&self, phi: &Morphism, codom: &Topology) -> anyhow::Result<Element>;
 
     fn name(&self) -> &'static str;
@@ -35,7 +35,7 @@ pub struct BothSidedSeamFromCorner {
     /// phi(seam.corner(corner_name)) already defined
     seam: Seam,
 
-    require: [Element; 2],
+    variables: [Element; 2],
 }
 
 impl BothSidedSeamFromCorner {
@@ -44,16 +44,18 @@ impl BothSidedSeamFromCorner {
             border_key,
             corner,
             seam,
-            require: [border_key.into(), seam.corner(corner).into()],
+            variables: [border_key.into(), seam.corner(corner).into()],
         }
     }
 }
 
-impl Propagation for BothSidedSeamFromCorner {
-    fn require(&self) -> &[Element] {
-        &self.require
+impl Variables for BothSidedSeamFromCorner {
+    fn variables(&self) -> &[Element] {
+        &self.variables
     }
+}
 
+impl Propagation for BothSidedSeamFromCorner {
     fn derives(&self) -> Element {
         self.seam.into()
     }
@@ -92,7 +94,7 @@ pub struct SoleSeamOnBorder {
     /// border only contains a single seam
     seam: Seam,
 
-    require: [Element; 1],
+    variables: [Element; 1],
 }
 
 impl SoleSeamOnBorder {
@@ -100,16 +102,18 @@ impl SoleSeamOnBorder {
         Self {
             border_key,
             seam,
-            require: [border_key.into()],
+            variables: [border_key.into()],
         }
     }
 }
 
-impl Propagation for SoleSeamOnBorder {
-    fn require(&self) -> &[Element] {
-        &self.require
+impl Variables for SoleSeamOnBorder {
+    fn variables(&self) -> &[Element] {
+        &self.variables
     }
+}
 
+impl Propagation for SoleSeamOnBorder {
     fn derives(&self) -> Element {
         self.seam.into()
     }
@@ -135,7 +139,7 @@ pub struct SeamFromBothCorners {
 
     seam: Seam,
 
-    require: [Element; 3],
+    variables: [Element; 3],
 }
 
 impl SeamFromBothCorners {
@@ -143,7 +147,7 @@ impl SeamFromBothCorners {
         Self {
             border_key,
             seam,
-            require: [
+            variables: [
                 seam.start_corner().into(),
                 seam.stop_corner().into(),
                 border_key.into(),
@@ -152,11 +156,13 @@ impl SeamFromBothCorners {
     }
 }
 
-impl Propagation for SeamFromBothCorners {
-    fn require(&self) -> &[Element] {
-        &self.require
+impl Variables for SeamFromBothCorners {
+    fn variables(&self) -> &[Element] {
+        &self.variables
     }
+}
 
+impl Propagation for SeamFromBothCorners {
     fn derives(&self) -> Element {
         self.seam.into()
     }
@@ -186,23 +192,25 @@ pub struct SeamReverse {
     /// phi(seam) is already defined
     seam: Seam,
 
-    require: [Element; 1],
+    variables: [Element; 1],
 }
 
 impl SeamReverse {
     pub fn new(seam: Seam) -> Self {
         Self {
             seam,
-            require: [seam.into()],
+            variables: [seam.into()],
         }
     }
 }
 
-impl Propagation for SeamReverse {
-    fn require(&self) -> &[Element] {
-        &self.require
+impl Variables for SeamReverse {
+    fn variables(&self) -> &[Element] {
+        &self.variables
     }
+}
 
+impl Propagation for SeamReverse {
     fn derives(&self) -> Element {
         self.seam.atom_reversed().into()
     }
@@ -235,7 +243,7 @@ pub struct LeftRegionOfSeam {
 
     region_key: RegionKey,
 
-    require: [Element; 1],
+    variables: [Element; 1],
 }
 
 impl LeftRegionOfSeam {
@@ -243,16 +251,18 @@ impl LeftRegionOfSeam {
         Self {
             seam,
             region_key,
-            require: [seam.into()],
+            variables: [seam.into()],
         }
     }
 }
 
-impl Propagation for LeftRegionOfSeam {
-    fn require(&self) -> &[Element] {
-        &self.require
+impl Variables for LeftRegionOfSeam {
+    fn variables(&self) -> &[Element] {
+        &self.variables
     }
+}
 
+impl Propagation for LeftRegionOfSeam {
     fn derives(&self) -> Element {
         self.region_key.into()
     }
@@ -277,7 +287,7 @@ pub struct CornerFromSeam {
 
     corner: SeamCorner,
 
-    require: [Element; 1],
+    variables: [Element; 1],
 }
 
 impl CornerFromSeam {
@@ -285,16 +295,18 @@ impl CornerFromSeam {
         Self {
             seam,
             corner,
-            require: [seam.into()],
+            variables: [seam.into()],
         }
     }
 }
 
-impl Propagation for CornerFromSeam {
-    fn require(&self) -> &[Element] {
-        &self.require
+impl Variables for CornerFromSeam {
+    fn variables(&self) -> &[Element] {
+        &self.variables
     }
+}
 
+impl Propagation for CornerFromSeam {
     fn derives(&self) -> Element {
         self.seam.corner(self.corner).into()
     }
@@ -317,14 +329,14 @@ pub struct OuterBorder {
     /// phi(region_key) is already defined
     region_key: RegionKey,
 
-    require: [Element; 1],
+    variables: [Element; 1],
 }
 
 impl OuterBorder {
     pub fn new(region_key: RegionKey) -> Self {
         Self {
             region_key,
-            require: [region_key.into()],
+            variables: [region_key.into()],
         }
     }
 
@@ -333,11 +345,13 @@ impl OuterBorder {
     }
 }
 
-impl Propagation for OuterBorder {
-    fn require(&self) -> &[Element] {
-        &self.require
+impl Variables for OuterBorder {
+    fn variables(&self) -> &[Element] {
+        &self.variables
     }
+}
 
+impl Propagation for OuterBorder {
     fn derives(&self) -> Element {
         self.outer_border().into()
     }
@@ -364,21 +378,21 @@ pub struct LastInnerBorder {
 
     inner_border_index: usize,
 
-    require: Vec<Element>,
+    variables: Vec<Element>,
 }
 
 impl LastInnerBorder {
     pub fn new(region_key: RegionKey, borders_len: usize, inner_border_index: usize) -> Self {
-        let mut require: Vec<_> =
+        let mut variables: Vec<_> =
             Self::other_inner_border_keys(region_key, borders_len, inner_border_index)
                 .map(|border_key| border_key.into())
                 .collect();
-        require.push(region_key.into());
+        variables.push(region_key.into());
         Self {
             region_key,
             borders_len,
             inner_border_index,
-            require,
+            variables,
         }
     }
 
@@ -397,11 +411,13 @@ impl LastInnerBorder {
     }
 }
 
-impl Propagation for LastInnerBorder {
-    fn require(&self) -> &[Element] {
-        &self.require
+impl Variables for LastInnerBorder {
+    fn variables(&self) -> &[Element] {
+        &self.variables
     }
+}
 
+impl Propagation for LastInnerBorder {
     fn derives(&self) -> Element {
         self.inner_border_key().into()
     }
@@ -539,11 +555,13 @@ impl AnyPropagation {
     }
 }
 
-impl Propagation for AnyPropagation {
-    fn require(&self) -> &[Element] {
-        self.as_propagation().require()
+impl Variables for AnyPropagation {
+    fn variables(&self) -> &[Element] {
+        self.as_propagation().variables()
     }
+}
 
+impl Propagation for AnyPropagation {
     fn derives(&self) -> Element {
         self.as_propagation().derives()
     }

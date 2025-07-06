@@ -6,9 +6,11 @@ use crate::{
 };
 use std::fmt::Debug;
 
-pub trait Constraint: Debug {
+pub trait Variables {
     fn variables(&self) -> &[Element];
+}
 
+pub trait Constraint: Debug + Variables {
     fn is_satisfied(&self, phi: &Morphism, codom: &Topology) -> bool;
 }
 
@@ -51,11 +53,13 @@ impl PreservesSeam {
     }
 }
 
-impl Constraint for PreservesSeam {
+impl Variables for PreservesSeam {
     fn variables(&self) -> &[Element] {
         &self.variables
     }
+}
 
+impl Constraint for PreservesSeam {
     #[inline(never)]
     fn is_satisfied(&self, phi: &Morphism, codom: &Topology) -> bool {
         let phi_seam = phi.seam_map[&self.seam];
@@ -83,11 +87,13 @@ impl PreservesSeamReverse {
     }
 }
 
-impl Constraint for PreservesSeamReverse {
+impl Variables for PreservesSeamReverse {
     fn variables(&self) -> &[Element] {
         &self.variables
     }
+}
 
+impl Constraint for PreservesSeamReverse {
     #[inline(never)]
     fn is_satisfied(&self, phi: &Morphism, _codom: &Topology) -> bool {
         let phi_seam = phi.seam_map[&self.seam];
@@ -117,11 +123,13 @@ impl PreservesMaterial {
     }
 }
 
-impl Constraint for PreservesMaterial {
+impl Variables for PreservesMaterial {
     fn variables(&self) -> &[Element] {
         &self.variables
     }
+}
 
+impl Constraint for PreservesMaterial {
     #[inline(never)]
     fn is_satisfied(&self, phi: &Morphism, codom: &Topology) -> bool {
         let phi_region_key = phi.region_map[&self.region_key];
@@ -149,11 +157,13 @@ impl PreservesBorderCount {
     }
 }
 
-impl Constraint for PreservesBorderCount {
+impl Variables for PreservesBorderCount {
     fn variables(&self) -> &[Element] {
         &self.variables
     }
+}
 
+impl Constraint for PreservesBorderCount {
     #[inline(never)]
     fn is_satisfied(&self, phi: &Morphism, codom: &Topology) -> bool {
         let phi_region_key = phi.region_map[&self.region_key];
@@ -196,11 +206,13 @@ impl PreservesSolid {
     }
 }
 
-impl Constraint for PreservesSolid {
+impl Variables for PreservesSolid {
     fn variables(&self) -> &[Element] {
         &self.variables
     }
+}
 
+impl Constraint for PreservesSolid {
     #[inline(never)]
     fn is_satisfied(&self, phi: &Morphism, codom: &Topology) -> bool {
         let phi_region_key = phi.region_map[&self.region_key];
@@ -229,11 +241,13 @@ impl PreservesBorderOrientation {
     }
 }
 
-impl Constraint for PreservesBorderOrientation {
+impl Variables for PreservesBorderOrientation {
     fn variables(&self) -> &[Element] {
         &self.variables
     }
+}
 
+impl Constraint for PreservesBorderOrientation {
     #[inline(never)]
     fn is_satisfied(&self, phi: &Morphism, codom: &Topology) -> bool {
         let phi_border_key = phi.border_map[&self.border_key];
@@ -260,11 +274,13 @@ impl NonOverlappingSeams {
     }
 }
 
-impl Constraint for NonOverlappingSeams {
+impl Variables for NonOverlappingSeams {
     fn variables(&self) -> &[Element] {
         &self.variables
     }
+}
 
+impl Constraint for NonOverlappingSeams {
     #[inline(never)]
     fn is_satisfied(&self, phi: &Morphism, codom: &Topology) -> bool {
         let phi_seam_a = phi.seam_map[&self.seam_a];
@@ -292,11 +308,13 @@ impl DistinctRegions {
     }
 }
 
-impl Constraint for DistinctRegions {
+impl Variables for DistinctRegions {
     fn variables(&self) -> &[Element] {
         &self.variables
     }
+}
 
+impl Constraint for DistinctRegions {
     #[inline(never)]
     fn is_satisfied(&self, phi: &Morphism, _codom: &Topology) -> bool {
         let phi_region_a_key = phi.region_map[&self.region_a_key];
@@ -332,11 +350,13 @@ impl AnyConstraint {
     }
 }
 
-impl Constraint for AnyConstraint {
+impl Variables for AnyConstraint {
     fn variables(&self) -> &[Element] {
         self.as_constraint().variables()
     }
+}
 
+impl Constraint for AnyConstraint {
     fn is_satisfied(&self, phi: &Morphism, codom: &Topology) -> bool {
         self.as_constraint().is_satisfied(phi, codom)
     }
@@ -428,7 +448,7 @@ pub fn constraints_are_satisfied(
 #[cfg(test)]
 mod test {
     use crate::{
-        morphism::{Morphism, test::seam_map_from_colors},
+        morphism::{test::seam_map_from_colors, Morphism},
         solver::constraints::{constraints_are_satisfied, morphism_constraints},
         topology::Topology,
     };

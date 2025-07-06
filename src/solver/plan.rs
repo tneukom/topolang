@@ -2,9 +2,9 @@ use crate::{
     material::Material,
     morphism::Morphism,
     solver::{
-        constraints::{AnyConstraint, Constraint, morphism_constraints},
+        constraints::{morphism_constraints, AnyConstraint, Constraint, Variables},
         element::Element,
-        propagations::{AnyPropagation, Propagation, morphism_propagations},
+        propagations::{morphism_propagations, AnyPropagation, Propagation},
     },
     topology::{BorderKey, MaskedTopology, RegionKey, Seam, Topology, TopologyStatistics},
 };
@@ -264,6 +264,58 @@ impl SearchBranch {
     }
 }
 
+pub struct FreeVariableTracker<T: Variables> {
+    /// Things with at least one free variable, and the number of free variable,
+    /// see https://en.wikipedia.org/wiki/Open_formula
+    open: Vec<(T, usize)>,
+
+    /// Things with no more free variables
+    closed: Vec<T>,
+}
+
+impl<T: Variables> FreeVariableTracker<T> {
+    pub fn new(items: Vec<T>) -> Self {
+        let mut open = Vec::new();
+        let mut closed = Vec::new();
+        for item in items {
+            let n_free = item.variables().len();
+            if n_free == 0 {
+                closed.push(item);
+            } else {
+                open.push((item, n_free));
+            }
+        }
+        Self { open, closed }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.open.is_empty() && self.closed.is_empty()
+    }
+
+    pub fn assign_variable(&mut self, variable: &Element) {
+        let newly_closed = self
+            .open
+            .extract_if(.., |(open, n_free)| {
+                // A variable can appear multiple times in `open.variables()`
+                let n_assigned = open
+                    .variables()
+                    .iter()
+                    .filter(|&candidate| candidate == variable)
+                    .count();
+                assert!(n_assigned <= *n_free);
+                *n_free -= n_assigned;
+                *n_free == 0
+            })
+            .map(|pair| pair.0);
+        self.closed.extend(newly_closed);
+    }
+
+    pub fn pop_closed(&mut self) -> Option<T> {
+        // self.closed.remove(0)
+        self.closed.pop()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SearchPlan {
     steps: Vec<SearchBranch>,
@@ -294,42 +346,6 @@ impl SearchPlan {
         variables
     }
 
-    #[inline(never)]
-    pub fn applicable_constraint(
-        assigned_variables: &HashSet<Element>,
-        constraints: &mut Vec<AnyConstraint>,
-    ) -> Option<AnyConstraint> {
-        let i_applicable = constraints.iter().position(|constraint| {
-            constraint
-                .variables()
-                .iter()
-                .all(|variable| assigned_variables.contains(variable))
-        })?;
-
-        Some(constraints.remove(i_applicable))
-    }
-
-    #[inline(never)]
-    pub fn applicable_propagation(
-        assigned_variables: &HashSet<Element>,
-        propagations: &mut Vec<AnyPropagation>,
-    ) -> Option<AnyPropagation> {
-        // Find a propagated to apply or break if there is none.
-        let i_applicable = propagations.iter().position(|propagation| {
-            // Variable is already assigned, so this propagation is not applicable
-            if assigned_variables.contains(&propagation.derives()) {
-                return false;
-            }
-
-            propagation
-                .require()
-                .iter()
-                .all(|required| assigned_variables.contains(required))
-        })?;
-
-        Some(propagations.remove(i_applicable))
-    }
-
     /// Make a plan to find solutions. Using `first` one can fix the guess that the plan should
     /// start with, otherwise `guess_chooser` is used to find the initial guess.
     #[inline(never)]
@@ -340,8 +356,9 @@ impl SearchPlan {
     ) -> Self {
         let _tracy_span = tracy_client::span!("SearchPlan::for_morphism");
 
-        let mut available_constraints = morphism_constraints(dom);
-        let mut available_propagations = morphism_propagations(dom);
+        let mut constraints = FreeVariableTracker::new(morphism_constraints(dom));
+        let mut propagations = FreeVariableTracker::new(morphism_propagations(dom));
+
         // for propagation in &propagations {
         //     println!("Available propagation: {propagation:?}");
         // }
@@ -353,9 +370,10 @@ impl SearchPlan {
         let mut steps = Vec::new();
 
         while !free_variables.is_empty() {
-            // TODO: Use let-chain when stable
-            let guess = if assigned_variables.is_empty() && first.is_some() {
-                first.unwrap()
+            let guess = if let Some(first) = first
+                && assigned_variables.is_empty()
+            {
+                first
             } else {
                 assert!(!free_variables.is_empty());
                 guess_chooser
@@ -365,27 +383,44 @@ impl SearchPlan {
 
             free_variables.remove(&guess.variable());
             assigned_variables.insert(guess.variable());
+            propagations.assign_variable(&guess.variable());
+            constraints.assign_variable(&guess.variable());
 
             // Check if there are any applicable constraints or propagations
             let mut actions = Vec::new();
             loop {
-                if let Some(constraint) =
-                    Self::applicable_constraint(&assigned_variables, &mut available_constraints)
-                {
+                if let Some(constraint) = constraints.pop_closed() {
+                    assert!(
+                        constraint
+                            .variables()
+                            .iter()
+                            .all(|variable| assigned_variables.contains(variable))
+                    );
+
                     let action = ConstraintAction::Constraint(constraint);
                     actions.push(action);
                     continue;
                 }
 
-                if let Some(propagation) =
-                    Self::applicable_propagation(&assigned_variables, &mut available_propagations)
-                {
-                    let derived = propagation.derives();
-                    free_variables.remove(&derived);
-                    assigned_variables.insert(derived);
+                if let Some(propagation) = propagations.pop_closed() {
+                    assert!(
+                        propagation
+                            .variables()
+                            .iter()
+                            .all(|variable| assigned_variables.contains(variable))
+                    );
 
-                    let action = ConstraintAction::Propagation(propagation);
-                    actions.push(action);
+                    let derived = propagation.derives();
+                    let was_free = free_variables.remove(&derived);
+                    if was_free {
+                        propagations.assign_variable(&derived);
+                        constraints.assign_variable(&derived);
+                        assigned_variables.insert(derived);
+
+                        let action = ConstraintAction::Propagation(propagation);
+                        actions.push(action);
+                    }
+
                     continue;
                 }
 
@@ -397,8 +432,8 @@ impl SearchPlan {
             steps.push(step);
         }
 
-        assert!(available_constraints.is_empty());
         assert!(free_variables.is_empty());
+        assert!(constraints.is_empty());
 
         Self { steps }
     }
