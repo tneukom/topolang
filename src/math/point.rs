@@ -1,5 +1,5 @@
 use crate::math::generic::{Dot, Num, SignedNum};
-use num_traits::{real::Real, AsPrimitive};
+use num_traits::{AsPrimitive, real::Real};
 use std::{
     cmp::Ordering,
     fmt::{Display, Formatter},

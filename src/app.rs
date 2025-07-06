@@ -14,7 +14,7 @@ use crate::{
     utils::ReflectEnum,
     view::{EditMode, View, ViewInput, ViewSettings},
     widgets::{
-        brush_chooser, enum_choice_buttons, prefab_picker, styled_button, styled_space, FileChooser,
+        FileChooser, brush_chooser, enum_choice_buttons, prefab_picker, styled_button, styled_space,
     },
     world::World,
 };
@@ -25,7 +25,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     rc::Rc,
-    sync::{mpsc, Arc, Mutex},
+    sync::{Arc, Mutex, mpsc},
 };
 use web_time::Instant;
 

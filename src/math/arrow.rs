@@ -3,7 +3,7 @@ use super::{
     rect::{Rect, RectBounds},
 };
 use crate::math::generic::{Dot, FloatNum, Num, SignedNum};
-use num_traits::{clamp, AsPrimitive};
+use num_traits::{AsPrimitive, clamp};
 use std::{clone::Clone, fmt::Debug};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -48,11 +48,7 @@ impl<T> Arrow<T> {
 impl<T: Num> Arrow<T> {
     /// Returns an endpoint q with p != q,
     pub fn other_endpoint(self, p: Point<T>) -> Point<T> {
-        if self.a == p {
-            self.b
-        } else {
-            self.a
-        }
+        if self.a == p { self.b } else { self.a }
     }
 
     pub fn is_endpoint(&self, p: Point<T>) -> bool {

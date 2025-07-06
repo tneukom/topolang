@@ -1,12 +1,12 @@
 use crate::{
     field::RgbaField,
-    material_effects::{material_map_effects, CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
+    material_effects::{CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA, material_map_effects},
     math::rgba8::Rgba8,
     pixmap::MaterialMap,
 };
 use image::{
-    codecs::gif::{GifEncoder, Repeat},
     Delay, Frame, RgbaImage,
+    codecs::gif::{GifEncoder, Repeat},
 };
 use std::{fs::File, path::Path};
 

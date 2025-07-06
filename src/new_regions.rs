@@ -8,7 +8,7 @@ use crate::{
 };
 use ahash::{HashMap, HashSet};
 use itertools::Itertools;
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::{BTreeMap, btree_map::Entry};
 
 pub type CycleMinSide = Side;
 

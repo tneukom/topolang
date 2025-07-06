@@ -119,11 +119,7 @@ pub fn repeating_effect<T, const PATTERN_WIDTH: usize, const PATTERN_HEIGHT: usi
 ) -> T {
     let pattern_offset = pixel.cwise_rem_euclid(Point(PATTERN_WIDTH as i64, PATTERN_HEIGHT as i64));
     let alternative = pattern[pattern_offset.y as usize][pattern_offset.x as usize];
-    if alternative {
-        on
-    } else {
-        off
-    }
+    if alternative { on } else { off }
 }
 
 pub fn sleep_effect(pixel: Point<i64>, rgb: Rgb8) -> Rgba8 {
