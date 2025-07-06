@@ -48,7 +48,7 @@ pub struct PlaceholderRange {
     /// Translated to origin
     pub placeholder: MaterialMap,
 
-    /// Each translated to origin
+    /// Each translated to origin, not empty
     pub choices: Vec<MaterialMap>,
 }
 
@@ -58,6 +58,8 @@ impl PlaceholderRange {
         items: Vec<MaterialMap>,
         source: HashSet<RegionKey>,
     ) -> Self {
+        assert!(!items.is_empty());
+
         let bounds = placeholder.bounding_rect();
         assert_eq!(bounds.low(), Point::ZERO);
 
@@ -369,14 +371,6 @@ impl Compiler {
         placeholder: &MaterialMap,
         ranges: &'a [PlaceholderRange],
     ) -> Option<&'a PlaceholderRange> {
-        for range in ranges {
-            println!(
-                "range placeholder bounds: {:?}",
-                range.placeholder.bounding_rect()
-            );
-        }
-        println!("placeholder bounds: {:?}", placeholder.bounding_rect());
-
         // TODO: Avoid clone
         let placeholder = placeholder
             .clone()
@@ -405,12 +399,14 @@ impl Compiler {
     }
 
     fn substitute_placeholder(
-        mut material_map: MaterialMap,
-        placeholder: &MaterialMap,
-        choice: &MaterialMap,
-    ) -> MaterialMap {
-        material_map.blit_translated(choice, placeholder.bounding_rect().low());
-        material_map
+        material_map: &mut MaterialMap,
+        substitution: &PlaceholderSubstitution,
+        i_choice: usize,
+    ) {
+        material_map.blit_translated(
+            &substitution.range.choices[i_choice],
+            substitution.placeholder.bounding_rect().low(),
+        );
     }
 
     pub fn compile_rule_instances(
@@ -426,68 +422,37 @@ impl Compiler {
         let after_substitutions =
             Self::placeholder_substitutions(&after_material_map, placeholder_ranges)?;
 
-        let Ok(before_substitution) = before_substitutions.into_iter().at_most_one() else {
-            anyhow::bail!("More than one before placeholder not supported yet.")
-        };
-
-        let Ok(after_substitution) = after_substitutions.into_iter().at_most_one() else {
-            anyhow::bail!("More than one after placeholder not supported yet.")
-        };
-
-        let before_after_instances: Vec<_> = if let Some(before_substitution) = &before_substitution
-            && let Some(after_substitution) = &after_substitution
-        {
-            anyhow::ensure!(
-                before_substitution.range.choices.len() == after_substitution.range.choices.len(),
-                "range of before and after choices must be same length"
-            );
-
-            before_substitution
-                .range
-                .choices
-                .iter()
-                .zip_eq(&after_substitution.range.choices)
-                .map(|(before_choice, after_choice)| {
-                    // Substitute before and after into placeholders
-                    let before_material_map = Self::substitute_placeholder(
-                        before_material_map.clone(),
-                        &before_substitution.placeholder,
-                        before_choice,
-                    );
-
-                    let after_material_map = Self::substitute_placeholder(
-                        after_material_map.clone(),
-                        &after_substitution.placeholder,
-                        after_choice,
-                    );
-
-                    (before_material_map, after_material_map)
-                })
-                .collect()
-        } else if let Some(before_substitution) = &before_substitution {
-            before_substitution
-                .range
-                .choices
-                .iter()
-                .map(|before_choice| {
-                    // Substitute before into placeholders
-                    let before_material_map = Self::substitute_placeholder(
-                        before_material_map.clone(),
-                        &before_substitution.placeholder,
-                        before_choice,
-                    );
-
-                    (before_material_map, after_material_map.clone())
-                })
-                .collect()
-        } else if let Some(after_substitution) = &after_substitution {
-            anyhow::bail!("Placeholder only in the after side does not make sense");
-        } else {
-            vec![(before_material_map, after_material_map)]
-        };
+        // Make sure all substitutions have the same length
+        let mut substitution_lens = before_substitutions
+            .iter()
+            .chain(&after_substitutions)
+            .map(|substitution| substitution.range.choices.len());
+        // If there are no substitutions we set the common_len to one so we can avoid a special
+        // case.
+        let common_len = substitution_lens.next().unwrap_or(1);
+        anyhow::ensure!(
+            substitution_lens.all(|len| len == common_len),
+            "All substitutions must have the same len"
+        );
 
         let mut rule_instances = Vec::new();
-        for (before_material_map, after_material_map) in before_after_instances {
+        for i_choice in 0..common_len {
+            // TODO: Substitute each before and after placeholder
+            let mut before_material_map = before_material_map.clone();
+            let mut after_material_map = after_material_map.clone();
+
+            for before_substitution in &before_substitutions {
+                Self::substitute_placeholder(
+                    &mut before_material_map,
+                    before_substitution,
+                    i_choice,
+                );
+            }
+
+            for after_substitution in &after_substitutions {
+                Self::substitute_placeholder(&mut after_material_map, after_substitution, i_choice);
+            }
+
             let pattern = self.compile_pattern(before_material_map.clone(), guess_chooser)?;
             let rule = Rule::new(pattern, after_material_map.clone())?;
             let rule_instance = RuleInstance {
@@ -508,6 +473,8 @@ impl Compiler {
         topology: &Topology,
         placeholder_ranges: &Vec<PlaceholderRange>,
     ) -> anyhow::Result<Vec<GenericRule>> {
+        let _tracy_span = tracy_client::span!("compile_rules");
+
         let masked_topology = MaskedTopology::whole(topology);
 
         // Find all matches for rule_frame in world

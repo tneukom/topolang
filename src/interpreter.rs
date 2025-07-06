@@ -177,8 +177,8 @@ pub fn wake_up(world: &mut World, excluded: &HashSet<RegionKey>) -> usize {
 #[cfg(test)]
 mod test {
     use crate::{
-        compiler::Compiler, field::RgbaField, interpreter::Interpreter,
-        rule::CanvasInput, world::World,
+        compiler::Compiler, field::RgbaField, interpreter::Interpreter, rule::CanvasInput,
+        world::World,
     };
 
     fn assert_execute_world(name: &str, expected_modifications: usize) {
@@ -254,5 +254,10 @@ mod test {
     #[test]
     fn circles() {
         assert_execute_world("circles", 3);
+    }
+
+    #[test]
+    fn generic_a() {
+        assert_execute_world("generic/a", 2);
     }
 }
