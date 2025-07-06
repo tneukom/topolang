@@ -68,31 +68,6 @@ pub fn benchmark_compile() {
     }
 }
 
-pub fn main_benchmark() {
-    let folder = "test_resources/benchmark";
-    let original_world = RgbaField::load(format!("{folder}/gates.png"))
-        .unwrap()
-        .intot::<MaterialMap>()
-        .intot::<World>();
-
-    let compiler = Compiler::new();
-
-    for _ in 0..100 {
-        use std::time::Instant;
-
-        let mut world = original_world.clone();
-        let compiled_rules = compiler.compile(&world).unwrap();
-        let mut interpreter = Interpreter::new(compiled_rules);
-
-        let now = Instant::now();
-        interpreter
-            .stabilize(&mut world, &CanvasInput::default(), 100)
-            .ok();
-
-        println!("elapsed = {:.3?}", now.elapsed());
-    }
-}
-
 pub fn benchmark_topology_new() {
     let folder = "test_resources/benchmark";
     let material_map = RgbaField::load(format!("{folder}/hex_wave.png"))

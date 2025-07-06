@@ -89,9 +89,9 @@ pub fn main() {
 
         tracy_client::Client::start();
 
-        // seamlang::benchmarks::main_benchmark();
-
         // seamlang::benchmarks::benchmark_run();
+
+        // seamlang::benchmarks::benchmark_compile();
 
         // seamlang::benchmarks::benchmark_topology_new();
 
@@ -100,11 +100,5 @@ pub fn main() {
         main_editor();
 
         // color_replace();
-
-        // main_benchmark_pixmap_regions();
-
-        // main_benchmark_legacy_regions();
-        // main_benchmark_pixmap_regions();
-        // main_benchmark_field_regions();
     }
 }
