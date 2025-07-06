@@ -316,7 +316,10 @@ impl Constraint for AnyConstraint {
 // - border orientation is preserved
 // - seams are not overlapping
 // - injective region mapping
+#[inline(never)]
 pub fn morphism_constraints(dom: &Topology) -> Vec<AnyConstraint> {
+    let _tracy_span = tracy_client::span!("morphism_constraints");
+
     let mut constraints: Vec<AnyConstraint> = Vec::new();
 
     // Preserve seams & reverse
@@ -390,7 +393,7 @@ pub fn constraints_are_satisfied(
 #[cfg(test)]
 mod test {
     use crate::{
-        morphism::{test::seam_map_from_colors, Morphism},
+        morphism::{Morphism, test::seam_map_from_colors},
         solver::constraints::{constraints_are_satisfied, morphism_constraints},
         topology::Topology,
     };

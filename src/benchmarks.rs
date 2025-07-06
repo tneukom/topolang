@@ -7,11 +7,10 @@ use std::time::Instant;
 /// Run a scene by repeatedly stabilizing and waking up sleeping components.
 pub fn benchmark_run() {
     let folder = "test_resources/benchmark";
-    let material_map = MaterialMap::load(format!("{folder}/hex_wave.png")).unwrap();
-    let world = World::from(material_map);
+    let world = World::load(format!("{folder}/hex_wave.png")).unwrap();
 
     let compiler = Compiler::new();
-    let rules = compiler.compile(&world).unwrap();
+    let program = compiler.compile(&world).unwrap();
 
     // for (i_rule, rule) in rules.rules.iter().enumerate() {
     //     // Print regions in pattern
@@ -29,7 +28,7 @@ pub fn benchmark_run() {
     // }
 
     for _ in 0..50 {
-        let mut interpreter = Interpreter::new(rules.clone());
+        let mut interpreter = Interpreter::new(program.clone());
         let mut world = world.clone();
 
         let now = Instant::now();
@@ -50,6 +49,22 @@ pub fn benchmark_run() {
             //     .unwrap();
         }
         println!("elapsed = {:.3?}, ticks = {}", now.elapsed(), ticks);
+    }
+}
+
+pub fn benchmark_compile() {
+    let folder = "test_resources/benchmark";
+    let world = World::load(format!("{folder}/generic_2048.png")).unwrap();
+
+    let compiler = Compiler::new();
+    for _ in 0..5 {
+        let now = Instant::now();
+        let program = compiler.compile(&world).unwrap();
+        println!(
+            "elapsed = {:.3?}, number of rule instances: {}",
+            now.elapsed(),
+            program.rule_instances_len()
+        );
     }
 }
 

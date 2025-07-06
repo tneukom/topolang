@@ -343,7 +343,10 @@ impl Propagation for LastInnerBorder {
     }
 }
 
+#[inline(never)]
 pub fn morphism_propagations(dom: &Topology) -> Vec<AnyPropagation> {
+    let _tracy_span = tracy_client::span!("morphism_propagations");
+
     let mut propagations: Vec<AnyPropagation> = Vec::new();
 
     for (&region_key, region) in &dom.regions {

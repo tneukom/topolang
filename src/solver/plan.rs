@@ -2,9 +2,9 @@ use crate::{
     material::Material,
     morphism::Morphism,
     solver::{
-        constraints::{morphism_constraints, AnyConstraint, Constraint},
+        constraints::{AnyConstraint, Constraint, morphism_constraints},
         element::Element,
-        propagations::{morphism_propagations, AnyPropagation, Propagation},
+        propagations::{AnyPropagation, Propagation, morphism_propagations},
     },
     topology::{BorderKey, MaskedTopology, RegionKey, Seam, Topology, TopologyStatistics},
 };
@@ -270,6 +270,7 @@ pub struct SearchPlan {
 }
 
 impl SearchPlan {
+    #[inline(never)]
     pub fn variables(dom: &Topology) -> HashSet<Element> {
         let mut variables = HashSet::default();
 
@@ -293,6 +294,7 @@ impl SearchPlan {
         variables
     }
 
+    #[inline(never)]
     pub fn applicable_constraint(
         assigned_variables: &HashSet<Element>,
         constraints: &mut Vec<AnyConstraint>,
@@ -307,6 +309,7 @@ impl SearchPlan {
         Some(constraints.remove(i_applicable))
     }
 
+    #[inline(never)]
     pub fn applicable_propagation(
         assigned_variables: &HashSet<Element>,
         propagations: &mut Vec<AnyPropagation>,
@@ -329,11 +332,14 @@ impl SearchPlan {
 
     /// Make a plan to find solutions. Using `first` one can fix the guess that the plan should
     /// start with, otherwise `guess_chooser` is used to find the initial guess.
+    #[inline(never)]
     pub fn for_morphism(
         dom: &Topology,
         guess_chooser: &impl GuessChooser,
         first: Option<Guess>,
     ) -> Self {
+        let _tracy_span = tracy_client::span!("SearchPlan::for_morphism");
+
         let mut available_constraints = morphism_constraints(dom);
         let mut available_propagations = morphism_propagations(dom);
         // for propagation in &propagations {
@@ -506,7 +512,10 @@ pub struct SearchStrategy {
 }
 
 impl SearchStrategy {
+    #[inline(never)]
     pub fn for_morphism(dom: &Topology, guess_chooser: &impl GuessChooser) -> Self {
+        let _tracy_span = tracy_client::span!("SearchStrategy::for_morphism");
+
         let mut plans = Vec::new();
         for region_key in dom.iter_region_keys() {
             let material = dom[region_key].material;
