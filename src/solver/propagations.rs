@@ -1,4 +1,4 @@
-use crate::{math::pixel::Corner, solver::constraints::Variables};
+use crate::solver::constraints::Variables;
 /// Do we need the following Propagations?
 /// - Derive border from seam, not needed if we guess border before seam
 /// - Derive right side region of seam, not needed since we can derive the left side of the  reverse

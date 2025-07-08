@@ -448,7 +448,7 @@ pub fn constraints_are_satisfied(
 #[cfg(test)]
 mod test {
     use crate::{
-        morphism::{test::seam_map_from_colors, Morphism},
+        morphism::{Morphism, test::seam_map_from_colors},
         solver::constraints::{constraints_are_satisfied, morphism_constraints},
         topology::Topology,
     };

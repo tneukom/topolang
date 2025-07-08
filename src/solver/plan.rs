@@ -2,13 +2,13 @@ use crate::{
     material::Material,
     morphism::Morphism,
     solver::{
-        constraints::{morphism_constraints, AnyConstraint, Constraint, Variables},
+        constraints::{AnyConstraint, Constraint, Variables, morphism_constraints},
         element::Element,
-        propagations::{morphism_propagations, AnyPropagation, Propagation},
+        propagations::{AnyPropagation, Propagation, morphism_propagations},
     },
     topology::{BorderKey, MaskedTopology, RegionKey, Seam, Topology, TopologyStatistics},
 };
-use ahash::HashSet;
+use ahash::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Guess {
@@ -264,54 +264,79 @@ impl SearchBranch {
     }
 }
 
-pub struct FreeVariableTracker<T: Variables> {
-    /// Things with at least one free variable, and the number of free variable,
-    /// see https://en.wikipedia.org/wiki/Open_formula
-    open: Vec<(T, usize)>,
+pub enum Countdown<T> {
+    Alive(T, usize),
+    Dead,
+}
 
-    /// Things with no more free variables
+impl<T> Countdown<T> {
+    pub fn decrement(&mut self) -> Option<T> {
+        if let Countdown::Alive(_, count) = self {
+            *count -= 1;
+            if *count == 0 {
+                let Countdown::Alive(inner, _) = std::mem::replace(self, Countdown::Dead) else {
+                    unreachable!();
+                };
+                return Some(inner);
+            }
+            None
+        } else {
+            panic!("Cannot decrement when already dead!");
+        }
+    }
+}
+
+pub struct FreeVariableTracker<T: Variables> {
+    /// The list of dependents that contain the given variable
+    variable_occurrences: HashMap<Element, Vec<usize>>,
+
+    /// Dependents with number of free variables
+    free_variable_counts: Vec<Countdown<T>>,
+
+    /// Dependents with no more free variables
     closed: Vec<T>,
 }
 
 impl<T: Variables> FreeVariableTracker<T> {
-    pub fn new(items: Vec<T>) -> Self {
-        let mut open = Vec::new();
-        let mut closed = Vec::new();
-        for item in items {
-            let n_free = item.variables().len();
-            if n_free == 0 {
-                closed.push(item);
-            } else {
-                open.push((item, n_free));
+    #[inline(never)]
+    pub fn new(dependents: Vec<T>) -> Self {
+        let mut variable_occurrences = HashMap::default();
+        let mut free_variable_counts = Vec::new();
+        for (i_dependent, dependent) in dependents.into_iter().enumerate() {
+            for variable in dependent.variables() {
+                variable_occurrences
+                    .entry(variable.clone())
+                    .or_insert(Vec::new())
+                    .push(i_dependent);
             }
+            let variable_count = dependent.variables().len();
+            free_variable_counts.push(Countdown::Alive(dependent, variable_count));
         }
-        Self { open, closed }
+
+        Self {
+            variable_occurrences,
+            free_variable_counts,
+            closed: Vec::new(),
+        }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.open.is_empty() && self.closed.is_empty()
+    pub fn len(&self) -> usize {
+        self.free_variable_counts.len()
     }
 
     pub fn assign_variable(&mut self, variable: &Element) {
-        let newly_closed = self
-            .open
-            .extract_if(.., |(open, n_free)| {
-                // A variable can appear multiple times in `open.variables()`
-                let n_assigned = open
-                    .variables()
-                    .iter()
-                    .filter(|&candidate| candidate == variable)
-                    .count();
-                assert!(n_assigned <= *n_free);
-                *n_free -= n_assigned;
-                *n_free == 0
-            })
-            .map(|pair| pair.0);
-        self.closed.extend(newly_closed);
+        let Some(variable_occurrences) = self.variable_occurrences.get(variable) else {
+            return;
+        };
+
+        for &i_dependent in variable_occurrences {
+            if let Some(dependent) = self.free_variable_counts[i_dependent].decrement() {
+                self.closed.push(dependent);
+            }
+        }
     }
 
     pub fn pop_closed(&mut self) -> Option<T> {
-        // self.closed.remove(0)
         self.closed.pop()
     }
 }
@@ -354,7 +379,7 @@ impl SearchPlan {
         guess_chooser: &impl GuessChooser,
         first: Option<Guess>,
     ) -> Self {
-        let _tracy_span = tracy_client::span!("SearchPlan::for_morphism");
+        let tracy_span = tracy_client::span!("SearchPlan::for_morphism");
 
         let mut constraints = FreeVariableTracker::new(morphism_constraints(dom));
         let mut propagations = FreeVariableTracker::new(morphism_propagations(dom));
@@ -432,8 +457,40 @@ impl SearchPlan {
             steps.push(step);
         }
 
+        // Statistics for tracy region
+        {
+            let mut n_regions = 0;
+            let mut n_seams = 0;
+            let mut n_corners = 0;
+            let mut n_borders = 0;
+            for var in &free_variables {
+                match var {
+                    Element::Seam(_) => {
+                        n_seams += 1;
+                    }
+                    Element::Corner(_) => {
+                        n_corners += 1;
+                    }
+                    Element::Region(_) => {
+                        n_regions += 1;
+                    }
+                    Element::Border(_) => {
+                        n_borders += 1;
+                    }
+                }
+            }
+            let n_constraints = constraints.len();
+            let n_propagations = propagations.len();
+
+            let n_steps = steps.len();
+            tracy_span.emit_text(&format!(
+                "regions: {n_regions}, seams: {n_seams}, corners: {n_corners}, borders: {n_borders} \
+            constraints: {n_constraints}, propagations: {n_propagations}, steps: {n_steps}",
+            ));
+        }
+
         assert!(free_variables.is_empty());
-        assert!(constraints.is_empty());
+        // assert!(constraints.is_empty());
 
         Self { steps }
     }

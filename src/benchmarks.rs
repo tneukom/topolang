@@ -57,7 +57,7 @@ pub fn benchmark_compile() {
     let world = World::load(format!("{folder}/generic_2048.png")).unwrap();
 
     let compiler = Compiler::new();
-    for _ in 0..5 {
+    for _ in 0..10 {
         let now = Instant::now();
         let program = compiler.compile(&world).unwrap();
         println!(
