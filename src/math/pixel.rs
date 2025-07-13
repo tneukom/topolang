@@ -391,6 +391,14 @@ impl Corner {
     }
 }
 
+impl Add<Point<i64>> for Corner {
+    type Output = Corner;
+
+    fn add(self, rhs: Point<i64>) -> Self::Output {
+        Corner::new(self.pixel + rhs, self.name)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::math::pixel::{Pixel, Side, SideName};

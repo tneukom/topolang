@@ -65,6 +65,10 @@ pub fn benchmark_compile() {
             now.elapsed(),
             program.rule_instances_len()
         );
+        // for rule in program.iter_rule_instances() {
+        //     let steps_len = rule.rule.before.search_strategy.main_plan.steps.len();
+        //     println!("steps_len: {steps_len}")
+        // }
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::solver::constraints::Variables;
+use crate::{math::pixel::Corner, solver::constraints::Variables};
 /// Do we need the following Propagations?
 /// - Derive border from seam, not needed if we guess border before seam
 /// - Derive right side region of seam, not needed since we can derive the left side of the  reverse
@@ -459,6 +459,98 @@ impl Propagation for LastInnerBorder {
     }
 }
 
+/// Derive border of a solid region
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SolidBorder {
+    border_key: BorderKey,
+
+    variables: [Element; 1],
+}
+
+impl SolidBorder {
+    pub fn new(border_key: BorderKey) -> Self {
+        Self {
+            border_key,
+            variables: [border_key.region_key.into()],
+        }
+    }
+}
+
+impl Variables for SolidBorder {
+    fn variables(&self) -> &[Element] {
+        &self.variables
+    }
+}
+
+impl Propagation for SolidBorder {
+    fn derives(&self) -> Element {
+        self.border_key.into()
+    }
+
+    fn derive(&self, phi: &Morphism, codom: &Topology) -> anyhow::Result<Element> {
+        let phi_region_key = phi[self.border_key.region_key];
+        let phi_region = &codom[phi_region_key];
+        if self.border_key.i_border >= phi_region.boundary.borders.len() {
+            anyhow::bail!("phi(border_key) does not exist.")
+        }
+        let phi_border_key = BorderKey::new(phi_region_key, self.border_key.i_border);
+        Ok(phi_border_key.into())
+    }
+
+    fn name(&self) -> &'static str {
+        "SolidBorder"
+    }
+}
+
+/// Derive corner of a solid border, does not work for borders with only a single corner!
+/// SoleSeamOnBorder should cover that case.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SolidCorner {
+    border_key: BorderKey,
+
+    corner: Corner,
+
+    variables: [Element; 1],
+}
+
+impl SolidCorner {
+    pub fn new(border_key: BorderKey, corner: Corner) -> Self {
+        Self {
+            border_key,
+            corner,
+            variables: [border_key.into()],
+        }
+    }
+}
+
+impl Variables for SolidCorner {
+    fn variables(&self) -> &[Element] {
+        &self.variables
+    }
+}
+
+impl Propagation for SolidCorner {
+    fn derives(&self) -> Element {
+        self.corner.into()
+    }
+
+    fn derive(&self, phi: &Morphism, codom: &Topology) -> anyhow::Result<Element> {
+        let phi_border_key = phi[self.border_key];
+        let offset = phi_border_key.region_key.left_pixel - self.border_key.region_key.left_pixel;
+        let phi_corner = self.corner + offset;
+        let phi_border = &codom[phi_border_key];
+        if !phi_border.corners().contains(&phi_corner) {
+            // panic!("phi(corner) does not exist.");
+            anyhow::bail!("phi(corner) does not exist.")
+        }
+        Ok(phi_corner.into())
+    }
+
+    fn name(&self) -> &'static str {
+        "SolidCorner"
+    }
+}
+
 #[inline(never)]
 pub fn morphism_propagations(dom: &Topology) -> Vec<AnyPropagation> {
     let _tracy_span = tracy_client::span!("morphism_propagations");
@@ -504,6 +596,20 @@ pub fn morphism_propagations(dom: &Topology) -> Vec<AnyPropagation> {
                     }
                 }
             }
+
+            if region.material.is_solid() {
+                let solid_border = SolidBorder::new(border_key);
+                propagations.push(AnyPropagation::SolidBorder(solid_border));
+
+                // If border has a single seam (just one corner) we cannot simply translate it
+                // to get phi(corner). SoleSeamOnBorder should cover that case.
+                if border.seams_len() > 1 {
+                    for corner in border.corners() {
+                        let solid_corner = SolidCorner::new(border_key, corner);
+                        propagations.push(AnyPropagation::SolidCorner(solid_corner));
+                    }
+                }
+            }
         }
 
         for seam in region.iter_seams() {
@@ -538,6 +644,8 @@ pub enum AnyPropagation {
     LeftRegionOfSeam(LeftRegionOfSeam),
     SeamReverse(SeamReverse),
     SoleSeamOnBorder(SoleSeamOnBorder),
+    SolidBorder(SolidBorder),
+    SolidCorner(SolidCorner),
 }
 
 impl AnyPropagation {
@@ -551,6 +659,8 @@ impl AnyPropagation {
             Self::LeftRegionOfSeam(this) => this,
             Self::SeamReverse(this) => this,
             Self::SoleSeamOnBorder(this) => this,
+            Self::SolidBorder(this) => this,
+            Self::SolidCorner(this) => this,
         }
     }
 }
