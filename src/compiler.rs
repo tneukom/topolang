@@ -10,7 +10,8 @@ use crate::{
     pixmap::MaterialMap,
     rule::{InputCondition, InputEvent, Pattern, Rule},
     solver::plan::{
-        GuessChooser, GuessChooserUsingStatistics, SearchPlan, SearchStrategy, SimpleGuessChooser,
+        ConstraintSystem, GuessChooser, GuessChooserUsingStatistics, SearchPlan, SearchStrategy,
+        SimpleGuessChooser,
     },
     topology::{BorderKey, MaskedTopology, Region, RegionKey, Topology, TopologyStatistics},
     world::World,
@@ -480,7 +481,9 @@ impl Compiler {
         // Find all matches for rule_frame in world
         let matches = {
             let guess_chooser = SimpleGuessChooser::default();
-            let search_plan = SearchPlan::for_morphism(&self.rule_frame, &guess_chooser, None);
+            let constraint_system = ConstraintSystem::for_morphism(&self.rule_frame);
+            let search_plan =
+                SearchPlan::new(constraint_system, &self.rule_frame, &guess_chooser, None);
             search_plan.solutions(&masked_topology)
         };
 

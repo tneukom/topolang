@@ -264,6 +264,7 @@ impl SearchBranch {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum Countdown<T> {
     Alive(T, usize),
     Dead,
@@ -286,6 +287,7 @@ impl<T> Countdown<T> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct FreeVariableTracker<T: Variables> {
     /// The list of dependents that contain the given variable
     variable_occurrences: HashMap<Element, Vec<usize>>,
@@ -342,11 +344,15 @@ impl<T: Variables> FreeVariableTracker<T> {
 }
 
 #[derive(Debug, Clone)]
-pub struct SearchPlan {
-    steps: Vec<SearchBranch>,
+pub struct ConstraintSystem {
+    pub variables: HashSet<Element>,
+
+    pub constraints: FreeVariableTracker<AnyConstraint>,
+
+    pub propagations: FreeVariableTracker<AnyPropagation>,
 }
 
-impl SearchPlan {
+impl ConstraintSystem {
     #[inline(never)]
     pub fn variables(dom: &Topology) -> HashSet<Element> {
         let mut variables = HashSet::default();
@@ -371,25 +377,39 @@ impl SearchPlan {
         variables
     }
 
+    #[inline(never)]
+    pub fn for_morphism(dom: &Topology) -> Self {
+        Self {
+            constraints: FreeVariableTracker::new(morphism_constraints(dom)),
+            propagations: FreeVariableTracker::new(morphism_propagations(dom)),
+            variables: Self::variables(dom),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SearchPlan {
+    pub steps: Vec<SearchBranch>,
+}
+
+impl SearchPlan {
     /// Make a plan to find solutions. Using `first` one can fix the guess that the plan should
     /// start with, otherwise `guess_chooser` is used to find the initial guess.
     #[inline(never)]
-    pub fn for_morphism(
+    pub fn new(
+        constraint_system: ConstraintSystem,
         dom: &Topology,
         guess_chooser: &impl GuessChooser,
         first: Option<Guess>,
     ) -> Self {
+        let ConstraintSystem {
+            variables: mut free_variables,
+            mut constraints,
+            mut propagations,
+        } = constraint_system;
+
         let tracy_span = tracy_client::span!("SearchPlan::for_morphism");
 
-        let mut constraints = FreeVariableTracker::new(morphism_constraints(dom));
-        let mut propagations = FreeVariableTracker::new(morphism_propagations(dom));
-
-        // for propagation in &propagations {
-        //     println!("Available propagation: {propagation:?}");
-        // }
-
-        // All elements (regions, borders, seams, corners) that appear in dom
-        let mut free_variables: HashSet<Element> = Self::variables(dom);
         let mut assigned_variables: HashSet<Element> = HashSet::default();
 
         let mut steps = Vec::new();
@@ -415,7 +435,7 @@ impl SearchPlan {
             let mut actions = Vec::new();
             loop {
                 if let Some(constraint) = constraints.pop_closed() {
-                    assert!(
+                    debug_assert!(
                         constraint
                             .variables()
                             .iter()
@@ -428,7 +448,7 @@ impl SearchPlan {
                 }
 
                 if let Some(propagation) = propagations.pop_closed() {
-                    assert!(
+                    debug_assert!(
                         propagation
                             .variables()
                             .iter()
@@ -608,15 +628,22 @@ impl SearchStrategy {
     pub fn for_morphism(dom: &Topology, guess_chooser: &impl GuessChooser) -> Self {
         let _tracy_span = tracy_client::span!("SearchStrategy::for_morphism");
 
+        let constraint_system = ConstraintSystem::for_morphism(dom);
         let mut plans = Vec::new();
         for region_key in dom.iter_region_keys() {
             let material = dom[region_key].material;
             let first_guess = Guess::Region(region_key);
-            let plan = SearchPlan::for_morphism(dom, guess_chooser, Some(first_guess));
+
+            let plan = SearchPlan::new(
+                constraint_system.clone(),
+                dom,
+                guess_chooser,
+                Some(first_guess),
+            );
             plans.push((material, plan));
         }
 
-        let main_plan = SearchPlan::for_morphism(dom, guess_chooser, None);
+        let main_plan = SearchPlan::new(constraint_system, dom, guess_chooser, None);
 
         Self { plans, main_plan }
     }
@@ -668,7 +695,7 @@ mod test {
         material::Material,
         math::rgba8::Rgba8,
         pixmap::MaterialMap,
-        solver::plan::{SearchPlan, SimpleGuessChooser},
+        solver::plan::{ConstraintSystem, SearchPlan, SimpleGuessChooser},
         topology::{MaskedTopology, Topology},
     };
     use itertools::Itertools;
@@ -737,7 +764,8 @@ mod test {
         let codom = load(format!("{folder}/{codom_filename}"));
 
         let guess_chooser = SimpleGuessChooser::default();
-        let plan = SearchPlan::for_morphism(&dom, &guess_chooser, None);
+        let constraint_system = ConstraintSystem::for_morphism(&dom);
+        let plan = SearchPlan::new(constraint_system, &dom, &guess_chooser, None);
         // plan.print();
 
         let solutions = plan.solutions(&MaskedTopology::whole(&codom));
