@@ -14,10 +14,11 @@ use crate::{
     utils::ReflectEnum,
     view::{EditMode, View, ViewInput, ViewSettings},
     widgets::{
-        FileChooser, brush_chooser, enum_choice_buttons, prefab_picker, styled_button, styled_space,
+        brush_chooser, enum_choice_buttons, prefab_picker, styled_button, styled_space, FileChooser,
     },
     world::World,
 };
+use egui::AtomExt;
 use glow::HasContext;
 use itertools::Itertools;
 use log::{info, warn};
@@ -25,7 +26,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     rc::Rc,
-    sync::{Arc, Mutex, mpsc},
+    sync::{mpsc, Arc, Mutex},
 };
 use web_time::Instant;
 
@@ -205,21 +206,18 @@ impl EguiApp {
 
                 for mode in EditMode::ALL {
                     let icon = Self::edit_mode_icon(mode);
-                    // let icon_size = icon.texture_size().unwrap();
                     let icon_size = egui::Vec2::splat(32.0);
-                    let button_size = icon_size + 2.0 * egui::Vec2::splat(BUTTON_PADDING);
 
                     // The behavior of Egui when clicking a button and moving the mouse is a bit weird.
                     // If a native Windows button is pressed down, the mouse moved while still inside
                     // the button and then released, it counts as a click.
                     // Egui aborts the clicked state if the mouse is moved too much. So we also consider
                     // dragging and check if the pointer is still over the button.
-                    let button = egui::Button::image(icon)
+                    let button = egui::Button::new(icon.atom_size(icon_size))
                         .corner_radius(4)
                         .selected(mode == self.view_settings.edit_mode)
                         .sense(egui::Sense::click_and_drag());
-                    let response = ui.add_sized(button_size, button);
-                    // let response = ui.add(button);
+                    let response = ui.add(button);
 
                     if response.clicked()
                         || response.drag_stopped() && response.hover_pos().is_some()
@@ -366,6 +364,7 @@ impl EguiApp {
             if ui.button("New").clicked() {
                 let bounds = Rect::low_size(Point(0, 0), self.new_size);
                 self.view = View::empty(bounds);
+                ui.close();
             }
         });
 
@@ -373,12 +372,12 @@ impl EguiApp {
 
         if ui.button("Load").clicked() {
             self.load_from_path(&path);
-            ui.close_menu();
+            ui.close();
         }
 
         if ui.button("Save").clicked() {
             self.save_to_path(&path);
-            ui.close_menu();
+            ui.close();
         }
     }
 
@@ -710,9 +709,15 @@ impl EguiApp {
     pub fn top_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             #[cfg(not(target_arch = "wasm32"))]
-            ui.menu_button("File Chooser", |ui| {
-                self.file_chooser_ui(ui);
-            });
+            {
+                let response = ui.button("File Chooser");
+                egui::Popup::menu(&response)
+                    .align(egui::RectAlign::LEFT)
+                    .close_behavior(egui::containers::PopupCloseBehavior::CloseOnClickOutside)
+                    .show(|ui| {
+                        self.file_chooser_ui(ui);
+                    });
+            }
 
             ui.menu_button("File", |ui| {
                 self.file_dialog_ui(ui);
