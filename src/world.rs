@@ -123,8 +123,12 @@ impl World {
             return false;
         }
 
-        self.topology
+        let draw_bounds = self
+            .topology
             .update(&self.material_map, changed_pixels.into_iter());
+
+        self.rgba_field.expire_rgba_rect(draw_bounds);
+
         true
     }
 

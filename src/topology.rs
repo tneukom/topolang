@@ -780,7 +780,7 @@ impl Topology {
         &mut self,
         material_map: &MaterialMap,
         pixels: impl Iterator<Item = Pixel> + Clone,
-    ) {
+    ) -> Rect<i64> {
         let _tracy_span = tracy_client::span!("Topology::draw");
 
         let draw_bounds = Rect::index_bounds(pixels.clone());
@@ -860,6 +860,8 @@ impl Topology {
 
         // For debugging, fully recreate Topology
         // *self = Topology::new(material_map);
+
+        draw_bounds
     }
 
     /// Assumes border is a boundary in `self`. Warning: Current implementation is very slow, only
