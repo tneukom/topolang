@@ -85,6 +85,40 @@ pub struct PlaceholderSubstitution<'a> {
 }
 
 #[derive(Debug, Clone)]
+pub struct CompileError {
+    pub bounds: Vec<Rect<i64>>,
+    pub message: String,
+}
+
+impl CompileError {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            bounds: Vec::new(),
+        }
+    }
+
+    pub fn err<T>(message: impl Into<String>) -> Result<T, Self> {
+        Err(Self::new(message))
+    }
+
+    pub fn with_bounds(mut self, bounds: Rect<i64>) -> Self {
+        self.bounds.push(bounds);
+        self
+    }
+}
+
+// pub trait CompileErrorContext {
+//     fn with_bounds(self, bounds: Rect<i64>) -> Self;
+// }
+//
+// impl<T> CompileErrorContext for Result<T, CompileError> {
+//     fn with_bounds(self, bounds: Rect<i64>) -> Self {
+//         self.map_err(|err| err.with_bounds(bounds))
+//     }
+// }
+
+#[derive(Debug, Clone)]
 pub struct Program {
     pub rules: Vec<GenericRule>,
     pub source: HashSet<RegionKey>,
@@ -243,7 +277,7 @@ impl Compiler {
         &self,
         mut material_map: MaterialMap,
         guess_chooser: &impl GuessChooser,
-    ) -> anyhow::Result<Pattern> {
+    ) -> Result<Pattern, CompileError> {
         let topology = Topology::new(&material_map);
 
         // Extract symbols from pattern and add InputCondition for each tagged area.
@@ -283,12 +317,14 @@ impl Compiler {
         has_no_overlap
     }
 
-    fn sort_horizontally_or_vertically(maps: &mut [MaterialMap]) -> anyhow::Result<()> {
+    fn sort_horizontally_or_vertically(maps: &mut [MaterialMap]) -> Result<(), CompileError> {
         // && short circuits
         if !Self::sort_by_interval_key(maps, |map| map.bounding_rect().x)
             && !Self::sort_by_interval_key(maps, |map| map.bounding_rect().y)
         {
-            anyhow::bail!("Failed to sort placeholder choices horizontally or vertically");
+            return Err(CompileError::new(
+                "Failed to sort placeholder choices horizontally or vertically",
+            ));
         }
         Ok(())
     }
@@ -297,24 +333,30 @@ impl Compiler {
     pub fn compile_placeholder_range(
         material_map: &MaterialMap,
         topology: &Topology,
-        region: &Region,
-    ) -> anyhow::Result<PlaceholderRange> {
+        frame_region: &Region,
+    ) -> Result<PlaceholderRange, CompileError> {
         let mut placeholder = None;
         let mut items = Vec::new();
 
-        for hole_border in region.boundary.holes() {
+        for hole_border in frame_region.boundary.holes() {
             let inside = material_map.right_of_border(hole_border);
 
             let is_placeholder = hole_border
                 .atomic_seams()
                 .all(|seam| topology.material_right_of(seam) == Some(Material::RULE_PLACEHOLDER));
             if is_placeholder {
-                anyhow::ensure!(placeholder.is_none(), "Only one placeholder allowed");
+                if !placeholder.is_none() {
+                    return CompileError::err("Only one placeholder allowed");
+                }
                 placeholder = Some(inside.translated_to_zero());
             } else {
                 items.push(inside);
             }
         }
+
+        let Some(placeholder) = placeholder else {
+            return CompileError::err("Must have a placeholder");
+        };
 
         Self::sort_horizontally_or_vertically(&mut items)?;
 
@@ -325,15 +367,11 @@ impl Compiler {
             .collect();
 
         let source = topology
-            .regions_left_of_border(region.boundary.outer_border())
+            .regions_left_of_border(frame_region.boundary.outer_border())
             .map(Region::key)
             .collect();
 
-        let placeholder_range = PlaceholderRange::new(
-            placeholder.ok_or(anyhow::anyhow!("Must have a placeholder"))?,
-            items,
-            source,
-        );
+        let placeholder_range = PlaceholderRange::new(placeholder, items, source);
 
         Ok(placeholder_range)
     }
@@ -342,17 +380,21 @@ impl Compiler {
     pub fn compile_placeholder_ranges(
         material_map: &MaterialMap,
         topology: &Topology,
-    ) -> anyhow::Result<Vec<PlaceholderRange>> {
+    ) -> Result<Vec<PlaceholderRange>, CompileError> {
         let mut placeholder_ranges = Vec::new();
 
-        for region in topology.regions.values() {
-            if region.material != Material::RULE_CHOICE {
+        for placeholder_frame_candidate in topology.regions.values() {
+            if placeholder_frame_candidate.material != Material::RULE_CHOICE {
                 continue;
             }
 
-            let placeholder_range =
-                Self::compile_placeholder_range(material_map, topology, region)?;
-            placeholder_ranges.push(placeholder_range)
+            let placeholder_range = Self::compile_placeholder_range(
+                material_map,
+                topology,
+                placeholder_frame_candidate,
+            )
+            .map_err(|err| err.with_bounds(placeholder_frame_candidate.bounds()))?;
+            placeholder_ranges.push(placeholder_range);
         }
 
         Ok(placeholder_ranges)
@@ -382,7 +424,7 @@ impl Compiler {
     fn placeholder_substitutions<'a>(
         material_map: &MaterialMap,
         ranges: &'a [PlaceholderRange],
-    ) -> anyhow::Result<Vec<PlaceholderSubstitution<'a>>> {
+    ) -> Result<Vec<PlaceholderSubstitution<'a>>, CompileError> {
         let topology = Topology::new(material_map);
         let placeholders = Self::placeholders(material_map, &topology);
 
@@ -390,7 +432,10 @@ impl Compiler {
         // Find range for each placeholder
         for placeholder in placeholders {
             let Some(range) = Self::placeholder_range(&placeholder, ranges) else {
-                anyhow::bail!("No range defined for the given placeholder");
+                return Err(
+                    CompileError::new("No range defined for the given placeholder")
+                        .with_bounds(placeholder.bounding_rect()),
+                );
             };
             let substitution = PlaceholderSubstitution { placeholder, range };
             substitutions.push(substitution);
@@ -416,7 +461,7 @@ impl Compiler {
         after_material_map: MaterialMap,
         guess_chooser: &impl GuessChooser,
         placeholder_ranges: &Vec<PlaceholderRange>,
-    ) -> anyhow::Result<Vec<RuleInstance>> {
+    ) -> Result<Vec<RuleInstance>, CompileError> {
         // Find placeholders in before and after, currently we only handle a single placeholder
         let before_substitutions =
             Self::placeholder_substitutions(&before_material_map, placeholder_ranges)?;
@@ -428,13 +473,14 @@ impl Compiler {
             .iter()
             .chain(&after_substitutions)
             .map(|substitution| substitution.range.choices.len());
+
         // If there are no substitutions we set the common_len to one so we can avoid a special
         // case.
         let common_len = substitution_lens.next().unwrap_or(1);
-        anyhow::ensure!(
-            substitution_lens.all(|len| len == common_len),
-            "All substitutions must have the same len"
-        );
+
+        if substitution_lens.any(|len| len != common_len) {
+            return CompileError::err("All substitutions must have the same len");
+        }
 
         let mut rule_instances = Vec::new();
         for i_choice in 0..common_len {
@@ -473,7 +519,7 @@ impl Compiler {
         material_map: &MaterialMap,
         topology: &Topology,
         placeholder_ranges: &Vec<PlaceholderRange>,
-    ) -> anyhow::Result<Vec<GenericRule>> {
+    ) -> Result<Vec<GenericRule>, CompileError> {
         let _tracy_span = tracy_client::span!("compile_rules");
 
         let masked_topology = MaskedTopology::whole(topology);
@@ -528,17 +574,24 @@ impl Compiler {
             // Find translation from after to before
             let before_bounds = before_material_map.bounding_rect();
             let after_bounds = after_material_map.bounding_rect();
-            assert_eq!(before_bounds.size(), after_bounds.size());
+            if before_bounds.size() != after_bounds.size() {
+                return Err(
+                    CompileError::new("Bounds of before and after must be equal.")
+                        .with_bounds(source_bounds),
+                );
+            }
 
             let offset = before_bounds.low() - after_bounds.low();
             let after_material_map = after_material_map.translated(offset);
 
-            let rule_instances = self.compile_rule_instances(
-                before_material_map,
-                after_material_map,
-                &guess_chooser,
-                &placeholder_ranges,
-            )?;
+            let rule_instances = self
+                .compile_rule_instances(
+                    before_material_map,
+                    after_material_map,
+                    &guess_chooser,
+                    &placeholder_ranges,
+                )
+                .map_err(|err| err.with_bounds(source_bounds))?;
 
             let generic_rule = GenericRule {
                 instances: rule_instances,
@@ -555,7 +608,7 @@ impl Compiler {
         Ok(rules)
     }
 
-    pub fn compile(&self, world: &World) -> anyhow::Result<Program> {
+    pub fn compile(&self, world: &World) -> Result<Program, CompileError> {
         let topology = world.topology();
         let material_map = world.material_map();
 

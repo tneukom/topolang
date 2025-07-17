@@ -1,6 +1,6 @@
 use crate::{
     brush::Brush,
-    compiler::Compiler,
+    compiler::{CompileError, Compiler},
     coordinate_frame::CoordinateFrames,
     field::RgbaField,
     gif_recorder::GifRecorder,
@@ -14,7 +14,7 @@ use crate::{
     utils::ReflectEnum,
     view::{EditMode, View, ViewInput, ViewSettings},
     widgets::{
-        brush_chooser, enum_choice_buttons, prefab_picker, styled_button, styled_space, FileChooser,
+        FileChooser, brush_chooser, enum_choice_buttons, prefab_picker, styled_button, styled_space,
     },
     world::World,
 };
@@ -26,7 +26,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     rc::Rc,
-    sync::{mpsc, Arc, Mutex},
+    sync::{Arc, Mutex, mpsc},
 };
 use web_time::Instant;
 
@@ -95,6 +95,7 @@ pub struct EguiApp {
     file_name: String,
     // current_folder: PathBuf,
     compiler: Compiler,
+    compile_error: Option<CompileError>,
     interpreter: Option<Interpreter>,
     run_mode: RunMode,
     run_speed: RunSpeed,
@@ -174,6 +175,7 @@ impl EguiApp {
                 FileChooser::new(saves_path)
             },
             compiler: Compiler::new(),
+            compile_error: None,
             interpreter: None,
             gif_recorder: None,
             clipboard: None,
@@ -455,10 +457,18 @@ impl EguiApp {
         match compiled_rules {
             Ok(compiled_rules) => {
                 self.interpreter = Some(Interpreter::new(compiled_rules));
+                self.compile_error = None;
                 info!("Compiling successful");
             }
             Err(err) => {
-                warn!("Failed to compile with error {err}");
+                let bounds = err.bounds.first();
+                warn!(
+                    "Failed to compile with error {}, bounds: {:?}",
+                    err.message, bounds
+                );
+                self.compile_error = Some(err);
+
+                // todo!("Show errors as a popup over the failed rule.");
                 self.interpreter = None;
             }
         }
@@ -572,7 +582,7 @@ impl EguiApp {
                         self.compile();
                         RunMode::Run
                     }
-                }
+                };
             }
 
             let walk_button = styled_button("Slowmo").selected(self.run_mode == RunMode::Slowmo);
@@ -587,6 +597,10 @@ impl EguiApp {
                         RunMode::Slowmo
                     }
                 }
+            }
+
+            if self.interpreter.is_none() {
+                self.run_mode = RunMode::Paused;
             }
 
             if self.run_mode == RunMode::Slowmo {
@@ -795,6 +809,55 @@ impl EguiApp {
             window_size,
             viewport,
         };
+
+        // Show compile error
+        if let Some(err) = &self.compile_error {
+            // egui::Tooltip::for_widget(&response).show(|ui| {
+            //     ui.label(&err.message);
+            // });
+
+            // egui::Area::new("error_popup".into()).anchor(egui::Align2::LEFT_TOP, [10.0, 10.0]).show(|ui| {
+            //     ui.label(&err.message);
+            // });
+
+            let window_error_pos = if let Some(bounds) = err.bounds.first() {
+                let world_error_pos = bounds.bottom_left().as_f64();
+                let view_pos = self.view.camera.world_to_view() * world_error_pos;
+                let window_pos = frames.view_to_window() * view_pos;
+                window_pos
+            } else {
+                viewport.top_left()
+            };
+
+            let mut open = true;
+            egui::Window::new("Error")
+                .frame(
+                    egui::Frame::default()
+                        .fill(egui::Color32::LIGHT_RED)
+                        .corner_radius(3)
+                        .inner_margin(3),
+                )
+                .title_bar(false)
+                .fixed_pos(window_error_pos)
+                .resizable(false)
+                .collapsible(false)
+                .show(ui.ctx(), |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(&err.message);
+
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let close_button = egui::Button::new("❌");
+                            if ui.add(close_button).clicked() {
+                                open = false;
+                            }
+                        });
+                    });
+                });
+
+            if !open {
+                self.compile_error = None;
+            }
+        }
 
         // `ctx.pointer_interact_pos()` is None if mouse is outside the window
         if let Some(egui_mouse) = ui.ctx().pointer_interact_pos() {

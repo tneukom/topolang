@@ -1,4 +1,5 @@
 use crate::{
+    compiler::CompileError,
     material::Material,
     math::{pixel::Pixel, point::Point},
     morphism::Morphism,
@@ -147,14 +148,14 @@ impl Rule {
     pub fn constant_pixmap_over_area<T: Eq + Copy>(
         map: &Pixmap<T>,
         area: impl IntoIterator<Item = Pixel>,
-    ) -> anyhow::Result<Option<T>> {
+    ) -> Result<Option<T>, CompileError> {
         let Ok(constant) = area
             .into_iter()
             .filter_map(|pixel| map.get(pixel))
             .dedup()
             .at_most_one()
         else {
-            anyhow::bail!("map not constant over given region");
+            return Err(CompileError::new("map not constant over given region"));
         };
         Ok(constant)
     }
@@ -166,7 +167,7 @@ impl Rule {
     pub fn constant_material_map_over_region(
         material_map: &MaterialMap,
         region: &Region,
-    ) -> anyhow::Result<Option<Material>> {
+    ) -> Result<Option<Material>, CompileError> {
         let area = region.boundary.interior_area();
         Self::constant_pixmap_over_area(material_map, area)
     }
@@ -199,7 +200,7 @@ impl Rule {
     fn extract_draw_region_operations(
         before_material_map: &MaterialMap,
         after_material_map: &mut MaterialMap,
-    ) -> anyhow::Result<Vec<DrawRegion>> {
+    ) -> Result<Vec<DrawRegion>, CompileError> {
         // Create one DrawRegion operation for each solid region in after_solid_region_map
         let mut draws = Vec::new();
 
@@ -209,9 +210,9 @@ impl Rule {
             let Some(anchor_region_key) =
                 Self::constant_pixmap_over_area(&before_solid_map, area.iter().copied())?
             else {
-                anyhow::bail!(
-                    "Each after side solid region must overlap a solid region in the before side"
-                );
+                return Err(CompileError::new(
+                    "Each after side solid region must overlap a solid region in the before side",
+                ));
             };
 
             let top_left = anchor_region_key.left_pixel;
@@ -236,7 +237,7 @@ impl Rule {
     }
 
     #[inline(never)]
-    pub fn new(before: Pattern, mut after_material_map: MaterialMap) -> anyhow::Result<Self> {
+    pub fn new(before: Pattern, mut after_material_map: MaterialMap) -> Result<Self, CompileError> {
         // Compute draw operations to be applied
 
         let draws =
