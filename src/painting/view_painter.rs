@@ -3,13 +3,14 @@ use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
     field::RgbaField,
+    material::Material,
     material_effects::{CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA, material_map_effects},
     math::{rect::Rect, rgba8::Rgba8},
     painting::{
         checkerboard_painter::CheckerboardPainter, line_painter::LinePainter,
         material_map_painter::RgbaFieldPainter,
     },
-    view::{EditMode, SelectingKind, UiState, View, ViewInput, ViewSettings},
+    view::{DraggingKind, EditMode, UiState, View, ViewInput, ViewSettings},
 };
 use std::sync::{Arc, RwLock};
 
@@ -22,6 +23,7 @@ pub struct DrawView {
     // TODO: Can we use world_rgba_field for this?
     selection_rgba_field: Option<Arc<RgbaField>>,
     brush_preview: Option<RgbaField>,
+    overlay_rgba_field: Option<RgbaField>,
     ui_state: UiState,
     grid_size: Option<i64>,
 }
@@ -50,12 +52,18 @@ impl DrawView {
             None
         };
 
+        // TODO: Currently without effects
+        let overlay_rgba_field = view
+            .overlay(view_settings)
+            .map(|material_map| material_map.to_rgba_field(Material::TRANSPARENT));
+
         Self {
             ui_state: view.ui_state.clone(),
             camera: view.camera,
             grid_size: view.grid_size,
             world_rgba_field,
             selection_rgba_field,
+            overlay_rgba_field,
             brush_preview,
             frames,
             time,
@@ -69,6 +77,7 @@ pub struct ViewPainter {
     pub line_painter: LinePainter,
     pub world_painter: RgbaFieldPainter,
     pub brush_preview_painter: RgbaFieldPainter,
+    pub overlay_painter: RgbaFieldPainter,
     pub selection_painter: RgbaFieldPainter,
 
     pub i_frame: usize,
@@ -82,6 +91,7 @@ impl ViewPainter {
             line_painter: LinePainter::new(gl),
             world_painter: RgbaFieldPainter::new(gl),
             brush_preview_painter: RgbaFieldPainter::new(gl),
+            overlay_painter: RgbaFieldPainter::new(gl),
             selection_painter: RgbaFieldPainter::new(gl),
             i_frame: 0,
         }
@@ -144,9 +154,14 @@ impl ViewPainter {
             }
         }
 
+        if let Some(overlay_rgba_field) = &draw.overlay_rgba_field {
+            self.overlay_painter
+                .draw(gl, &overlay_rgba_field, world_to_device);
+        }
+
         // Draw selection rectangle currently being drawn
-        if let UiState::SelectingRect(selecting) = &draw.ui_state {
-            if selecting.kind == SelectingKind::Rect {
+        if let UiState::Dragging(selecting) = &draw.ui_state {
+            if selecting.kind == DraggingKind::SelectRect {
                 self.draw_selection_outline(
                     gl,
                     selecting.rect(),

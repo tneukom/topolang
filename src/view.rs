@@ -64,6 +64,8 @@ pub enum EditMode {
     SelectRect,
     SelectWand,
     PickColor,
+    DrawRect,
+    DrawLine,
 }
 
 impl EditMode {
@@ -75,16 +77,20 @@ impl EditMode {
             Self::SelectRect => "Select Rect",
             Self::SelectWand => "Select Wand",
             Self::PickColor => "Pick Color",
+            Self::DrawRect => "Draw Rect",
+            Self::DrawLine => "Draw Line",
         }
     }
 
-    pub const ALL: [EditMode; 6] = [
+    pub const ALL: [EditMode; 8] = [
         Self::Brush,
         Self::Eraser,
         Self::Fill,
         Self::SelectRect,
         Self::SelectWand,
         Self::PickColor,
+        Self::DrawRect,
+        Self::DrawLine,
     ];
 
     pub fn is_select(self) -> bool {
@@ -113,14 +119,16 @@ pub struct Brushing {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SelectingKind {
-    Rect,
-    Wand,
+pub enum DraggingKind {
+    SelectRect,
+    SelectWand,
+    DrawRect,
+    DrawLine,
 }
 
 #[derive(Debug, Clone)]
-pub struct Selecting {
-    pub kind: SelectingKind,
+pub struct Dragging {
+    pub kind: DraggingKind,
 
     pub world_start: Point<f64>,
     pub world_stop: Point<f64>,
@@ -134,10 +142,43 @@ pub struct MovingSelection {
     pub previous: Point<i64>,
 }
 
-impl Selecting {
+impl Dragging {
     pub fn rect(&self) -> Rect<i64> {
         // end can be smaller than start, so we take the bounds of both points
         Rect::index_bounds([self.world_start.as_i64(), self.world_stop.as_i64()])
+    }
+
+    pub fn draw(&self, view_settings: &ViewSettings) -> Option<MaterialMap> {
+        match &self.kind {
+            DraggingKind::DrawRect => {
+                let bounds = self.rect();
+                let mut material_map = MaterialMap::nones(bounds);
+                // Top and bottom lines
+                for x in bounds.left()..bounds.right() {
+                    material_map.set([x, bounds.top()], view_settings.brush.material);
+                    material_map.set([x, bounds.bottom() - 1], view_settings.brush.material);
+                }
+                // Left and right lines
+                for y in bounds.top()..bounds.bottom() {
+                    material_map.set([bounds.left(), y], view_settings.brush.material);
+                    material_map.set([bounds.right() - 1, y], view_settings.brush.material);
+                }
+
+                Some(material_map)
+            }
+            DraggingKind::DrawLine => {
+                let bounds = self.rect();
+                let padded_bounds = bounds.padded(view_settings.brush.size);
+                let mut material_map = MaterialMap::nones(padded_bounds);
+                let arrow = Arrow::new(self.world_start, self.world_stop);
+                for (pixel, material) in view_settings.brush.draw_line(arrow) {
+                    material_map.set(pixel, material);
+                }
+
+                Some(material_map)
+            }
+            _ => None,
+        }
     }
 }
 
@@ -145,7 +186,7 @@ impl Selecting {
 pub enum UiState {
     MoveCamera(MoveCamera),
     Brushing(Brushing),
-    SelectingRect(Selecting),
+    Dragging(Dragging),
     MovingSelection(MovingSelection),
     Idle,
 }
@@ -316,25 +357,33 @@ impl View {
         UiState::Brushing(op)
     }
 
-    pub fn handle_selecting(
+    pub fn handle_dragging(
         &mut self,
-        mut op: Selecting,
+        mut op: Dragging,
         input: &ViewInput,
-        _settings: &ViewSettings,
+        view_settings: &ViewSettings,
     ) -> UiState {
         if !input.left_mouse_down {
-            self.cancel_selection();
+            if let Some(draw) = op.draw(view_settings) {
+                self.world.blit(&draw);
+                self.add_snapshot(SnapshotCause::Brush);
+            }
 
-            let selection = match op.kind {
-                SelectingKind::Rect => {
+            match op.kind {
+                DraggingKind::SelectRect => {
+                    self.cancel_selection();
+
                     if op.view_start.distance(op.view_stop) < 5.0 {
                         self.add_snapshot(SnapshotCause::SelectionCancelled);
                         return UiState::Idle;
                     }
 
-                    self.world.rect_selection(op.rect())
+                    self.selection = Some(self.world.rect_selection(op.rect()));
+                    self.add_snapshot(SnapshotCause::Selected);
                 }
-                SelectingKind::Wand => {
+                DraggingKind::SelectWand => {
+                    self.cancel_selection();
+
                     let pixel: Pixel = input.world_mouse.floor().as_i64();
                     let Some(region_key) = self.world.topology().region_key_at(pixel) else {
                         return UiState::Idle;
@@ -346,19 +395,18 @@ impl View {
                         return UiState::Idle;
                     }
 
-                    self.world.region_selection(region_key)
+                    self.selection = Some(self.world.region_selection(region_key));
+                    self.add_snapshot(SnapshotCause::Selected);
                 }
-            };
-
-            self.selection = Some(selection);
-            self.add_snapshot(SnapshotCause::Selected);
+                _ => {}
+            }
 
             return UiState::Idle;
         }
 
         op.world_stop = input.world_mouse;
         op.view_stop = input.view_mouse;
-        UiState::SelectingRect(op)
+        UiState::Dragging(op)
     }
 
     pub fn handle_moving_selection(
@@ -383,11 +431,11 @@ impl View {
         UiState::MovingSelection(op)
     }
 
-    pub fn begin_selection_action(
+    pub fn begin_dragging_action(
         &mut self,
         input: &ViewInput,
         settings: &ViewSettings,
-        kind: SelectingKind,
+        kind: DraggingKind,
     ) -> UiState {
         // If mouse is inside the current selecting we enter the MoveSelection move.
         if let Some(selection) = &self.selection {
@@ -404,14 +452,14 @@ impl View {
         }
 
         // Otherwise we start drawing a new selection rectangle.
-        let op = Selecting {
+        let op = Dragging {
             kind,
             world_start: input.world_mouse,
             world_stop: input.world_mouse,
             view_start: input.view_mouse,
             view_stop: input.view_mouse,
         };
-        self.handle_selecting(op, input, settings)
+        self.handle_dragging(op, input, settings)
     }
 
     /// Transition from None state
@@ -450,12 +498,22 @@ impl View {
             }
             EditMode::SelectRect => {
                 if input.left_mouse_down {
-                    return self.begin_selection_action(input, settings, SelectingKind::Rect);
+                    return self.begin_dragging_action(input, settings, DraggingKind::SelectRect);
                 }
             }
             EditMode::SelectWand => {
                 if input.left_mouse_down {
-                    return self.begin_selection_action(input, settings, SelectingKind::Wand);
+                    return self.begin_dragging_action(input, settings, DraggingKind::SelectWand);
+                }
+            }
+            EditMode::DrawRect => {
+                if input.left_mouse_down {
+                    return self.begin_dragging_action(input, settings, DraggingKind::DrawRect);
+                }
+            }
+            EditMode::DrawLine => {
+                if input.left_mouse_down {
+                    return self.begin_dragging_action(input, settings, DraggingKind::DrawLine);
                 }
             }
             EditMode::PickColor => {
@@ -507,7 +565,7 @@ impl View {
         self.ui_state = match ui_state {
             UiState::MoveCamera(op) => self.handle_moving_camera(op, input, settings),
             UiState::Brushing(op) => self.handle_brushing(op, input, settings),
-            UiState::SelectingRect(op) => self.handle_selecting(op, input, settings),
+            UiState::Dragging(op) => self.handle_dragging(op, input, settings),
             UiState::MovingSelection(op) => self.handle_moving_selection(op, input, settings),
             UiState::Idle => self.begin_action(input, settings),
         };
@@ -565,5 +623,12 @@ impl View {
         self.world = World::from_material_map(resized);
 
         self.add_snapshot(SnapshotCause::Resized);
+    }
+
+    pub fn overlay(&self, view_settings: &ViewSettings) -> Option<MaterialMap> {
+        match &self.ui_state {
+            UiState::Dragging(dragging) => dragging.draw(view_settings),
+            _ => None,
+        }
     }
 }

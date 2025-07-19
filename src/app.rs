@@ -196,6 +196,8 @@ impl EguiApp {
             EditMode::SelectRect => egui::include_image!("icons/select_rect.png"),
             EditMode::PickColor => egui::include_image!("icons/pick.png"),
             EditMode::SelectWand => egui::include_image!("icons/wand.png"),
+            EditMode::DrawRect => egui::include_image!("icons/rect.png"),
+            EditMode::DrawLine => egui::include_image!("icons/line.png"),
         }
     }
 
