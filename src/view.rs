@@ -625,9 +625,15 @@ impl View {
         self.add_snapshot(SnapshotCause::Resized);
     }
 
-    pub fn overlay(&self, view_settings: &ViewSettings) -> Option<MaterialMap> {
+    pub fn overlay(&self, settings: &ViewSettings, input: &ViewInput) -> Option<MaterialMap> {
+        if settings.edit_mode == EditMode::Brush {
+            let world_mouse = self.camera.view_to_world() * input.view_mouse;
+            let dot = settings.brush.dot(world_mouse);
+            return Some(dot);
+        }
+
         match &self.ui_state {
-            UiState::Dragging(dragging) => dragging.draw(view_settings),
+            UiState::Dragging(dragging) => dragging.draw(settings),
             _ => None,
         }
     }

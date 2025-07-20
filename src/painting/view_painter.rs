@@ -4,13 +4,13 @@ use crate::{
     coordinate_frame::CoordinateFrames,
     field::RgbaField,
     material::Material,
-    material_effects::{CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA, material_map_effects},
-    math::{rect::Rect, rgba8::Rgba8},
+    material_effects::{CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
+    math::rect::Rect,
     painting::{
         checkerboard_painter::CheckerboardPainter, line_painter::LinePainter,
         material_map_painter::RgbaFieldPainter,
     },
-    view::{DraggingKind, EditMode, UiState, View, ViewInput, ViewSettings},
+    view::{DraggingKind, UiState, View, ViewInput, ViewSettings},
 };
 use std::sync::{Arc, RwLock};
 
@@ -21,9 +21,7 @@ pub struct DrawView {
     time: f64,
     world_rgba_field: Arc<RwLock<RgbaField>>,
     world_rgba_expired: Rect<i64>,
-    // TODO: Can we use world_rgba_field for this?
     selection_rgba_field: Option<Arc<RgbaField>>,
-    brush_preview: Option<RgbaField>,
     overlay_rgba_field: Option<RgbaField>,
     ui_state: UiState,
     grid_size: Option<i64>,
@@ -44,18 +42,9 @@ impl DrawView {
             .as_ref()
             .map(|selection| selection.rgba_field().clone());
 
-        let brush_preview = if view_settings.edit_mode == EditMode::Brush {
-            let world_mouse = view.camera.view_to_world() * view_input.view_mouse;
-            let dot = view_settings.brush.dot(world_mouse);
-            let rgba_field = material_map_effects(&dot, Rgba8::TRANSPARENT);
-            Some(rgba_field)
-        } else {
-            None
-        };
-
         // TODO: Currently without effects
         let overlay_rgba_field = view
-            .overlay(view_settings)
+            .overlay(view_settings, view_input)
             .map(|material_map| material_map.to_rgba_field(Material::TRANSPARENT));
 
         Self {
@@ -66,7 +55,6 @@ impl DrawView {
             selection_rgba_field,
             overlay_rgba_field,
             world_rgba_expired,
-            brush_preview,
             frames,
             time,
         }
@@ -78,7 +66,6 @@ pub struct ViewPainter {
     pub grid_painter: GridPainter,
     pub line_painter: LinePainter,
     pub world_painter: RgbaFieldPainter,
-    pub brush_preview_painter: RgbaFieldPainter,
     pub overlay_painter: RgbaFieldPainter,
     pub selection_painter: RgbaFieldPainter,
 
@@ -92,7 +79,6 @@ impl ViewPainter {
             grid_painter: GridPainter::new(gl),
             line_painter: LinePainter::new(gl),
             world_painter: RgbaFieldPainter::new(gl),
-            brush_preview_painter: RgbaFieldPainter::new(gl),
             overlay_painter: RgbaFieldPainter::new(gl),
             selection_painter: RgbaFieldPainter::new(gl),
             i_frame: 0,
@@ -184,16 +170,6 @@ impl ViewPainter {
                     draw.time,
                 );
             }
-        }
-
-        // Draw brush preview
-        if let Some(brush_preview) = &draw.brush_preview {
-            self.brush_preview_painter.draw(
-                gl,
-                brush_preview,
-                brush_preview.bounds(),
-                world_to_device,
-            );
         }
 
         // Grid in the background
