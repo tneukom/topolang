@@ -20,6 +20,7 @@ pub struct DrawView {
     frames: CoordinateFrames,
     time: f64,
     world_rgba_field: Arc<RwLock<RgbaField>>,
+    world_rgba_expired: Rect<i64>,
     // TODO: Can we use world_rgba_field for this?
     selection_rgba_field: Option<Arc<RgbaField>>,
     brush_preview: Option<RgbaField>,
@@ -36,7 +37,7 @@ impl DrawView {
         frames: CoordinateFrames,
         time: f64,
     ) -> Self {
-        let world_rgba_field = view.world.fresh_rgba_field();
+        let (world_rgba_field, world_rgba_expired) = view.world.fresh_rgba_field();
 
         let selection_rgba_field = view
             .selection
@@ -64,6 +65,7 @@ impl DrawView {
             world_rgba_field,
             selection_rgba_field,
             overlay_rgba_field,
+            world_rgba_expired,
             brush_preview,
             frames,
             time,
@@ -126,8 +128,12 @@ impl ViewPainter {
             &draw.camera,
         );
 
-        self.world_painter
-            .draw(gl, &read_world_rgba_field, world_to_device);
+        self.world_painter.draw(
+            gl,
+            &read_world_rgba_field,
+            draw.world_rgba_expired,
+            world_to_device,
+        );
 
         // Draw a rectangle around the scene
         self.draw_selection_outline(
@@ -141,8 +147,12 @@ impl ViewPainter {
         // Draw selection rectangle and content
         if let Some(selection_rgba_field) = &draw.selection_rgba_field {
             if !selection_rgba_field.is_empty() {
-                self.selection_painter
-                    .draw(gl, &selection_rgba_field, world_to_device);
+                self.selection_painter.draw(
+                    gl,
+                    &selection_rgba_field,
+                    selection_rgba_field.bounds(),
+                    world_to_device,
+                );
 
                 self.draw_selection_outline(
                     gl,
@@ -155,8 +165,12 @@ impl ViewPainter {
         }
 
         if let Some(overlay_rgba_field) = &draw.overlay_rgba_field {
-            self.overlay_painter
-                .draw(gl, &overlay_rgba_field, world_to_device);
+            self.overlay_painter.draw(
+                gl,
+                &overlay_rgba_field,
+                overlay_rgba_field.bounds(),
+                world_to_device,
+            );
         }
 
         // Draw selection rectangle currently being drawn
@@ -174,8 +188,12 @@ impl ViewPainter {
 
         // Draw brush preview
         if let Some(brush_preview) = &draw.brush_preview {
-            self.brush_preview_painter
-                .draw(gl, brush_preview, world_to_device);
+            self.brush_preview_painter.draw(
+                gl,
+                brush_preview,
+                brush_preview.bounds(),
+                world_to_device,
+            );
         }
 
         // Grid in the background

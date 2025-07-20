@@ -18,7 +18,7 @@ struct CachedRgbaField {
     rgba_field: Arc<RwLock<RgbaField>>,
 
     /// Where `rgba_field` is not fresh anymore and needs to be recomputed.
-    expired_rgba_field: Cell<Rect<i64>>,
+    expired_bounds: Cell<Rect<i64>>,
 }
 
 impl CachedRgbaField {
@@ -26,23 +26,24 @@ impl CachedRgbaField {
         let rgba_field = RgbaField::filled(bounds, Rgba8::TRANSPARENT);
         Self {
             rgba_field: Arc::new(RwLock::new(rgba_field)),
-            expired_rgba_field: Cell::new(bounds),
+            expired_bounds: Cell::new(bounds),
         }
     }
 
     fn expire_rgba_rect(&self, rect: Rect<i64>) {
-        let expanded = self.expired_rgba_field.get().bounds_with_rect(rect);
-        self.expired_rgba_field.set(expanded);
+        let expanded = self.expired_bounds.get().bounds_with_rect(rect);
+        self.expired_bounds.set(expanded);
     }
 
     /// Recomputes stale areas of rgba_field, so can be expensive
-    fn fresh_rgba_field(&self, material_map: &MaterialMap) -> Arc<RwLock<RgbaField>> {
-        if !self.expired_rgba_field.get().is_empty() {
+    fn fresh_rgba_field(&self, material_map: &MaterialMap) -> (Arc<RwLock<RgbaField>>, Rect<i64>) {
+        let expired_bounds = self.expired_bounds.get();
+        if !expired_bounds.is_empty() {
             let mut write_rgba_field = self.rgba_field.write().unwrap();
             paint_material_map_effects(material_map, &mut write_rgba_field);
-            self.expired_rgba_field.set(Rect::EMPTY);
+            self.expired_bounds.set(Rect::EMPTY);
         }
-        self.rgba_field.clone()
+        (self.rgba_field.clone(), expired_bounds)
     }
 }
 
@@ -172,7 +173,7 @@ impl World {
     }
 
     /// Recomputes stale areas of rgba_field, so can be expensive
-    pub fn fresh_rgba_field(&self) -> Arc<RwLock<RgbaField>> {
+    pub fn fresh_rgba_field(&self) -> (Arc<RwLock<RgbaField>>, Rect<i64>) {
         self.rgba_field.fresh_rgba_field(&self.material_map)
     }
 

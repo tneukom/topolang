@@ -78,8 +78,11 @@ impl RgbaFieldPainter {
         &mut self,
         gl: &glow::Context,
         rgba_field: &RgbaField,
+        mut expired: Rect<i64>,
         world_to_device: AffineMap<f64>,
     ) {
+        expired = expired.intersect(rgba_field.bounds());
+
         if !rgba_field.bounds().has_positive_area() {
             println!("Trying to draw empty field.");
             return;
@@ -92,10 +95,12 @@ impl RgbaFieldPainter {
                 self.texture.height.max(rgba_field.height()),
             );
             self.texture = Self::transparent_texture(gl, texture_size);
+            expired = rgba_field.bounds();
         }
 
-        // Upload texture data
-        self.texture.texture_sub_image(gl, Point::ZERO, &rgba_field);
+        // We only need to update the expired part of the image
+        self.texture
+            .texture_sub_image(gl, expired, expired - rgba_field.low(), &rgba_field);
 
         let texture_rect = Rect::low_size(Point::ZERO, rgba_field.size());
         let rect = texture_rect + rgba_field.bounds().low();

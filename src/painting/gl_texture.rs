@@ -1,6 +1,6 @@
 use crate::{
     field::{Field, RgbaField},
-    math::{affine_map::AffineMap, point::Point, rgba8::Rgba8},
+    math::{affine_map::AffineMap, point::Point, rect::Rect, rgba8::Rgba8},
 };
 use glow::{HasContext, PixelUnpackData};
 use log::warn;
@@ -73,24 +73,34 @@ impl GlTexture {
     pub unsafe fn texture_sub_image(
         &mut self,
         gl: &glow::Context,
-        offset: Point<i64>,
+        bitmap_rect: Rect<i64>,
+        texture_rect: Rect<i64>,
         field: &Field<Rgba8>,
     ) {
-        let bitmap_bytes = field.linear_slice().align_to::<u8>().1;
+        assert_eq!(bitmap_rect.size(), texture_rect.size());
+        if bitmap_rect.is_empty() {
+            return;
+        }
+        assert!(field.bounds().contains_rect(bitmap_rect));
+
+        let bitmap_offset = field.linear_index(bitmap_rect.top_left()).unwrap();
+        let bitmap_bytes = field.linear_slice()[bitmap_offset..].align_to::<u8>().1;
 
         gl.active_texture(glow::TEXTURE0);
         gl.bind_texture(glow::TEXTURE_2D, Some(self.id));
+        gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, field.width() as i32);
         gl.tex_sub_image_2d(
             glow::TEXTURE_2D,
             0,
-            offset.x as i32,
-            offset.y as i32,
-            field.width() as i32,
-            field.height() as i32,
+            texture_rect.left() as i32,
+            texture_rect.top() as i32,
+            texture_rect.width() as i32,
+            texture_rect.height() as i32,
             glow::RGBA,
             glow::UNSIGNED_BYTE,
             PixelUnpackData::Slice(Some(bitmap_bytes)),
         );
+        gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, 0);
     }
 
     /// Affine map from bitmap coordinates (0,0 at top left) to Gltexture coordinates.
