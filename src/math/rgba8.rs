@@ -39,6 +39,10 @@ impl Rgb<u8> {
         )
     }
 
+    pub fn invert(self) -> Self {
+        Rgb::new(!self.r, !self.g, !self.b)
+    }
+
     pub const ZERO: Self = Rgb(0x00, 0x00, 0x00);
     pub const BLACK: Self = Rgb(0x00, 0x00, 0x00);
     pub const WHITE: Self = Rgb(0xFF, 0xFF, 0xFF);

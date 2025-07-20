@@ -632,6 +632,22 @@ impl View {
             return Some(dot);
         }
 
+        if settings.edit_mode == EditMode::Eraser {
+            let world_mouse = self.camera.view_to_world() * input.view_mouse;
+            let mut dot = settings.brush.dot(world_mouse);
+            // Invert world colors
+            // TODO: Looks ugly, something like Aseprite would look much better!
+            let world_material_map = self.world.material_map();
+            for (pixel, material) in dot.iter_mut() {
+                *material = if let Some(world_material) = world_material_map.get(pixel) {
+                    Material::normal(world_material.to_rgba().rgb().invert())
+                } else {
+                    Material::BLACK
+                };
+            }
+            return Some(dot);
+        }
+
         match &self.ui_state {
             UiState::Dragging(dragging) => dragging.draw(settings),
             _ => None,
