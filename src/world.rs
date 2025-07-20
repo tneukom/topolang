@@ -31,7 +31,9 @@ impl CachedRgbaField {
     }
 
     fn expire_rgba_rect(&self, rect: Rect<i64>) {
-        let expanded = self.expired_bounds.get().bounds_with_rect(rect);
+        // Some effects (before, after material) depend on neighboring pixels.
+        let padded = rect.padded(1);
+        let expanded = self.expired_bounds.get().bounds_with_rect(padded);
         self.expired_bounds.set(expanded);
     }
 
