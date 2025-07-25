@@ -79,7 +79,9 @@ impl RgbaFieldPainter {
         gl: &glow::Context,
         rgba_field: &RgbaField,
         mut expired: Rect<i64>,
-        world_to_device: AffineMap<f64>,
+        world_to_view: AffineMap<f64>,
+        view_to_device: AffineMap<f64>,
+        time: f64,
     ) {
         expired = expired.intersect(rgba_field.bounds());
 
@@ -123,6 +125,7 @@ impl RgbaFieldPainter {
         // Update uniforms
         self.shader.uniform(gl, "material_texture", glow::TEXTURE0);
 
+        let world_to_device = view_to_device * world_to_view;
         let mat_world_to_device = Matrix3::from(world_to_device);
         self.shader
             .uniform(gl, "world_to_device", &mat_world_to_device);
@@ -131,6 +134,16 @@ impl RgbaFieldPainter {
         let mat_bitmap_to_gltexture = Matrix3::from(bitmap_to_gltexture);
         self.shader
             .uniform(gl, "bitmap_to_gltexture", &mat_bitmap_to_gltexture);
+
+        // World coordinates are same bitmap coordinates
+        let view_to_gltexture = bitmap_to_gltexture * world_to_view.inv();
+        let mat_view_to_gltexture = Matrix3::from(view_to_gltexture);
+        // self.shader
+        //     .uniform(gl, "view_to_gltexture", &mat_bitmap_to_gltexture);
+        self.shader
+            .uniform(gl, "view_to_gltexture", &mat_view_to_gltexture);
+
+        self.shader.uniform(gl, "time", time);
 
         // Paint 2 triangles
         gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);

@@ -99,6 +99,7 @@ impl ViewPainter {
     }
 
     pub unsafe fn draw_view(&mut self, gl: &glow::Context, draw: &DrawView) {
+        // let world_to_view = draw.frames.
         let world_to_device = draw.frames.view_to_device() * draw.camera.world_to_view();
         let read_world_rgba_field = draw.world_rgba_field.read().unwrap();
 
@@ -118,7 +119,9 @@ impl ViewPainter {
             gl,
             &read_world_rgba_field,
             draw.world_rgba_expired,
-            world_to_device,
+            draw.camera.world_to_view(),
+            draw.frames.view_to_device(),
+            draw.time,
         );
 
         // Draw a rectangle around the scene
@@ -137,7 +140,9 @@ impl ViewPainter {
                     gl,
                     &selection_rgba_field,
                     selection_rgba_field.bounds(),
-                    world_to_device,
+                    draw.camera.world_to_view(),
+                    draw.frames.view_to_device(),
+                    draw.time,
                 );
 
                 self.draw_selection_outline(
@@ -155,7 +160,9 @@ impl ViewPainter {
                 gl,
                 &overlay_rgba_field,
                 overlay_rgba_field.bounds(),
-                world_to_device,
+                draw.camera.world_to_view(),
+                draw.frames.view_to_device(),
+                draw.time,
             );
         }
 

@@ -194,21 +194,21 @@ impl Material {
         Rgba8::from_rgb_a(self.rgb, Self::SOLID_MAIN_ALPHA)
     }
 
-    pub fn solid_alt_rgba(self) -> Rgba8 {
-        let Rgb { r, g, b } = self.rgb;
-
-        if r >= 128 || g >= 128 || b >= 128 {
-            // darken color
-            let alpha_offset = (r & 1) | (g & 1) << 1 | (b & 1) << 2;
-            let alpha = Self::SOLID_DARKEN_ALPHA_RANGE.start + alpha_offset;
-            assert!(Self::SOLID_DARKEN_ALPHA_RANGE.contains(&alpha));
-            let darkened_rgb = Rgb(r >> 1, g >> 1, b >> 1);
-            Rgba8::from_rgb_a(darkened_rgb, alpha)
-        } else {
-            let lightened_rgb = Rgb(r << 1, g << 1, b << 1);
-            Rgba8::from_rgb_a(lightened_rgb, Self::SOLID_LIGHTEN_ALPHA)
-        }
-    }
+    // pub fn solid_alt_rgba(self) -> Rgba8 {
+    //     let Rgb { r, g, b } = self.rgb;
+    //
+    //     if r >= 128 || g >= 128 || b >= 128 {
+    //         // darken color
+    //         let alpha_offset = (r & 1) | (g & 1) << 1 | (b & 1) << 2;
+    //         let alpha = Self::SOLID_DARKEN_ALPHA_RANGE.start + alpha_offset;
+    //         assert!(Self::SOLID_DARKEN_ALPHA_RANGE.contains(&alpha));
+    //         let darkened_rgb = Rgb(r >> 1, g >> 1, b >> 1);
+    //         Rgba8::from_rgb_a(darkened_rgb, alpha)
+    //     } else {
+    //         let lightened_rgb = Rgb(r << 1, g << 1, b << 1);
+    //         Rgba8::from_rgb_a(lightened_rgb, Self::SOLID_LIGHTEN_ALPHA)
+    //     }
+    // }
 
     /// Convert to Rgba8 without applying any effects
     pub fn to_rgba(self) -> Rgba8 {

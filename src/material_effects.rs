@@ -185,14 +185,7 @@ pub fn material_effect(material_map: &MaterialMap, pixel: Point<i64>) -> Rgba8 {
     let material = material_map.get(pixel).unwrap();
 
     match material.class {
-        MaterialClass::Solid => {
-            // alternating lines effect
-            if pixel.y % 2 == 0 {
-                material.solid_main_rgba()
-            } else {
-                material.solid_alt_rgba()
-            }
-        }
+        MaterialClass::Solid => Rgba8::from_rgb_a(material.rgb, Material::SOLID_MAIN_ALPHA),
         MaterialClass::Rule => rule_effect(material_map, pixel, material),
         MaterialClass::Wildcard => {
             // alternating diagonal lines effect
@@ -200,7 +193,7 @@ pub fn material_effect(material_map: &MaterialMap, pixel: Point<i64>) -> Rgba8 {
             let rgb = Material::WILDCARD_RAINBOW_RGB[k as usize];
             Rgba8::from_rgb_a(rgb, Material::WILDCARD_ALPHA)
         }
-        MaterialClass::Sleeping => sleep_effect(pixel, material.rgb),
+        MaterialClass::Sleeping => Rgba8::from_rgb_a(material.rgb, Material::SLEEPING_ALPHA),
         _ => material.to_rgba(),
     }
 }
