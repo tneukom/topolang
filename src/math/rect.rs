@@ -105,8 +105,6 @@ impl<T: Copy> Rect<T> {
     pub fn point(p: Point<T>) -> Self {
         Self::new(Interval::point(p.x), Interval::point(p.y))
     }
-
-    pub const TRIANGLE_INDICES: [u32; 6] = [0, 1, 2, 0, 2, 3];
 }
 
 impl<T: Num> Rect<T> {

@@ -7,7 +7,7 @@ use crate::{
 };
 use ahash::HashSet;
 use itertools::Itertools;
-use std::{collections::BTreeSet, hash::Hash};
+use std::hash::Hash;
 
 pub fn iter_pixmap_sides<T: Copy>(
     pixmap: &Pixmap<T>,
@@ -18,20 +18,6 @@ pub fn iter_pixmap_sides<T: Copy>(
             (side, left, right)
         })
     })
-}
-
-#[inline(never)]
-pub fn region_boundaries(region_map: &Pixmap<usize>, n_regions: usize) -> Vec<BTreeSet<Side>> {
-    let mut boundaries = vec![BTreeSet::new(); n_regions];
-
-    for (side, left, right) in iter_pixmap_sides(region_map) {
-        let boundary = &mut boundaries[left];
-        if Some(left) != right {
-            boundary.insert(side);
-        }
-    }
-
-    boundaries
 }
 
 fn pop_arbitrary<T: Eq + Hash + Copy>(set: &mut HashSet<T>) -> Option<T> {

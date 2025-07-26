@@ -40,6 +40,18 @@ impl VertexAttribDesc {
         utype: glow::UNSIGNED_SHORT,
         normalized: false,
     };
+
+    pub const U32: VertexAttribDesc = VertexAttribDesc {
+        components: 1,
+        utype: glow::UNSIGNED_INT,
+        normalized: false,
+    };
+
+    pub const I32: VertexAttribDesc = VertexAttribDesc {
+        components: 1,
+        utype: glow::INT,
+        normalized: false,
+    };
 }
 
 pub struct Shader {
@@ -65,7 +77,13 @@ impl Shader {
             let success = gl.get_shader_compile_status(shader);
             if !success {
                 let info_log = gl.get_shader_info_log(shader);
-                panic!("Error compiling shader: {}", info_log);
+                let shader_type_str = match shader_type {
+                    glow::VERTEX_SHADER => "vertex shader",
+                    glow::FRAGMENT_SHADER => "fragment shader",
+                    glow::GEOMETRY_SHADER => "geometry shader",
+                    _ => "unknown shader",
+                };
+                panic!("Error compiling {shader_type_str}: {}", info_log);
             }
             shader
         }
@@ -122,12 +140,9 @@ impl Shader {
         }
     }
 
-    pub unsafe fn attribute_location(&self, gl: &glow::Context, name: &str) -> u32 {
-        let active_attribute = &self.attributes[name];
-        let location = gl
-            .get_attrib_location(self.program, &active_attribute.name)
-            .expect("Failed to get attribute location");
-        location
+    pub unsafe fn attribute_location(&self, gl: &glow::Context, name: &str) -> Option<u32> {
+        let active_attribute = self.attributes.get(name)?;
+        gl.get_attrib_location(self.program, &active_attribute.name)
     }
 
     pub unsafe fn assign_attribute_f32(
@@ -138,7 +153,10 @@ impl Shader {
         offset: i32,
         stride: i32,
     ) {
-        let location = self.attribute_location(gl, name);
+        let Some(location) = self.attribute_location(gl, name) else {
+            warn!("Attribute location for {name} not found.");
+            return;
+        };
 
         gl.enable_vertex_attrib_array(location);
         gl.vertex_attrib_pointer_f32(
@@ -159,7 +177,10 @@ impl Shader {
         offset: i32,
         stride: i32,
     ) {
-        let location = self.attribute_location(gl, name);
+        let Some(location) = self.attribute_location(gl, name) else {
+            warn!("Attribute location for {name} not found.");
+            return;
+        };
 
         gl.enable_vertex_attrib_array(location);
         gl.vertex_attrib_pointer_i32(location, desc.components, desc.utype, stride, offset);

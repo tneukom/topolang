@@ -18,8 +18,6 @@ pub struct RectVertices {
 }
 
 impl RectVertices {
-    const INDICES_LEN: usize = 6;
-
     pub unsafe fn new(gl: &glow::Context) -> Self {
         let array_buffer = GlBuffer::new(gl, GlBufferTarget::ArrayBuffer);
         Self { array_buffer }
@@ -53,3 +51,5 @@ impl RectVertices {
         self.array_buffer.buffer_data(gl, &vertices);
     }
 }
+
+pub const RECT_TRIANGLE_INDICES: [u32; 6] = [0, 1, 2, 0, 2, 3];
