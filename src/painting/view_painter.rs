@@ -3,6 +3,7 @@ use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
     field::RgbaField,
+    frozen::{Frozen, FrozenBoundary},
     material::Material,
     material_effects::{CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
     math::{
@@ -16,11 +17,8 @@ use crate::{
         material_map_painter::RgbaFieldPainter,
         nice_line_painter::{NiceLineGeometry, NiceLinePainter},
     },
-    regions::split_boundary_into_cycles,
-    topology::Topology,
     view::{DraggingKind, UiState, View, ViewInput, ViewSettings},
 };
-use ahash::HashSet;
 use std::sync::{Arc, RwLock};
 
 /// What is necessary to paint the view
@@ -32,7 +30,7 @@ pub struct DrawView {
     world_rgba_expired: Rect<i64>,
     selection_rgba_field: Option<Arc<RgbaField>>,
     overlay_rgba_field: Option<RgbaField>,
-    solid_outline: NiceLineGeometry,
+    solid_boundary: FrozenBoundary,
     ui_state: UiState,
     grid_size: Option<i64>,
 }
@@ -57,8 +55,6 @@ impl DrawView {
             .overlay(view_settings, view_input)
             .map(|material_map| material_map.to_rgba_field(Material::TRANSPARENT));
 
-        let solid_outline = Self::solid_outline(view.world.topology());
-
         Self {
             ui_state: view.ui_state.clone(),
             camera: view.camera,
@@ -67,58 +63,10 @@ impl DrawView {
             selection_rgba_field,
             overlay_rgba_field,
             world_rgba_expired,
-            solid_outline,
+            solid_boundary: view.world.solid_boundary(),
             frames,
             time,
         }
-    }
-
-    /// Sides where left is solid and right is not.
-    fn solid_boundary_sides(topology: &Topology) -> HashSet<Side> {
-        let mut sides = HashSet::default();
-        for region in topology.regions.values() {
-            if region.material.is_solid() {
-                for side in region.boundary.iter_sides() {
-                    // side cancels out side.reverse()
-                    if !sides.remove(&side.reversed()) {
-                        sides.insert(side);
-                    }
-                }
-            }
-        }
-        sides
-    }
-
-    /// BottomRight and TopLeft sides are discarded
-    fn solid_boundary_cycles(topology: &Topology) -> Vec<Vec<Side>> {
-        let sides = Self::solid_boundary_sides(topology);
-        split_boundary_into_cycles(sides)
-    }
-
-    fn polyline_from_cycle(cycle: &[Side]) -> impl Iterator<Item = Point<i64>> {
-        cycle.iter().filter_map(|side| match side.name {
-            SideName::Left => Some(side.left_pixel),
-            SideName::Bottom => Some(side.left_pixel + Point(0, 1)),
-            SideName::BottomRight => None,
-            SideName::Right => Some(side.left_pixel + Point(1, 1)),
-            SideName::Top => Some(side.left_pixel + Point(1, 0)),
-            SideName::TopLeft => None,
-        })
-    }
-
-    fn solid_outline(topology: &Topology) -> NiceLineGeometry {
-        let mut geometry = NiceLineGeometry::default();
-
-        for cycle in Self::solid_boundary_cycles(topology) {
-            // TODO: Should be possible without collecting, problem is circular_tuple_windows in
-            //   add_polyline requires Clone trait on iterator
-            let polyline: Vec<_> = Self::polyline_from_cycle(&cycle)
-                .map(Point::as_f32)
-                .collect();
-            geometry.add_polyline(&polyline);
-        }
-
-        geometry
     }
 }
 
@@ -130,7 +78,7 @@ pub struct ViewPainter {
     pub overlay_painter: RgbaFieldPainter,
     pub selection_painter: RgbaFieldPainter,
     pub nice_line_painter: NiceLinePainter,
-
+    pub solid_outline: Frozen<NiceLineGeometry>,
     pub i_frame: usize,
 }
 
@@ -144,8 +92,35 @@ impl ViewPainter {
             overlay_painter: RgbaFieldPainter::new(gl),
             selection_painter: RgbaFieldPainter::new(gl),
             nice_line_painter: NiceLinePainter::new(gl),
+            solid_outline: Frozen::invalid(NiceLineGeometry::default()),
             i_frame: 0,
         }
+    }
+
+    fn polyline_from_cycle(cycle: &[Side]) -> impl Iterator<Item = Point<i64>> {
+        cycle.iter().filter_map(|side| match side.name {
+            SideName::Left => Some(side.left_pixel),
+            SideName::Bottom => Some(side.left_pixel + Point(0, 1)),
+            SideName::BottomRight => None,
+            SideName::Right => Some(side.left_pixel + Point(1, 1)),
+            SideName::Top => Some(side.left_pixel + Point(1, 0)),
+            SideName::TopLeft => None,
+        })
+    }
+
+    fn outline(boundary: &Vec<Vec<Side>>) -> NiceLineGeometry {
+        let mut geometry = NiceLineGeometry::default();
+
+        for cycle in boundary {
+            // TODO: Should be possible without collecting, problem is circular_tuple_windows in
+            //   add_polyline requires Clone trait on iterator
+            let polyline: Vec<_> = Self::polyline_from_cycle(&cycle)
+                .map(Point::as_f32)
+                .collect();
+            geometry.add_polyline(&polyline);
+        }
+
+        geometry
     }
 
     pub unsafe fn draw_selection_outline(
@@ -188,9 +163,14 @@ impl ViewPainter {
         );
 
         // Draw solid outline
+        self.solid_outline
+            .update(&draw.solid_boundary, |boundary| Self::outline(boundary));
+
+        // TODO: Vertex buffers only need to be updated if solid_outline has changed.
+        //   NiceLinePainter could store vertex and index buffers as Frozen
         self.nice_line_painter.draw_lines(
             gl,
-            &draw.solid_outline,
+            &self.solid_outline.payload,
             draw.camera.world_to_view(),
             draw.frames.view_to_device(),
             draw.time,

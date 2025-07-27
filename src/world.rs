@@ -1,14 +1,21 @@
 use crate::{
     field::RgbaField,
+    frozen::{Frozen, FrozenBoundary},
     material::Material,
     material_effects::paint_material_map_effects,
-    math::{pixel::Pixel, rect::Rect, rgba8::Rgba8},
+    math::{
+        pixel::{Pixel, Side},
+        rect::Rect,
+        rgba8::Rgba8,
+    },
     pixmap::MaterialMap,
+    regions::split_boundary_into_cycles,
     topology::{RegionKey, Topology},
     view::Selection,
 };
+use ahash::HashSet;
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
     path::Path,
     sync::{Arc, RwLock},
 };
@@ -49,6 +56,28 @@ impl CachedRgbaField {
     }
 }
 
+/// Sides where left is solid and right is not.
+pub fn solid_boundary_sides(topology: &Topology) -> HashSet<Side> {
+    let mut sides = HashSet::default();
+    for region in topology.regions.values() {
+        if region.material.is_solid() {
+            for side in region.boundary.iter_sides() {
+                // side cancels out side.reverse()
+                if !sides.remove(&side.reversed()) {
+                    sides.insert(side);
+                }
+            }
+        }
+    }
+    sides
+}
+
+/// BottomRight and TopLeft sides are discarded
+pub fn solid_boundary_cycles(topology: &Topology) -> Vec<Vec<Side>> {
+    let sides = solid_boundary_sides(topology);
+    split_boundary_into_cycles(sides)
+}
+
 #[derive(Debug, Clone)]
 pub struct World {
     material_map: MaterialMap,
@@ -57,16 +86,17 @@ pub struct World {
     topology: Topology,
 
     rgba_field: CachedRgbaField,
+
+    solid_boundary: RefCell<FrozenBoundary>,
 }
 
 impl World {
     pub fn from_material_map(material_map: MaterialMap) -> Self {
-        let topology = Topology::new(&material_map);
-        let rgba_field = CachedRgbaField::new(material_map.bounding_rect());
         Self {
+            rgba_field: CachedRgbaField::new(material_map.bounding_rect()),
+            topology: Topology::new(&material_map),
+            solid_boundary: RefCell::new(Frozen::invalid(Default::default())),
             material_map,
-            topology,
-            rgba_field,
         }
     }
 
@@ -177,6 +207,12 @@ impl World {
     /// Recomputes stale areas of rgba_field, so can be expensive
     pub fn fresh_rgba_field(&self) -> (Arc<RwLock<RgbaField>>, Rect<i64>) {
         self.rgba_field.fresh_rgba_field(&self.material_map)
+    }
+
+    pub fn solid_boundary(&self) -> FrozenBoundary {
+        let mut solid_boundary = self.solid_boundary.borrow_mut();
+        solid_boundary.update_boundary(&self.topology);
+        solid_boundary.clone()
     }
 
     // pub fn rgba_field(&self) -> &RgbaField {

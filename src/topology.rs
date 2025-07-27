@@ -445,6 +445,8 @@ pub struct Topology {
 
     bounds: Rect<i64>,
 
+    /// Mapping the modification time of each region to the region. Each region is contained
+    /// exactly once!
     modifications: BTreeMap<ModificationTime, RegionKey>,
 }
 
@@ -757,6 +759,7 @@ impl Topology {
             .filter(move |(_, region)| region.material == material)
     }
 
+    /// Modifications after (not including) mtime
     pub fn modifications_after(
         &self,
         mtime: ModificationTime,
@@ -771,6 +774,11 @@ impl Topology {
         mtime: ModificationTime,
     ) -> Option<(ModificationTime, RegionKey)> {
         self.modifications_after(mtime).next()
+    }
+
+    pub fn last_modification(&self) -> Option<(ModificationTime, &RegionKey)> {
+        let (&mtime, region_key) = self.modifications.last_key_value()?;
+        Some((mtime, region_key))
     }
 
     /// Draw the given (pixel, material) pairs. Equivalent to drawing to the underlying MaterialMap
