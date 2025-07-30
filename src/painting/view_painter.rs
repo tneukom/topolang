@@ -3,7 +3,7 @@ use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
     field::RgbaField,
-    frozen::{Frozen, FrozenBoundary},
+    frozen::Frozen,
     material::Material,
     material_effects::{CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
     math::{
@@ -30,7 +30,7 @@ pub struct DrawView {
     world_rgba_expired: Rect<i64>,
     selection_rgba_field: Option<Arc<RgbaField>>,
     overlay_rgba_field: Option<RgbaField>,
-    solid_boundary: FrozenBoundary,
+    // solid_boundary: FrozenBoundary,
     ui_state: UiState,
     grid_size: Option<i64>,
 }
@@ -63,7 +63,7 @@ impl DrawView {
             selection_rgba_field,
             overlay_rgba_field,
             world_rgba_expired,
-            solid_boundary: view.world.solid_boundary(),
+            // solid_boundary: view.world.solid_boundary(),
             frames,
             time,
         }
@@ -138,7 +138,7 @@ impl ViewPainter {
 
     pub unsafe fn draw_view(&mut self, gl: &glow::Context, draw: &DrawView) {
         // let world_to_view = draw.frames.
-        let world_to_device = draw.frames.view_to_device() * draw.camera.world_to_view();
+        // let world_to_device = draw.frames.view_to_device() * draw.camera.world_to_view();
         let read_world_rgba_field = draw.world_rgba_field.read().unwrap();
 
         // Checkerboard pattern in background
@@ -163,18 +163,18 @@ impl ViewPainter {
         );
 
         // Draw solid outline
-        self.solid_outline
-            .update(&draw.solid_boundary, |boundary| Self::outline(boundary));
+        // self.solid_outline
+        //     .update(&draw.solid_boundary, |boundary| Self::outline(boundary));
 
         // TODO: Vertex buffers only need to be updated if solid_outline has changed.
         //   NiceLinePainter could store vertex and index buffers as Frozen
-        self.nice_line_painter.draw_lines(
-            gl,
-            &self.solid_outline.payload,
-            draw.camera.world_to_view(),
-            draw.frames.view_to_device(),
-            draw.time,
-        );
+        // self.nice_line_painter.draw_lines(
+        //     gl,
+        //     &self.solid_outline.payload,
+        //     draw.camera.world_to_view(),
+        //     draw.frames.view_to_device(),
+        //     draw.time,
+        // );
 
         // Draw a rectangle around the scene
         self.draw_selection_outline(

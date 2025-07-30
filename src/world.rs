@@ -1,6 +1,6 @@
 use crate::{
     field::RgbaField,
-    frozen::{Frozen, FrozenBoundary},
+    frozen::Frozen,
     material::Material,
     material_effects::paint_material_map_effects,
     math::{
@@ -87,6 +87,7 @@ pub struct World {
 
     rgba_field: CachedRgbaField,
 
+    /// Cached
     solid_boundary: RefCell<FrozenBoundary>,
 }
 
@@ -244,6 +245,28 @@ impl World {
 impl From<MaterialMap> for World {
     fn from(material_map: MaterialMap) -> Self {
         Self::from_material_map(material_map)
+    }
+}
+
+pub type FrozenBoundary = Frozen<Arc<Vec<Vec<Side>>>>;
+
+impl FrozenBoundary {
+    pub fn update_boundary(&mut self, topology: &Topology) {
+        let topology_modified_atime = topology.last_modification().map_or(0, |pair| pair.0);
+
+        let solid_modified_atime = topology
+            .modifications_after(self.valid_duration.stop)
+            .filter_map(|(region_modified_atime, region_key)| {
+                let region = &topology[region_key];
+                region.material.is_solid().then_some(region_modified_atime)
+            })
+            .max();
+
+        if let Some(solid_modified_atime) = solid_modified_atime {
+            self.payload = Arc::new(solid_boundary_cycles(topology));
+            self.valid_duration.start = solid_modified_atime;
+        }
+        self.valid_duration.stop = topology_modified_atime;
     }
 }
 

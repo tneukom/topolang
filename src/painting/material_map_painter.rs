@@ -130,6 +130,9 @@ impl RgbaFieldPainter {
         self.shader
             .uniform(gl, "world_to_device", &mat_world_to_device);
 
+        let mat_world_to_view = Matrix3::from(world_to_view);
+        self.shader.uniform(gl, "world_to_view", &mat_world_to_view);
+
         let bitmap_to_gltexture = self.texture.bitmap_to_gltexture();
         let mat_bitmap_to_gltexture = Matrix3::from(bitmap_to_gltexture);
         self.shader

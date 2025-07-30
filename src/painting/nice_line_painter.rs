@@ -139,7 +139,9 @@ impl NiceLinePainter {
         device_from_view: AffineMap<f64>,
         time: f64,
     ) {
-        gl.disable(glow::BLEND);
+        gl.enable(glow::BLEND);
+        gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+        gl.blend_equation(glow::FUNC_ADD);
 
         // The depth written by the fragment shader is the distance to the line, this way the
         // connection between line segments is properly drawn.

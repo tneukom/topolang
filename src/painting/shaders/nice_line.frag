@@ -24,6 +24,11 @@ vec2 line_st(vec2 p, vec2 a, vec2 b) {
 }
 
 // Returns value between 0 and 1 where 1 is a dash.
+//      ┌────────┐
+//      │        │
+//      │        │
+// ─────┘        └─────
+// 0   2.5      7.5   10
 float dashes(float t) {
     t = mod(t, 10.0);
     // Smoothstep with a gap < 2 doesn't animate smoothly
@@ -32,6 +37,10 @@ float dashes(float t) {
     } else {
         return 1.0 - smoothstep(6.5, 8.5, t);
     }
+}
+
+bool dashes_alternating(float t) {
+    return mod(t, 20.0) < 10.0;
 }
 
 void main() {
@@ -45,9 +54,11 @@ void main() {
 
     if(dist_to_line_segment < pass_line_width) {
         float arc_length = pass_arc_length + line_p.t;
-        vec4 dash_color = vec4(1.0, 0.8, 0.0, 1.0);
-        vec4 blank_color = vec4(0.0, 0.0, 0.0, 1.0);
-        out_color = mix(dash_color, blank_color, dashes(arc_length + 4.0 * time));
+        float t = arc_length + 2.0 * time;
+        // float alpha = dashes(t);
+        // vec3 rgb = dashes_alternating(t) ? vec3(1.0, 0.8, 0.0) : vec3(0.0, 0.0, 0.0);
+        vec3 rgb = mix(vec3(1.0, 0.8, 0.0), vec3(0.0, 0.0, 0.0), sin(0.5 * t));
+        out_color = vec4(rgb, 1.0);
         gl_FragDepth = dist_to_line_segment / pass_line_width;
     } else {
         discard;
