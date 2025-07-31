@@ -4,9 +4,9 @@
 extern crate core;
 
 #[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::wasm_bindgen;
-#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::wasm_bindgen;
 
 pub mod app;
 pub mod benchmarks;

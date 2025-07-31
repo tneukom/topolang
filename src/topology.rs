@@ -7,7 +7,10 @@ use crate::{
         point::Point,
         rect::Rect,
     },
-    new_regions::{BoundaryCycles, ConnectedCycleGroups, Cycle, CycleGroup, CycleMinSide, Sides},
+    new_regions::{
+        BoundaryCycles, ConnectedCycleGroups, Cycle, CycleGroup, CycleMinSide, Sides,
+        is_outer_border,
+    },
     pixmap::{MaterialMap, Pixmap},
     regions::area_left_of_boundary,
     utils::{UndirectedEdge, UndirectedGraph},
@@ -19,6 +22,7 @@ use std::{
     fmt,
     fmt::{Debug, Display, Formatter},
     hash::{Hash, Hasher},
+    iter,
     ops::{
         Bound::{Excluded, Unbounded},
         Index, IndexMut,
@@ -897,6 +901,29 @@ impl Topology {
     ) -> impl Iterator<Item = &'a Region> + use<'a> {
         self.regions_left_of_boundary(border.sides.iter().copied().map(Side::reversed))
     }
+
+    /// Region that directly contains `region_key`
+    pub fn containing_region(&self, region_key: RegionKey) -> Option<RegionKey> {
+        let mut cycle_min_side = region_key;
+        assert!(is_outer_border(cycle_min_side));
+        while is_outer_border(cycle_min_side) {
+            cycle_min_side = *self
+                .boundary_cycles
+                .side_to_cycle
+                .get(&cycle_min_side.reversed())?;
+        }
+        Some(self.cycle_groups.cycle_to_outer_cycle[&cycle_min_side])
+    }
+
+    /// region, containing(region), containing^2(region), ...
+    pub fn iter_containing_regions(
+        &self,
+        region_key: RegionKey,
+    ) -> impl Iterator<Item = RegionKey> {
+        iter::successors(Some(region_key), |&region_key| {
+            self.containing_region(region_key)
+        })
+    }
 }
 
 /// Warning: Slow
@@ -1025,9 +1052,9 @@ impl TopologyStatistics {
 pub mod test {
     use crate::{
         material::Material,
-        math::{point::Point, rect::Rect},
+        math::{point::Point, rect::Rect, rgba8::Rgb8},
         pixmap::MaterialMap,
-        topology::{SeamIndex, Topology},
+        topology::{Region, SeamIndex, Topology},
         utils::{KeyValueItertools, UndirectedEdge, UndirectedGraph},
     };
     use itertools::Itertools;
@@ -1358,5 +1385,43 @@ pub mod test {
             check_draw_topology(&material_map, &drawn_material_map);
             swap(&mut material_map, &mut drawn_material_map);
         }
+    }
+
+    fn unique_region_by_color(topology: &Topology, rgb: Rgb8) -> &Region {
+        let material = Material::normal(rgb);
+        let (_, region) = topology
+            .regions_by_material(material)
+            .exactly_one()
+            .ok()
+            .unwrap();
+        region
+    }
+
+    #[test]
+    fn containing_a() {
+        let folder = "test_resources/topology/containing";
+        let topology = Topology::load(format!("{folder}/a.png")).unwrap();
+
+        let white_region = unique_region_by_color(&topology, Rgb8::WHITE).key();
+        let black_region = unique_region_by_color(&topology, Rgb8::BLACK).key();
+        let red_region = unique_region_by_color(&topology, Rgb8::RED).key();
+        let yellow_region = unique_region_by_color(&topology, Rgb8::YELLOW).key();
+        let green_region = unique_region_by_color(&topology, Rgb8::GREEN).key();
+        let blue_region = unique_region_by_color(&topology, Rgb8::BLUE).key();
+        let magenta_region = unique_region_by_color(&topology, Rgb8::MAGENTA).key();
+
+        assert_eq!(topology.containing_region(red_region), Some(black_region));
+        assert_eq!(
+            topology.containing_region(yellow_region),
+            Some(black_region)
+        );
+        assert_eq!(topology.containing_region(green_region), Some(black_region));
+        assert_eq!(topology.containing_region(blue_region), Some(black_region));
+        assert_eq!(
+            topology.containing_region(magenta_region),
+            Some(blue_region)
+        );
+        assert_eq!(topology.containing_region(black_region), Some(white_region));
+        assert_eq!(topology.containing_region(white_region), None);
     }
 }

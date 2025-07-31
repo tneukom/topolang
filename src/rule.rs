@@ -60,7 +60,18 @@ impl InputCondition {
     pub fn is_satisfied(&self, phi: &Morphism, codom: &Topology, input: &CanvasInput) -> bool {
         // The given region contains the mouse cursor
         let phi_region_key = phi[self.region_key];
-        let contains_mouse = codom.region_key_at(input.mouse_position) == Some(phi_region_key);
+
+        // region contains mouse
+        // let contains_mouse = codom.region_key_at(input.mouse_position) == Some(phi_region_key);
+
+        // region or any child region contains mouse
+        let contains_mouse = if let Some(mouse_region) = codom.region_key_at(input.mouse_position) {
+            codom
+                .iter_containing_regions(mouse_region)
+                .any(|containing_region_key| containing_region_key == phi_region_key)
+        } else {
+            false
+        };
 
         match self.event {
             InputEvent::MouseLeftDown => contains_mouse && input.left_mouse_down,
