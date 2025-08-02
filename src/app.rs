@@ -847,7 +847,7 @@ impl EguiApp {
         warn!("Saving to path {:?}", path.as_ref().to_str());
         let material_map = self.view.world.material_map();
         let rgba_filed = material_map_effects(material_map, Rgba8::TRANSPARENT);
-        if let Err(err) = rgba_filed.save(path) {
+        if let Err(err) = rgba_filed.save_png(path) {
             warn!("Failed to save with error {err}");
         }
     }

@@ -3,6 +3,7 @@ use crate::{
     math::{point::Point, rect::Rect, rgba8::Rgba8},
 };
 use data_encoding::BASE64;
+use image::ImageEncoder;
 use std::{
     io::Cursor,
     ops::{Index, IndexMut},
@@ -284,6 +285,32 @@ impl RgbaField {
 
     pub fn save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         self.to_imageio().save(path)?;
+        Ok(())
+    }
+
+    /// Uses more aggressive compression than save()
+    pub fn save_png(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
+        use image::{
+            ExtendedColorType,
+            codecs::png::{CompressionType, FilterType, PngEncoder},
+        };
+
+        let file = std::fs::File::create(path)?;
+        let writer = std::io::BufWriter::new(file);
+
+        // Create PngEncoder with best compression
+        let encoder =
+            PngEncoder::new_with_quality(writer, CompressionType::Best, FilterType::Adaptive);
+
+        // Encode the image buffer
+        let bytes = self.as_raw();
+        encoder.write_image(
+            bytes,
+            self.width() as u32,
+            self.height() as u32,
+            ExtendedColorType::Rgba8,
+        )?;
+
         Ok(())
     }
 
