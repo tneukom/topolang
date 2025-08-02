@@ -3,7 +3,6 @@ use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
     field::RgbaField,
-    frozen::Frozen,
     material::Material,
     material_effects::{CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
     math::{
@@ -12,13 +11,10 @@ use crate::{
         rect::Rect,
     },
     painting::{
-        checkerboard_painter::CheckerboardPainter,
-        line_painter::LinePainter,
-        material_map_painter::RgbaFieldPainter,
-        nice_line_painter::{NiceLineGeometry, NiceLinePainter},
+        checkerboard_painter::CheckerboardPainter, line_painter::LinePainter,
+        material_map_painter::RgbaFieldPainter, nice_line_painter::NiceLineGeometry,
     },
     view::{DraggingKind, UiState, View, ViewInput, ViewSettings},
-    world::FrozenBoundary,
 };
 use std::sync::{Arc, RwLock};
 
@@ -31,8 +27,6 @@ pub struct DrawView {
     world_rgba_expired: Rect<i64>,
     selection_rgba_field: Option<Arc<RgbaField>>,
     overlay_rgba_field: Option<RgbaField>,
-    // solid_boundary: FrozenBoundary,
-    link_boundary: FrozenBoundary,
     ui_state: UiState,
     grid_size: Option<i64>,
 }
@@ -65,8 +59,6 @@ impl DrawView {
             selection_rgba_field,
             overlay_rgba_field,
             world_rgba_expired,
-            // solid_boundary: view.world.solid_boundary(),
-            link_boundary: view.world.link_boundary(),
             frames,
             time,
         }
@@ -80,9 +72,6 @@ pub struct ViewPainter {
     pub world_painter: RgbaFieldPainter,
     pub overlay_painter: RgbaFieldPainter,
     pub selection_painter: RgbaFieldPainter,
-    pub nice_line_painter: NiceLinePainter,
-    pub solid_outline: Frozen<NiceLineGeometry>,
-    pub link_outline: Frozen<NiceLineGeometry>,
     pub i_frame: usize,
 }
 
@@ -95,9 +84,6 @@ impl ViewPainter {
             world_painter: RgbaFieldPainter::new(gl),
             overlay_painter: RgbaFieldPainter::new(gl),
             selection_painter: RgbaFieldPainter::new(gl),
-            nice_line_painter: NiceLinePainter::new(gl),
-            solid_outline: Frozen::invalid(),
-            link_outline: Frozen::invalid(),
             i_frame: 0,
         }
     }
@@ -180,17 +166,6 @@ impl ViewPainter {
         //     draw.frames.view_to_device(),
         //     draw.time,
         // );
-
-        // Draw link outline
-        self.link_outline
-            .update(&draw.link_boundary, |boundary| Self::outline(boundary));
-        self.nice_line_painter.draw_lines(
-            gl,
-            &self.link_outline.payload,
-            draw.camera.world_to_view(),
-            draw.frames.view_to_device(),
-            draw.time,
-        );
 
         // Draw a rectangle around the scene
         self.draw_selection_outline(

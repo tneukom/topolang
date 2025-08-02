@@ -5,6 +5,7 @@ extern crate core;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsCast;
+
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -18,27 +19,24 @@ pub(crate) mod cycle_segments;
 pub(crate) mod field;
 pub(crate) mod gif_recorder;
 pub(crate) mod history;
+pub(crate) mod interpreter;
 pub(crate) mod line_drawing;
 pub(crate) mod material;
+pub(crate) mod material_effects;
 pub(crate) mod math;
 pub(crate) mod morphism;
+pub(crate) mod new_regions;
 pub(crate) mod painting;
 pub(crate) mod palettes;
 pub(crate) mod pixmap;
 pub(crate) mod regions;
 pub(crate) mod rule;
+pub(crate) mod solver;
 pub(crate) mod topology;
 pub(crate) mod utils;
 pub(crate) mod view;
 pub(crate) mod widgets;
 pub(crate) mod world;
-
-// pub(crate) mod material_effects;
-pub(crate) mod frozen;
-pub(crate) mod interpreter;
-pub(crate) mod material_effects;
-pub(crate) mod new_regions;
-pub(crate) mod solver;
 
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]

@@ -1,20 +1,14 @@
 use crate::{
     field::RgbaField,
-    frozen::Frozen,
     material::Material,
     material_effects::paint_material_map_effects,
-    math::{
-        pixel::{Pixel, Side},
-        rect::Rect,
-        rgba8::Rgba8,
-    },
+    math::{pixel::Pixel, rect::Rect, rgba8::Rgba8},
     pixmap::MaterialMap,
-    regions::split_boundary_into_cycles,
     topology::{RegionKey, Topology},
     view::Selection,
 };
 use std::{
-    cell::{Cell, RefCell},
+    cell::Cell,
     path::Path,
     sync::{Arc, RwLock},
 };
@@ -63,12 +57,6 @@ pub struct World {
     topology: Topology,
 
     rgba_field: CachedRgbaField,
-
-    /// Cached
-    solid_boundary: RefCell<FrozenBoundary>,
-
-    /// Cached
-    link_boundary: RefCell<FrozenBoundary>,
 }
 
 impl World {
@@ -76,8 +64,6 @@ impl World {
         Self {
             rgba_field: CachedRgbaField::new(material_map.bounding_rect()),
             topology: Topology::new(&material_map),
-            solid_boundary: RefCell::new(Frozen::invalid()),
-            link_boundary: RefCell::new(Frozen::invalid()),
             material_map,
         }
     }
@@ -191,18 +177,6 @@ impl World {
         self.rgba_field.fresh_rgba_field(&self.material_map)
     }
 
-    pub fn solid_boundary(&self) -> FrozenBoundary {
-        let mut solid_boundary = self.solid_boundary.borrow_mut();
-        solid_boundary.update_boundary(&self.topology, Material::is_solid);
-        solid_boundary.clone()
-    }
-
-    pub fn link_boundary(&self) -> FrozenBoundary {
-        let mut link_boundary = self.link_boundary.borrow_mut();
-        link_boundary.update_boundary(&self.topology, |material| material == Material::LINK);
-        link_boundary.clone()
-    }
-
     // pub fn rgba_field(&self) -> &RgbaField {
     //     self.rgba_field.get_or_init(|| {
     //         // Use MaterialMap::effects_rgba instead
@@ -232,30 +206,6 @@ impl World {
 impl From<MaterialMap> for World {
     fn from(material_map: MaterialMap) -> Self {
         Self::from_material_map(material_map)
-    }
-}
-
-pub type FrozenBoundary = Frozen<Arc<Vec<Vec<Side>>>>;
-
-impl FrozenBoundary {
-    pub fn update_boundary(&mut self, topology: &Topology, mut pred: impl FnMut(Material) -> bool) {
-        let topology_modified_atime = topology.last_modification().map_or(0, |pair| pair.0);
-
-        let modified_atime = topology
-            .modifications_after(self.valid_duration.stop)
-            .filter_map(|(region_modified_atime, region_key)| {
-                let region = &topology[region_key];
-                pred(region.material).then_some(region_modified_atime)
-            })
-            .max();
-
-        if let Some(modified_atime) = modified_atime {
-            let boundary_sides = topology.predicate_area_boundary_sides(pred);
-            let boundary_cycles = split_boundary_into_cycles(boundary_sides);
-            self.payload = Arc::new(boundary_cycles);
-            self.valid_duration.start = modified_atime;
-        }
-        self.valid_duration.stop = topology_modified_atime;
     }
 }
 
