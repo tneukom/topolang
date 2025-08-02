@@ -157,6 +157,10 @@ pub fn system_material_widget(ui: &mut egui::Ui, material: &mut Material) -> boo
         ("Rule Before", Material::RULE_BEFORE),
         ("Rule After", Material::RULE_AFTER),
         ("Wildcard", Material::WILDCARD),
+        #[cfg(feature = "link_ui")]
+        ("Link", Material::LINK),
+        #[cfg(feature = "link_ui")]
+        ("Link Hover", Material::LINK_HOVER),
     ];
 
     let placeholder_materials = [

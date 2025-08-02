@@ -10,16 +10,18 @@ pub enum MaterialClass {
     Normal,
     Solid,
     Rule,
+    Special,
     Wildcard,
     Transparent,
     Sleeping,
 }
 
 impl MaterialClass {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Normal,
         Self::Solid,
         Self::Rule,
+        Self::Special,
         Self::Wildcard,
         Self::Transparent,
         Self::Sleeping,
@@ -36,6 +38,7 @@ impl ReflectEnum for MaterialClass {
             Self::Normal => "Normal",
             Self::Solid => "Solid",
             Self::Rule => "Rule",
+            Self::Special => "Special",
             Self::Wildcard => "Wildcard",
             Self::Transparent => "Transparent",
             Self::Sleeping => "Sleeping",
@@ -74,6 +77,8 @@ impl Material {
     pub const SOLID_ALPHA_RANGE: RangeInclusive<u8> =
         Self::SOLID_DARKEN_ALPHA_RANGE.start..=Self::SOLID_MAIN_ALPHA;
 
+    pub const SPECIAL_ALPHA: u8 = 240;
+
     // Rule materials
     #[deprecated]
     pub const LEGACY_RULE_ALPHA: u8 = 180;
@@ -104,6 +109,12 @@ impl Material {
 
     pub const RULE_CHOICE_RGB: Rgb8 = Rgb(0x0f, 0x5f, 0x94);
     pub const RULE_CHOICE: Self = Self::new(Self::RULE_CHOICE_RGB, MaterialClass::Rule);
+
+    pub const LINK_RGB: Rgb8 = Rgb8::new(0x00, 0x00, 0xEE);
+    pub const LINK: Self = Self::new(Self::LINK_RGB, MaterialClass::Special);
+
+    pub const LINK_HOVER_RGB: Rgb8 = Rgb8::new(0x1E, 0x90, 0xFF);
+    pub const LINK_HOVER: Self = Self::new(Self::LINK_HOVER_RGB, MaterialClass::Special);
 
     // Wildcard material
     pub const WILDCARD_ALPHA: u8 = 230;
@@ -216,6 +227,7 @@ impl Material {
             MaterialClass::Normal => Rgba8::from_rgb_a(self.rgb, Self::OPAQUE_ALPHA),
             MaterialClass::Solid => Rgba8::from_rgb_a(self.rgb, Self::SOLID_MAIN_ALPHA),
             MaterialClass::Rule => Rgba8::from_rgb_a(self.rgb, Self::RULE_INTERIOR_ALPHA),
+            MaterialClass::Special => Rgba8::from_rgb_a(self.rgb, Self::SPECIAL_ALPHA),
             MaterialClass::Wildcard => Rgba8::from_rgb_a(self.rgb, Self::WILDCARD_ALPHA),
             MaterialClass::Transparent => Rgba8::from_rgb_a(self.rgb, 0),
             MaterialClass::Sleeping => Rgba8::from_rgb_a(self.rgb, Self::SLEEPING_ALPHA),
@@ -260,6 +272,8 @@ impl From<Rgba8> for Material {
             Self::WILDCARD
         } else if Self::SLEEPING_ALPHAS.contains(&a) {
             Self::new(rgb, MaterialClass::Sleeping)
+        } else if a == Self::SPECIAL_ALPHA {
+            Self::new(rgb, MaterialClass::Special)
         } else {
             unimplemented!();
         }

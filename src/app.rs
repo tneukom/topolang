@@ -6,13 +6,14 @@ use crate::{
     gif_recorder::GifRecorder,
     history::SnapshotCause,
     interpreter::{Interpreter, InterpreterError},
+    material::Material,
     material_effects::material_map_effects,
     math::{point::Point, rect::Rect, rgba8::Rgba8},
     painting::view_painter::{DrawView, ViewPainter},
     pixmap::MaterialMap,
     rule::CanvasInput,
     utils::ReflectEnum,
-    view::{EditMode, View, ViewInput, ViewSettings},
+    view::{EditMode, Selection, View, ViewInput, ViewSettings},
     widgets::{
         FileChooser, brush_chooser, enum_choice_buttons, prefab_picker, styled_button, styled_space,
     },
@@ -119,6 +120,9 @@ pub struct EguiApp {
     i_frame: usize,
     modifications_during_tick: usize,
     woken_up_during_tick: usize,
+
+    #[cfg(feature = "link_ui")]
+    link: String,
 }
 
 impl EguiApp {
@@ -185,6 +189,8 @@ impl EguiApp {
             i_frame: 0,
             modifications_during_tick: 0,
             woken_up_during_tick: 0,
+            #[cfg(feature = "link_ui")]
+            link: "".to_string(),
         }
     }
 
@@ -515,6 +521,38 @@ impl EguiApp {
         }
     }
 
+    pub fn pressed_link(&mut self) -> Option<String> {
+        if !self.canvas_input.left_mouse_click {
+            return None;
+        }
+
+        let topology = self.view.world.topology();
+        let mouse_region = topology.region_key_at(self.canvas_input.mouse_position)?;
+
+        let link_region =
+            topology
+                .iter_containing_regions(mouse_region)
+                .find_map(|region_key| {
+                    let region = &topology[region_key];
+                    (region.material == Material::LINK).then_some(region)
+                })?;
+
+        let Ok(inner_border) = link_region.boundary.inner_borders().exactly_one() else {
+            warn!("Link region has multiple hole but should only have one");
+            return None;
+        };
+
+        // Copy interior of region to material map
+        let encoded_address = self
+            .view
+            .world
+            .material_map()
+            .right_of_border(inner_border)
+            .without(Material::BLACK);
+        let bytes = encoded_address.decode_bytes();
+        Some(String::from_utf8(bytes).unwrap())
+    }
+
     pub fn run(&mut self) {
         // Tick at lower rate than 60fps
         let tick_frame = self.i_frame % self.run_speed.frames_per_tick() == 0;
@@ -522,6 +560,11 @@ impl EguiApp {
         // Add gif frame if previous tick there were modifications or regions woken up
         if tick_frame && (self.modifications_during_tick > 0 || self.woken_up_during_tick > 0) {
             self.record_gif_frame();
+        }
+
+        // Check if mouse is pressed on a link
+        if let Some(link) = self.pressed_link() {
+            println!("{link}");
         }
 
         let Some(interpreter) = &mut self.interpreter else {
@@ -717,6 +760,17 @@ impl EguiApp {
             ui.label("Gif");
             self.gif_ui(ui);
             ui.separator();
+        }
+
+        #[cfg(feature = "link_ui")]
+        {
+            ui.text_edit_singleline(&mut self.link);
+            if ui.button("Link").clicked() {
+                let encoded = MaterialMap::encode_bytes(self.link.as_bytes(), Point(20, 20));
+                let selection = Selection::new(encoded);
+                self.view_settings.edit_mode = EditMode::SelectRect;
+                self.view.set_selection(selection);
+            }
         }
 
         self.grid_size_ui(ui);

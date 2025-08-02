@@ -33,10 +33,12 @@ impl<T> Frozen<T> {
         }
         self.valid_duration = arg.valid_duration;
     }
+}
 
-    pub fn invalid(payload: T) -> Self {
+impl<T: Default> Frozen<T> {
+    pub fn invalid() -> Self {
         Self {
-            payload,
+            payload: T::default(),
             valid_duration: ValidDuration::INVALID,
         }
     }

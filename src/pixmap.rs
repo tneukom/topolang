@@ -1,11 +1,17 @@
 use crate::{
     field::{Field, FieldIndex, MaterialField, RgbaField},
     material::Material,
-    math::{pixel::Side, point::Point, rect::Rect, rgba8::Rgba8},
+    math::{
+        pixel::Side,
+        point::Point,
+        rect::Rect,
+        rgba8::{Rgb8, Rgba8},
+    },
     regions::{area_left_of_boundary, area_left_of_boundary_bounds, area_right_of_boundary},
     topology::Border,
 };
 use ahash::HashMap;
+use itertools::Itertools;
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,7 +49,7 @@ impl<T: Copy> Pixmap<T> {
         Self { field }
     }
 
-    /// Iterate over all (pixel, &value)
+    /// Iterate over defined (pixel, &value)
     pub fn iter(&self) -> impl Iterator<Item = (Point<i64>, T)> + Clone + '_ {
         self.field
             .enumerate()
@@ -53,6 +59,7 @@ impl<T: Copy> Pixmap<T> {
             })
     }
 
+    /// Iterate over defined (pixel, &mut value)
     pub fn iter_mut(&mut self) -> impl Iterator<Item = (Point<i64>, &mut T)> + '_ {
         self.field
             .enumerate_mut()
@@ -265,6 +272,50 @@ impl Pixmap<Material> {
 
     pub fn save(&self, path: impl AsRef<Path>) -> anyhow::Result<()> {
         self.clone().into_rgba().save(path)
+    }
+
+    pub fn byte_to_bits(byte: u8) -> impl Iterator<Item = bool> {
+        (0..8).map(move |i| (byte >> i) & 1u8 != 0u8)
+    }
+
+    pub fn bits_to_byte(bits: impl Iterator<Item = bool>) -> u8 {
+        let mut byte = 0;
+        for (i, bit) in bits.enumerate() {
+            byte = byte | (bit as u8) << i;
+        }
+        byte
+    }
+
+    /// Encode the passed bytes into a MaterialMap of the given size.
+    pub fn encode_bytes(bytes: &[u8], size: Point<i64>) -> Self {
+        let bits = bytes.iter().copied().flat_map(Self::byte_to_bits);
+
+        let bounds = Rect::low_size(Point::ZERO, size);
+        let mut material_map = MaterialMap::filled(bounds, Material::BLACK);
+        for (bit, material) in bits.into_iter().zip(material_map.field.iter_mut()) {
+            if bit {
+                *material = Some(Material::normal(Rgb8::PALETTE_ORANGE));
+            } else {
+                *material = Some(Material::normal(Rgb8::PALETTE_BLUE));
+            }
+        }
+
+        material_map
+    }
+
+    /// Decode into bytes, reverse operation of encode_bytes()
+    pub fn decode_bytes(&self) -> Vec<u8> {
+        let bits = self.values().map_while(|material| {
+            if material == Material::normal(Rgb8::PALETTE_ORANGE) {
+                Some(true)
+            } else if material == Material::normal(Rgb8::PALETTE_BLUE) {
+                Some(false)
+            } else {
+                None
+            }
+        });
+
+        bits.chunks(8).into_iter().map(Self::bits_to_byte).collect()
     }
 }
 

@@ -610,6 +610,10 @@ impl View {
         self.selection = Some(selection);
     }
 
+    pub fn set_selection(&mut self, selection: Selection) {
+        self.selection = Some(selection);
+    }
+
     /// Paste `material_map` at center of world.
     pub fn paste(&mut self, material_map: MaterialMap) {
         let world_center = self.world.bounds().center();

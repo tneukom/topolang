@@ -294,6 +294,10 @@ impl Boundary {
         self.borders.first().unwrap()
     }
 
+    pub fn inner_borders(&self) -> impl ExactSizeIterator<Item = &Border> + Clone {
+        self.borders.iter().skip(1)
+    }
+
     pub fn holes(&self) -> &[Border] {
         &self.borders[1..]
     }
@@ -923,6 +927,25 @@ impl Topology {
         iter::successors(Some(region_key), |&region_key| {
             self.containing_region(region_key)
         })
+    }
+
+    /// Sides of area defined by pred
+    pub fn predicate_area_boundary_sides(
+        &self,
+        mut pred: impl FnMut(Material) -> bool,
+    ) -> HashSet<Side> {
+        let mut sides = HashSet::default();
+        for region in self.regions.values() {
+            if pred(region.material) {
+                for side in region.boundary.iter_sides() {
+                    // side cancels out side.reverse()
+                    if !sides.remove(&side.reversed()) {
+                        sides.insert(side);
+                    }
+                }
+            }
+        }
+        sides
     }
 }
 
