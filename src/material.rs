@@ -77,7 +77,10 @@ impl Material {
     pub const SOLID_ALPHA_RANGE: RangeInclusive<u8> =
         Self::SOLID_DARKEN_ALPHA_RANGE.start..=Self::SOLID_MAIN_ALPHA;
 
-    pub const SPECIAL_ALPHA: u8 = 240;
+    pub const SPECIAL_BORDER_ALPHA: u8 = 192;
+    pub const SPECIAL_INTERIOR_ALPHA: u8 = 82;
+
+    pub const SPECIAL_ALPHAS: [u8; 2] = [Self::SPECIAL_BORDER_ALPHA, Self::SPECIAL_INTERIOR_ALPHA];
 
     // Rule materials
     #[deprecated]
@@ -227,7 +230,7 @@ impl Material {
             MaterialClass::Normal => Rgba8::from_rgb_a(self.rgb, Self::OPAQUE_ALPHA),
             MaterialClass::Solid => Rgba8::from_rgb_a(self.rgb, Self::SOLID_MAIN_ALPHA),
             MaterialClass::Rule => Rgba8::from_rgb_a(self.rgb, Self::RULE_INTERIOR_ALPHA),
-            MaterialClass::Special => Rgba8::from_rgb_a(self.rgb, Self::SPECIAL_ALPHA),
+            MaterialClass::Special => Rgba8::from_rgb_a(self.rgb, Self::SPECIAL_INTERIOR_ALPHA),
             MaterialClass::Wildcard => Rgba8::from_rgb_a(self.rgb, Self::WILDCARD_ALPHA),
             MaterialClass::Transparent => Rgba8::from_rgb_a(self.rgb, 0),
             MaterialClass::Sleeping => Rgba8::from_rgb_a(self.rgb, Self::SLEEPING_ALPHA),
@@ -272,7 +275,7 @@ impl From<Rgba8> for Material {
             Self::WILDCARD
         } else if Self::SLEEPING_ALPHAS.contains(&a) {
             Self::new(rgb, MaterialClass::Sleeping)
-        } else if a == Self::SPECIAL_ALPHA {
+        } else if Self::SPECIAL_ALPHAS.contains(&a) {
             Self::new(rgb, MaterialClass::Special)
         } else {
             unimplemented!();

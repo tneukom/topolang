@@ -94,7 +94,12 @@ fn border_class(pixel: Point<i64>, mut area: impl FnMut(Point<i64>) -> bool) -> 
 // }
 
 /// Border to transparent color
-pub fn rule_effect(material_map: &MaterialMap, pixel: Point<i64>, material: Material) -> Rgba8 {
+pub fn border_effect(
+    material_map: &MaterialMap,
+    pixel: Point<i64>,
+    border_rgba: Rgba8,
+    interior_rgba: Rgba8,
+) -> Rgba8 {
     let is_border = NEIGHBORS_8.into_iter().any(|neighbor_offset| {
         match material_map.get(pixel + neighbor_offset) {
             None => true,
@@ -102,13 +107,11 @@ pub fn rule_effect(material_map: &MaterialMap, pixel: Point<i64>, material: Mate
         }
     });
 
-    let alpha = if is_border {
-        Material::RULE_BORDER_ALPHA
+    if is_border {
+        border_rgba
     } else {
-        Material::RULE_INTERIOR_ALPHA
-    };
-
-    Rgba8::from_rgb_a(material.rgb, alpha)
+        interior_rgba
+    }
 }
 
 pub fn repeating_effect<T, const PATTERN_WIDTH: usize, const PATTERN_HEIGHT: usize>(
@@ -186,13 +189,24 @@ pub fn material_effect(material_map: &MaterialMap, pixel: Point<i64>) -> Rgba8 {
 
     match material.class {
         MaterialClass::Solid => Rgba8::from_rgb_a(material.rgb, Material::SOLID_MAIN_ALPHA),
-        MaterialClass::Rule => rule_effect(material_map, pixel, material),
+        MaterialClass::Rule => border_effect(
+            material_map,
+            pixel,
+            Rgba8::from_rgb_a(material.rgb, Material::RULE_BORDER_ALPHA),
+            Rgba8::from_rgb_a(material.rgb, Material::RULE_INTERIOR_ALPHA),
+        ),
         MaterialClass::Wildcard => {
             // alternating diagonal lines effect
             let k = (pixel.x + pixel.y).rem_euclid(Material::WILDCARD_RAINBOW_RGB.len() as i64);
             let rgb = Material::WILDCARD_RAINBOW_RGB[k as usize];
             Rgba8::from_rgb_a(rgb, Material::WILDCARD_ALPHA)
         }
+        MaterialClass::Special => border_effect(
+            material_map,
+            pixel,
+            Rgba8::from_rgb_a(material.rgb, Material::SPECIAL_BORDER_ALPHA),
+            Rgba8::from_rgb_a(material.rgb, Material::SPECIAL_INTERIOR_ALPHA),
+        ),
         MaterialClass::Sleeping => Rgba8::from_rgb_a(material.rgb, Material::SLEEPING_ALPHA),
         _ => material.to_rgba(),
     }
