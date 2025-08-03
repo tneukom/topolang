@@ -15,9 +15,7 @@ use crate::{
     rule::CanvasInput,
     utils::ReflectEnum,
     view::{EditMode, Selection, View, ViewInput, ViewSettings},
-    widgets::{
-        FileChooser, brush_chooser, enum_choice_buttons, prefab_picker, styled_button, styled_space,
-    },
+    widgets::{FileChooser, brush_chooser, enum_choice_buttons, prefab_picker, styled_button},
     world::World,
 };
 use egui::AtomExt;
@@ -294,7 +292,7 @@ impl EguiApp {
     //     self.view.clipboard_paste(clipboard.clone());
     // }
 
-    pub fn copy_paste_undo_redo_ui(&mut self, ui: &mut egui::Ui) {
+    pub fn tool_buttons_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.scope(|ui| {
                 const BUTTON_PADDING: f32 = 3.0;
@@ -315,7 +313,7 @@ impl EguiApp {
                 if ui.add(Self::icon_button(paste_icon, 32.0)).clicked() {
                     if let Some(clipboard) = &self.clipboard {
                         self.view
-                            .clipboard_paste(&self.view_input, clipboard.material_map.clone());
+                            .clipboard_paste(None, clipboard.material_map.clone());
                     }
                     // TODO: Use ViewportCommand::RequestPaste
                 }
@@ -764,7 +762,7 @@ impl EguiApp {
         self.view_ui(ui);
         ui.separator();
 
-        self.copy_paste_undo_redo_ui(ui);
+        self.tool_buttons_ui(ui);
         ui.separator();
 
         ui.label("Brush");
@@ -1082,7 +1080,9 @@ impl eframe::App for EguiApp {
                 egui::Event::Paste(paste) => {
                     if let Ok(rgba_field) = RgbaField::decode_base64_png(&paste) {
                         let material_map = MaterialMap::from(rgba_field);
-                        self.view.clipboard_paste(&self.view_input, material_map);
+                        let world_position = self.view_input.world_mouse.as_i64();
+                        self.view
+                            .clipboard_paste(Some(world_position), material_map);
                     }
                 }
                 egui::Event::Copy => {

@@ -602,11 +602,15 @@ impl View {
         Some(selection.material_map)
     }
 
-    pub fn clipboard_paste(&mut self, input: &ViewInput, material_map: MaterialMap) {
+    pub fn clipboard_paste(
+        &mut self,
+        world_position: Option<Point<i64>>,
+        material_map: MaterialMap,
+    ) {
         self.cancel_selection();
         // Create selection from entry
-        let world_mouse = input.world_mouse.floor().cwise_as();
-        let selection = Selection::new(material_map).with_center_at(world_mouse);
+        let world_position = world_position.unwrap_or(self.world.bounds().center());
+        let selection = Selection::new(material_map).with_center_at(world_position);
         self.selection = Some(selection);
     }
 
