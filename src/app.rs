@@ -214,12 +214,12 @@ impl EguiApp {
     }
 
     pub fn view_ui(&mut self, ui: &mut egui::Ui) {
-        // Edit mode choices
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.scope(|ui| {
                 const BUTTON_PADDING: f32 = 3.0;
                 ui.style_mut().spacing.button_padding = egui::Vec2::splat(BUTTON_PADDING);
 
+                // Edit mode choices
                 for mode in EditMode::ALL {
                     // The behavior of Egui when clicking a button and moving the mouse is a bit weird.
                     // If a native Windows button is pressed down, the mouse moved while still inside
@@ -238,6 +238,17 @@ impl EguiApp {
                         self.view_settings.edit_mode = mode;
                     }
                 }
+
+                // Prefabs popup
+                let folder_icon = egui::include_image!("icons/folder.png");
+                let button = Self::icon_button(folder_icon, 32.0);
+                let response = ui.add(button);
+                egui::Popup::menu(&response).show(|ui| {
+                    if let Some(prefab) = prefab_picker(ui) {
+                        self.view_settings.edit_mode = EditMode::SelectRect;
+                        self.view.paste(prefab.clone());
+                    }
+                });
             });
         });
     }
@@ -758,12 +769,6 @@ impl EguiApp {
 
         ui.label("Brush");
         brush_chooser(ui, &mut self.view_settings.brush);
-        ui.separator();
-
-        if let Some(prefab) = prefab_picker(ui) {
-            self.view_settings.edit_mode = EditMode::SelectRect;
-            self.view.paste(prefab.clone());
-        }
         ui.separator();
 
         // ui.label("History");
