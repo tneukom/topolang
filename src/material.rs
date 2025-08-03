@@ -186,9 +186,11 @@ impl Material {
     }
 
     /// Discard flags like `Self::SOLID_FLAG`
-    pub fn as_normal(mut self) -> Material {
-        self.class = MaterialClass::Normal;
-        self
+    pub fn as_normal(self) -> Material {
+        match self.class {
+            MaterialClass::Transparent => Material::TRANSPARENT,
+            _ => Material::normal(self.rgb),
+        }
     }
 
     /// Can a matching map a region with material `self` to a region with material `other`?

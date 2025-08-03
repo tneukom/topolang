@@ -296,9 +296,7 @@ pub fn prefab_picker(ui: &mut egui::Ui) -> Option<&'static MaterialMap> {
         for input_event in InputEvent::ALL {
             let png = input_event.symbol_png();
             let rgba_field = RgbaField::load_from_memory(png).unwrap();
-            let material_map = MaterialMap::from(rgba_field)
-                .without(Material::WILDCARD)
-                .map(|material| material.as_normal());
+            let material_map = MaterialMap::from(rgba_field).map(|material| material.as_normal());
 
             let icon_rgba =
                 material_map_effects(&material_map, Rgba8::TRANSPARENT).integer_upscale(2);
