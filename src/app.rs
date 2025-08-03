@@ -648,6 +648,30 @@ impl EguiApp {
 
     pub fn run_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
+            let pause_button = styled_button("Pause").selected(self.run_mode == RunMode::Paused);
+            if ui.add(pause_button).clicked() {
+                if self.run_mode != RunMode::Paused {
+                    self.view.add_snapshot(SnapshotCause::Run);
+                    self.run_mode = RunMode::Paused;
+                }
+            }
+
+            let run_button = styled_button("Run").selected(self.run_mode == RunMode::Run);
+            if ui.add(run_button).clicked() {
+                if self.run_mode != RunMode::Run {
+                    self.compile();
+                    self.run_mode = RunMode::Run;
+                }
+            }
+
+            let slowmo_button = styled_button("Slowmo").selected(self.run_mode == RunMode::Slowmo);
+            if ui.add(slowmo_button).clicked() {
+                if self.run_mode != RunMode::Slowmo {
+                    self.compile();
+                    self.run_mode = RunMode::Slowmo;
+                }
+            }
+
             let step_button = styled_button("Step");
             if ui
                 .add_enabled(self.run_mode == RunMode::Paused, step_button)
@@ -656,34 +680,6 @@ impl EguiApp {
                 // Single step
                 self.compile();
                 self.tick(1);
-            }
-
-            let run_button = styled_button("Run").selected(self.run_mode == RunMode::Run);
-            if ui.add(run_button).clicked() {
-                self.run_mode = match self.run_mode {
-                    RunMode::Run => {
-                        self.view.add_snapshot(SnapshotCause::Run);
-                        RunMode::Paused
-                    }
-                    _ => {
-                        self.compile();
-                        RunMode::Run
-                    }
-                };
-            }
-
-            let walk_button = styled_button("Slowmo").selected(self.run_mode == RunMode::Slowmo);
-            if ui.add(walk_button).clicked() {
-                self.run_mode = match self.run_mode {
-                    RunMode::Slowmo => {
-                        self.view.add_snapshot(SnapshotCause::Run);
-                        RunMode::Paused
-                    }
-                    _ => {
-                        self.compile();
-                        RunMode::Slowmo
-                    }
-                }
             }
 
             if self.interpreter.is_none() {
@@ -751,6 +747,9 @@ impl EguiApp {
     }
 
     pub fn side_panel_ui(&mut self, ui: &mut egui::Ui) {
+        self.run_ui(ui);
+        ui.separator();
+
         self.view_ui(ui);
         ui.separator();
 
@@ -771,9 +770,6 @@ impl EguiApp {
         // self.history_ui(ui);
         // ui.separator();
 
-        self.run_ui(ui);
-        ui.separator();
-
         #[cfg(not(feature = "minimal_ui"))]
         {
             ui.label("Gif");
@@ -792,6 +788,7 @@ impl EguiApp {
             }
         }
 
+        #[cfg(not(feature = "minimal_ui"))]
         self.grid_size_ui(ui);
     }
 
