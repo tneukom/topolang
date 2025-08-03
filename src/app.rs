@@ -2,6 +2,7 @@ use crate::{
     brush::Brush,
     compiler::{CompileError, Compiler},
     coordinate_frame::CoordinateFrames,
+    demos::Demo,
     field::RgbaField,
     gif_recorder::GifRecorder,
     history::SnapshotCause,
@@ -442,6 +443,15 @@ impl EguiApp {
         });
     }
 
+    pub fn demo_ui(&mut self, ui: &mut egui::Ui) {
+        for demo in &Demo::DEMOS {
+            if ui.button(demo.filename).clicked() {
+                let world = demo.load_world();
+                self.set_world(world);
+            }
+        }
+    }
+
     pub fn grid_size_ui(&mut self, ui: &mut egui::Ui) {
         const GRID_SIZE_CHOICES: [Option<i64>; 4] = [None, Some(4), Some(8), Some(16)];
         const GRID_SIZE_LABELS: [&str; 4] = ["None", "4px", "8px", "16px"];
@@ -797,6 +807,10 @@ impl EguiApp {
                 self.document_ui(ui);
             });
 
+            ui.menu_button("Demos", |ui| {
+                self.demo_ui(ui);
+            });
+
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button("Reset camera").clicked() {
                     self.reset_camera_requested = true;
@@ -818,6 +832,11 @@ impl EguiApp {
         });
     }
 
+    fn set_world(&mut self, world: World) {
+        self.view = View::new(world);
+        self.reset_camera_requested = true;
+    }
+
     fn load_file(&mut self, content: &[u8]) {
         info!("Loading a file!");
         let Ok(rgba_field) = RgbaField::load_from_memory(content) else {
@@ -827,8 +846,7 @@ impl EguiApp {
         self.new_size = rgba_field.size();
         let material_map = MaterialMap::from(rgba_field);
         let world = World::from(material_map);
-        self.view = View::new(world);
-        self.reset_camera_requested = true;
+        self.set_world(world);
     }
 
     fn load_from_path(&mut self, path: impl AsRef<Path>) {

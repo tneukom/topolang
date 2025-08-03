@@ -16,6 +16,7 @@ pub(crate) mod camera;
 pub(crate) mod compiler;
 pub(crate) mod coordinate_frame;
 pub(crate) mod cycle_segments;
+pub(crate) mod demos;
 pub(crate) mod field;
 pub(crate) mod gif_recorder;
 pub(crate) mod history;
