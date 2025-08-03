@@ -208,6 +208,11 @@ impl EguiApp {
         }
     }
 
+    fn icon_button(icon: egui::ImageSource, size: f32) -> egui::Button {
+        let icon_size = egui::Vec2::splat(size);
+        egui::Button::new(icon.atom_size(icon_size)).corner_radius(4)
+    }
+
     pub fn view_ui(&mut self, ui: &mut egui::Ui) {
         // Edit mode choices
         ui.horizontal(|ui| {
@@ -216,16 +221,13 @@ impl EguiApp {
                 ui.style_mut().spacing.button_padding = egui::Vec2::splat(BUTTON_PADDING);
 
                 for mode in EditMode::ALL {
-                    let icon = Self::edit_mode_icon(mode);
-                    let icon_size = egui::Vec2::splat(32.0);
-
                     // The behavior of Egui when clicking a button and moving the mouse is a bit weird.
                     // If a native Windows button is pressed down, the mouse moved while still inside
                     // the button and then released, it counts as a click.
                     // Egui aborts the clicked state if the mouse is moved too much. So we also consider
                     // dragging and check if the pointer is still over the button.
-                    let button = egui::Button::new(icon.atom_size(icon_size))
-                        .corner_radius(4)
+
+                    let button = Self::icon_button(Self::edit_mode_icon(mode), 32.0)
                         .selected(mode == self.view_settings.edit_mode)
                         .sense(egui::Sense::click_and_drag());
                     let response = ui.add(button);
@@ -281,23 +283,53 @@ impl EguiApp {
     //     self.view.clipboard_paste(clipboard.clone());
     // }
 
-    pub fn copy_paste_ui(&mut self, ui: &mut egui::Ui) {
+    pub fn copy_paste_undo_redo_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            if ui.add(styled_button("🗐 Copy")).clicked() {
-                self.clipboard_copy(ui.ctx());
-            }
+            ui.scope(|ui| {
+                const BUTTON_PADDING: f32 = 3.0;
+                ui.style_mut().spacing.button_padding = egui::Vec2::splat(BUTTON_PADDING);
 
-            if ui.add(styled_button("✂ Cut")).clicked() {
-                self.clipboard_cut(ui.ctx());
-            }
-
-            if ui.add(styled_button("📋 Paste")).clicked() {
-                if let Some(clipboard) = &self.clipboard {
-                    self.view
-                        .clipboard_paste(&self.view_input, clipboard.material_map.clone());
+                // Copy, cut, past UI
+                let copy_icon = egui::include_image!("icons/copy.png");
+                if ui.add(Self::icon_button(copy_icon, 32.0)).clicked() {
+                    self.clipboard_copy(ui.ctx());
                 }
-                // TODO: Use ViewportCommand::RequestPaste
-            }
+
+                let cut_icon = egui::include_image!("icons/cut.png");
+                if ui.add(Self::icon_button(cut_icon, 32.0)).clicked() {
+                    self.clipboard_cut(ui.ctx());
+                }
+
+                let paste_icon = egui::include_image!("icons/paste.png");
+                if ui.add(Self::icon_button(paste_icon, 32.0)).clicked() {
+                    if let Some(clipboard) = &self.clipboard {
+                        self.view
+                            .clipboard_paste(&self.view_input, clipboard.material_map.clone());
+                    }
+                    // TODO: Use ViewportCommand::RequestPaste
+                }
+
+                // Undo/redo ui
+                let current_head = self.view.history.head.clone();
+                let history = &mut self.view.history;
+
+                // Undo, Redo buttons
+                let undo_icon = egui::include_image!("icons/undo.png");
+                if ui.add(Self::icon_button(undo_icon, 32.0)).clicked() {
+                    history.undo();
+                }
+
+                let redo_icon = egui::include_image!("icons/redo.png");
+                if ui.add(Self::icon_button(redo_icon, 32.0)).clicked() {
+                    history.redo();
+                }
+
+                // If head has changed, update world
+                if !Rc::ptr_eq(&history.head, &current_head) {
+                    self.view.world = World::from_material_map(history.head.material_map().clone());
+                    self.view.selection = history.head.selection().clone();
+                }
+            });
         });
     }
 
@@ -682,27 +714,6 @@ impl EguiApp {
         }
     }
 
-    pub fn undo_redo_ui(&mut self, ui: &mut egui::Ui) {
-        let current_head = self.view.history.head.clone();
-        let history = &mut self.view.history;
-
-        // Undo, Redo buttons
-        ui.horizontal(|ui| {
-            if ui.add(styled_button("⟲ Undo")).clicked() {
-                history.undo();
-            }
-            if ui.add(styled_button("⟳ Redo")).clicked() {
-                history.redo();
-            }
-        });
-
-        // If head has changed, update world
-        if !Rc::ptr_eq(&history.head, &current_head) {
-            self.view.world = World::from_material_map(history.head.material_map().clone());
-            self.view.selection = history.head.selection().clone();
-        }
-    }
-
     /// If the user reverts to a snapshot in the history that snapshot is returned.
     #[cfg(any())] // disabled
     pub fn history_ui(&mut self, ui: &mut egui::Ui) {
@@ -743,9 +754,7 @@ impl EguiApp {
         self.view_ui(ui);
         ui.separator();
 
-        self.copy_paste_ui(ui);
-        styled_space(ui);
-        self.undo_redo_ui(ui);
+        self.copy_paste_undo_redo_ui(ui);
         ui.separator();
 
         ui.label("Brush");
