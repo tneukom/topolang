@@ -153,45 +153,39 @@ pub fn rgb_chooser(ui: &mut egui::Ui, rgb: &mut Rgb8) -> bool {
 
 /// Returns true if the color was changed
 pub fn system_material_widget(ui: &mut egui::Ui, material: &mut Material) -> bool {
-    let system_materials = [
-        ("Rule Before", Material::RULE_BEFORE),
-        ("Rule After", Material::RULE_AFTER),
-        ("Wildcard", Material::WILDCARD),
-        #[cfg(feature = "link_ui")]
-        ("Link", Material::LINK),
-        #[cfg(feature = "link_ui")]
-        ("Link Hover", Material::LINK_HOVER),
-    ];
-
-    let placeholder_materials = [
-        ("Placeholder", Material::RULE_PLACEHOLDER),
-        ("Choice", Material::RULE_CHOICE),
-    ];
-
     let mut color_set = false;
+
+    let mut btn = |ui: &mut egui::Ui, name: &str, choice| {
+        if material_button(ui, choice, choice == *material).clicked() {
+            *material = choice;
+            color_set = true;
+        }
+        ui.label(name);
+    };
+
     ui.scope(|ui| {
         ui.style_mut().spacing.button_padding =
             egui::Vec2::new(COLOR_BUTTON_MARGIN, COLOR_BUTTON_MARGIN);
 
-        for (name, choice) in system_materials {
-            ui.horizontal(|ui| {
-                if material_button(ui, choice, choice == *material).clicked() {
-                    *material = choice;
-                    color_set = true;
-                }
-                ui.label(name);
-            });
-        }
+        ui.horizontal(|ui| {
+            btn(ui, "Rule Before", Material::RULE_BEFORE);
+            btn(ui, "Rule After", Material::RULE_AFTER);
+        });
 
         ui.horizontal(|ui| {
-            for (name, choice) in placeholder_materials {
-                if material_button(ui, choice, choice == *material).clicked() {
-                    *material = choice;
-                    color_set = true;
-                }
-                ui.label(name);
-            }
-        })
+            btn(ui, "Wildcard", Material::WILDCARD);
+        });
+
+        #[cfg(feature = "link_ui")]
+        ui.horizontal(|ui| {
+            btn(ui, "Link", Material::LINK);
+            btn(ui, "Link Hover", Material::LINK_HOVER);
+        });
+
+        ui.horizontal(|ui| {
+            btn(ui, "Placeholder", Material::RULE_PLACEHOLDER);
+            btn(ui, "Choice", Material::RULE_CHOICE);
+        });
     });
 
     color_set
