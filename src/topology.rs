@@ -928,25 +928,6 @@ impl Topology {
             self.containing_region(region_key)
         })
     }
-
-    /// Sides of area defined by pred
-    pub fn predicate_area_boundary_sides(
-        &self,
-        mut pred: impl FnMut(Material) -> bool,
-    ) -> HashSet<Side> {
-        let mut sides = HashSet::default();
-        for region in self.regions.values() {
-            if pred(region.material) {
-                for side in region.boundary.iter_sides() {
-                    // side cancels out side.reverse()
-                    if !sides.remove(&side.reversed()) {
-                        sides.insert(side);
-                    }
-                }
-            }
-        }
-        sides
-    }
 }
 
 /// Warning: Slow

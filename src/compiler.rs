@@ -3,17 +3,23 @@ use crate::{
     material::{Material, MaterialClass},
     math::{
         interval::Interval,
+        pixel::Side,
         point::Point,
         rect::Rect,
         rgba8::{Rgb8, Rgba8},
     },
+    morphism::Morphism,
+    new_regions::{CycleMinSide, cancel_opposing_sides},
     pixmap::MaterialMap,
     rule::{InputCondition, InputEvent, Pattern, Rule},
     solver::plan::{
         ConstraintSystem, GuessChooser, GuessChooserUsingStatistics, SearchPlan, SearchStrategy,
         SimpleGuessChooser,
     },
-    topology::{BorderKey, MaskedTopology, Region, RegionKey, Topology, TopologyStatistics},
+    topology::{
+        Border, BorderKey, MaskedTopology, ModificationTime, Region, RegionKey, Topology,
+        TopologyStatistics,
+    },
     world::World,
 };
 use ahash::{HashMap, HashSet};
@@ -28,14 +34,30 @@ pub struct RuleInstance {
     pub rule: Rule,
 }
 
+/// All regions in the Rule frame, before and after. These elements should be hidden during Rule
+/// execution. Contains an arbitrary pixel of each region.
+#[derive(Debug, Clone)]
+pub struct RuleSource {
+    pub keys: HashSet<RegionKey>,
+    pub before_outer_border: Border,
+    pub after_outer_border: Border,
+    pub bounds: Rect<i64>,
+    pub modified_time: ModificationTime,
+}
+
+impl RuleSource {
+    pub fn outline(&self) -> HashSet<Side> {
+        let before_sides = self.before_outer_border.iter_sides();
+        let after_sides = self.after_outer_border.iter_sides();
+        let sides = before_sides.chain(after_sides);
+        cancel_opposing_sides(sides)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct GenericRule {
-    /// All regions in the Rule frame, before and after. These elements should be hidden during Rule
-    /// execution. Contains an arbitrary pixel of each region.
-    /// Can be empty if there is no source.
-    pub source: HashSet<RegionKey>,
-
-    pub source_bounds: Rect<i64>,
+    /// Can be None if there is no source.
+    pub source: Option<RuleSource>,
 
     /// Multiple instances if there are placeholders
     pub instances: Vec<RuleInstance>,
@@ -513,6 +535,40 @@ impl Compiler {
         Ok(rule_instances)
     }
 
+    pub fn compile_source(&self, topology: &Topology, phi: &Morphism) -> RuleSource {
+        // Extract everything inside the before and after regions of the rule
+        let phi_before_outer_border = topology[phi[self.before_outer_border_key]].clone();
+        let phi_after_outer_border = topology[phi[self.after_outer_border_key]].clone();
+
+        // Collect regions that are part of the source for this Rule.
+        let mut keys = HashSet::default();
+        // Before and after regions
+        let before_keys = topology
+            .regions_left_of_border(&phi_before_outer_border)
+            .map(Region::key);
+        keys.extend(before_keys);
+        let after_keys = topology
+            .regions_right_of_border(&phi_after_outer_border)
+            .map(Region::key);
+        keys.extend(after_keys);
+
+        let modified_time = keys
+            .iter()
+            .map(|&key| topology[key].modified_time)
+            .max()
+            .unwrap();
+
+        let bounds = Rect::iter_bounds(keys.iter().map(|&key| topology[key].bounds()));
+
+        RuleSource {
+            keys,
+            before_outer_border: phi_before_outer_border,
+            after_outer_border: phi_after_outer_border,
+            bounds,
+            modified_time,
+        }
+    }
+
     #[inline(never)]
     pub fn compile_rules(
         &self,
@@ -541,33 +597,17 @@ impl Compiler {
 
         // Compile each found rule
         for phi in matches {
-            // Extract everything inside the before and after regions of the rule
-            let phi_before_border = &topology[phi[self.before_outer_border_key]];
-            let phi_after_border = &topology[phi[self.after_outer_border_key]];
-
-            // Collect regions that are part of the source for this Rule.
-            let mut source = HashSet::default();
-            // Before and after regions
-            let before_source = topology
-                .regions_left_of_border(phi_before_border)
-                .map(Region::key);
-            source.extend(before_source);
-            let after_source = topology
-                .regions_right_of_border(phi_after_border)
-                .map(Region::key);
-            source.extend(after_source);
-
-            let source_bounds = Rect::iter_bounds(source.iter().map(|&key| topology[key].bounds()));
+            let source = self.compile_source(topology, &phi);
 
             // The before material map is the before frame and everything it contains except
             // RULE_BEFORE
             let before_material_map = material_map
-                .left_of_border(phi_before_border)
+                .left_of_border(&source.before_outer_border)
                 .filter(|_, material| material != Material::RULE_BEFORE)
                 .shrink();
 
             let after_material_map = material_map
-                .left_of_border(phi_after_border)
+                .left_of_border(&source.after_outer_border)
                 .filter(|_, material| material != Material::RULE_AFTER)
                 .shrink();
 
@@ -577,7 +617,7 @@ impl Compiler {
             if before_bounds.size() != after_bounds.size() {
                 return Err(
                     CompileError::new("Bounds of before and after must be equal.")
-                        .with_bounds(source_bounds),
+                        .with_bounds(source.bounds),
                 );
             }
 
@@ -591,19 +631,18 @@ impl Compiler {
                     &guess_chooser,
                     &placeholder_ranges,
                 )
-                .map_err(|err| err.with_bounds(source_bounds))?;
+                .map_err(|err| err.with_bounds(source.bounds))?;
 
             let generic_rule = GenericRule {
                 instances: rule_instances,
-                source,
-                source_bounds,
+                source: Some(source),
             };
 
             rules.push(generic_rule);
         }
 
         // Sort rules by y coordinates of bounding box
-        rules.sort_by_key(|rule| rule.source_bounds.top());
+        rules.sort_by_key(|rule| rule.source.as_ref().unwrap().bounds.top());
 
         Ok(rules)
     }
@@ -619,7 +658,9 @@ impl Compiler {
 
         let mut source = HashSet::default();
         for rule in &rules {
-            source.extend(rule.source.iter().copied())
+            if let Some(rule_source) = &rule.source {
+                source.extend(rule_source.keys.iter().copied())
+            }
         }
 
         for placeholder_range in &placeholder_ranges {
@@ -629,7 +670,7 @@ impl Compiler {
         Ok(Program {
             rules,
             source,
-            placeholder_ranges: placeholder_ranges,
+            placeholder_ranges,
         })
     }
 }

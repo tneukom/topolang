@@ -1,4 +1,5 @@
 use crate::{
+    material::Material,
     math::{
         pixel::{Pixel, Side, SideName},
         rect::Rect,
@@ -395,6 +396,18 @@ pub fn region_map<T: Copy + Eq>(map: &Pixmap<T>) -> Pixmap<CycleMinSide> {
 //
 //     // Create Boundaries from grouped cycles
 // }
+
+/// If sides contains `side` and `side.reversed()`, both are not included in the result.
+pub fn cancel_opposing_sides(sides: impl IntoIterator<Item = Side>) -> HashSet<Side> {
+    let mut result = HashSet::default();
+    for side in sides.into_iter() {
+        // side cancels out side.reverse()
+        if !result.remove(&side.reversed()) {
+            result.insert(side);
+        }
+    }
+    result
+}
 
 #[cfg(test)]
 mod test {
