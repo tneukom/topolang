@@ -9,7 +9,7 @@ use crate::{
         rgba8::{Rgb8, Rgba8},
     },
     morphism::Morphism,
-    new_regions::{CycleMinSide, cancel_opposing_sides},
+    new_regions::cancel_opposing_sides,
     pixmap::MaterialMap,
     rule::{InputCondition, InputEvent, Pattern, Rule},
     solver::plan::{
@@ -148,8 +148,14 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn iter_rule_instances(&self) -> impl Iterator<Item = &RuleInstance> + Clone {
-        self.rules.iter().flat_map(|rule| &rule.instances)
+    pub fn iter_rule_instances(
+        &self,
+    ) -> impl Iterator<Item = (&GenericRule, &RuleInstance)> + Clone {
+        self.rules.iter().flat_map(|rule| {
+            rule.instances
+                .iter()
+                .map(move |rule_instance| (rule, rule_instance))
+        })
     }
 
     pub fn rule_instances_len(&self) -> usize {
@@ -766,7 +772,7 @@ mod test {
         let program = compiler.compile(&world).unwrap();
 
         // Save all instances
-        for (i, rule_instance) in program.iter_rule_instances().enumerate() {
+        for (i, (_, rule_instance)) in program.iter_rule_instances().enumerate() {
             let expected_before = MaterialMap::load(format!("{folder}/before_{i}.png")).unwrap();
             assert_eq!(
                 expected_before,

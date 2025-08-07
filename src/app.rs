@@ -6,14 +6,15 @@ use crate::{
     field::RgbaField,
     gif_recorder::GifRecorder,
     history::SnapshotCause,
-    interpreter::{Interpreter, InterpreterError},
+    interpreter::{Interpreter, InterpreterError, StabilizeOutcome},
     material::Material,
     material_effects::material_map_effects,
     math::{point::Point, rect::Rect, rgba8::Rgba8},
     painting::view_painter::{DrawView, ViewPainter},
     pixmap::MaterialMap,
     rule::CanvasInput,
-    utils::ReflectEnum,
+    rule_activity_effect::RuleActivity,
+    utils::{ReflectEnum, monotonic_time},
     view::{EditMode, Selection, View, ViewInput, ViewSettings},
     widgets::{FileChooser, brush_chooser, enum_choice_buttons, prefab_picker, styled_button},
     world::World,
@@ -82,7 +83,6 @@ impl ReflectEnum for RunSpeed {
 
 pub struct EguiApp {
     view_painter: Arc<Mutex<ViewPainter>>,
-    start_time: Instant,
     pub view_settings: ViewSettings,
 
     gl: Arc<glow::Context>,
@@ -99,6 +99,8 @@ pub struct EguiApp {
     interpreter: Option<Interpreter>,
     run_mode: RunMode,
     run_speed: RunSpeed,
+
+    rule_activity: RuleActivity,
 
     // stabilize: bool,
     // stabilize_count: i64,
@@ -125,16 +127,11 @@ pub struct EguiApp {
 }
 
 impl EguiApp {
-    fn time(&self) -> f64 {
-        (Instant::now() - self.start_time).as_secs_f64()
-    }
-
     pub unsafe fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // let gl = cc.gl.as_ref().map(|arc| arc.as_ref());
         let gl_arc = cc.gl.clone().unwrap();
         let gl = gl_arc.as_ref();
         let view_painter = ViewPainter::new(gl);
-        let start_time = Instant::now();
 
         // Load topology from file
         // TODO: Should be fetched instead of included
@@ -160,7 +157,6 @@ impl EguiApp {
 
         Self {
             view_painter: Arc::new(Mutex::new(view_painter)),
-            start_time,
             view,
             view_settings,
             gl,
@@ -180,6 +176,7 @@ impl EguiApp {
             compiler: Compiler::new(),
             compile_error: None,
             interpreter: None,
+            rule_activity: Default::default(),
             gif_recorder: None,
             clipboard: None,
             channel_sender,
@@ -515,6 +512,8 @@ impl EguiApp {
         let compiled_rules = self.compiler.compile(&self.view.world);
         match compiled_rules {
             Ok(compiled_rules) => {
+                self.rule_activity.update_program(&compiled_rules);
+
                 self.interpreter = Some(Interpreter::new(compiled_rules));
                 self.compile_error = None;
                 info!("Compiling successful");
@@ -562,13 +561,15 @@ impl EguiApp {
             return;
         };
 
-        let modified = match interpreter.tick(&mut self.view.world, &self.canvas_input, 1) {
-            Ok(ticked) => ticked.changed(),
-            Err(_) => true,
-        };
+        let (outcome, applications) =
+            interpreter.stabilize(&mut self.view.world, &self.canvas_input, 1);
 
-        if modified {
-            self.record_gif_frame();
+        for &application in &applications {
+            self.rule_activity.rule_applied(application);
+        }
+
+        if outcome == StabilizeOutcome::Stable {
+            interpreter.wake_up(&mut self.view.world);
         }
     }
 
@@ -633,20 +634,18 @@ impl EguiApp {
         let now = Instant::now();
         while now.elapsed().as_secs_f64() < 0.01 {
             let max_modifications = 32;
-            let modifications = match interpreter.stabilize(
-                &mut self.view.world,
-                &self.canvas_input,
-                max_modifications,
-            ) {
-                Ok(modifications) => modifications,
-                Err(InterpreterError::MaxModificationReached) => max_modifications,
-            };
+            let (outcome, applications) =
+                interpreter.stabilize(&mut self.view.world, &self.canvas_input, max_modifications);
+            self.modifications_during_tick += applications.len();
 
-            if modifications == 0 {
+            for &application in &applications {
+                self.rule_activity.rule_applied(application);
+            }
+
+            if outcome == StabilizeOutcome::Stable {
                 break;
             }
 
-            self.modifications_during_tick += modifications;
             // let duration = now.elapsed().as_secs_f64();
             // println!(
             //     "Stabilize duration: {}, modifications: {}",
@@ -997,13 +996,13 @@ impl EguiApp {
             self.reset_camera_requested = false;
         }
 
-        let time = self.time();
         let draw_view = DrawView::from_view(
             &self.view,
             &self.view_settings,
             &self.view_input,
             frames,
-            time,
+            self.rule_activity.clone(),
+            monotonic_time(),
         );
 
         let view_painter = self.view_painter.clone();
@@ -1030,6 +1029,9 @@ impl EguiApp {
                 //     viewport.width() as i32,
                 //     viewport.height() as i32,
                 // );
+
+                gl.clear_depth(1.0);
+                gl.clear(glow::DEPTH_BUFFER_BIT);
 
                 // gl.enable(glow::SCISSOR_TEST);
                 // gl.clear_color(1.0f32, 0.0f32, 0.0f32, 1.0f32);

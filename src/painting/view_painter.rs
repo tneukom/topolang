@@ -5,15 +5,12 @@ use crate::{
     field::RgbaField,
     material::Material,
     material_effects::{CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
-    math::{
-        pixel::{Side, SideName},
-        point::Point,
-        rect::Rect,
-    },
+    math::rect::Rect,
     painting::{
         checkerboard_painter::CheckerboardPainter, line_painter::LinePainter,
-        material_map_painter::RgbaFieldPainter, nice_line_painter::NiceLineGeometry,
+        material_map_painter::RgbaFieldPainter, rule_activity_painter::RuleActivityPainter,
     },
+    rule_activity_effect::RuleActivity,
     view::{DraggingKind, UiState, View, ViewInput, ViewSettings},
 };
 use std::sync::{Arc, RwLock};
@@ -29,6 +26,7 @@ pub struct DrawView {
     overlay_rgba_field: Option<RgbaField>,
     ui_state: UiState,
     grid_size: Option<i64>,
+    rule_activity: RuleActivity,
 }
 
 impl DrawView {
@@ -37,6 +35,7 @@ impl DrawView {
         view_settings: &ViewSettings,
         view_input: &ViewInput,
         frames: CoordinateFrames,
+        rule_activity: RuleActivity,
         time: f64,
     ) -> Self {
         let (world_rgba_field, world_rgba_expired) = view.world.fresh_rgba_field();
@@ -61,6 +60,7 @@ impl DrawView {
             world_rgba_expired,
             frames,
             time,
+            rule_activity,
         }
     }
 }
@@ -72,6 +72,7 @@ pub struct ViewPainter {
     pub world_painter: RgbaFieldPainter,
     pub overlay_painter: RgbaFieldPainter,
     pub selection_painter: RgbaFieldPainter,
+    pub rule_activity_painter: RuleActivityPainter,
     pub i_frame: usize,
 }
 
@@ -84,34 +85,9 @@ impl ViewPainter {
             world_painter: RgbaFieldPainter::new(gl),
             overlay_painter: RgbaFieldPainter::new(gl),
             selection_painter: RgbaFieldPainter::new(gl),
+            rule_activity_painter: RuleActivityPainter::new(gl),
             i_frame: 0,
         }
-    }
-
-    fn polyline_from_cycle(cycle: &[Side]) -> impl Iterator<Item = Point<i64>> {
-        cycle.iter().filter_map(|side| match side.name {
-            SideName::Left => Some(side.left_pixel),
-            SideName::Bottom => Some(side.left_pixel + Point(0, 1)),
-            SideName::BottomRight => None,
-            SideName::Right => Some(side.left_pixel + Point(1, 1)),
-            SideName::Top => Some(side.left_pixel + Point(1, 0)),
-            SideName::TopLeft => None,
-        })
-    }
-
-    fn outline(boundary: &Vec<Vec<Side>>) -> NiceLineGeometry {
-        let mut geometry = NiceLineGeometry::default();
-
-        for cycle in boundary {
-            // TODO: Should be possible without collecting, problem is circular_tuple_windows in
-            //   add_polyline requires Clone trait on iterator
-            let polyline: Vec<_> = Self::polyline_from_cycle(&cycle)
-                .map(Point::as_f32)
-                .collect();
-            geometry.add_polyline(&polyline);
-        }
-
-        geometry
     }
 
     pub unsafe fn draw_selection_outline(
@@ -173,6 +149,15 @@ impl ViewPainter {
             read_world_rgba_field.bounds(),
             &draw.camera,
             &draw.frames,
+            draw.time,
+        );
+
+        // Draw rule activity
+        self.rule_activity_painter.draw(
+            gl,
+            &draw.rule_activity,
+            draw.camera.world_to_view(),
+            draw.frames.view_to_device(),
             draw.time,
         );
 

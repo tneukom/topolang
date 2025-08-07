@@ -1,5 +1,4 @@
 use crate::{
-    material::Material,
     math::{
         pixel::{Pixel, Side, SideName},
         rect::Rect,

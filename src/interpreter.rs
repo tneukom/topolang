@@ -2,6 +2,7 @@ use crate::{
     compiler::Program,
     rule::{CanvasInput, FillRegion, Rule, RuleApplicationContext},
     topology::{ModificationTime, RegionKey},
+    utils::monotonic_time,
     world::World,
 };
 use ahash::HashSet;
@@ -17,6 +18,20 @@ pub struct Interpreter {
 #[derive(Debug, Clone, Copy)]
 pub enum InterpreterError {
     MaxModificationReached,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RuleApplication {
+    /// Modification time of the source of the rule
+    pub source_mtime: Option<ModificationTime>,
+
+    pub real_time: f64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StabilizeOutcome {
+    Stable,
+    MaxApplicationsReached,
 }
 
 impl Interpreter {
@@ -61,8 +76,8 @@ impl Interpreter {
         &mut self,
         world: &mut World,
         input: &CanvasInput,
-        max_modifications: usize,
-    ) -> Result<usize, InterpreterError> {
+        max_applications: usize,
+    ) -> (StabilizeOutcome, Vec<RuleApplication>) {
         let _span = tracy_client::span!("stabilize");
 
         let ctx = RuleApplicationContext {
@@ -71,15 +86,15 @@ impl Interpreter {
             input,
         };
 
-        let mut n_modifications = 0usize;
+        let mut applications = Vec::new();
 
         'outer: loop {
-            if n_modifications >= max_modifications {
-                return Err(InterpreterError::MaxModificationReached);
+            if applications.len() >= max_applications {
+                return (StabilizeOutcome::MaxApplicationsReached, applications);
             }
 
             // Stabilize each rule
-            for (rule_instance, cursor) in
+            for ((generic_rule, rule_instance), cursor) in
                 self.program.iter_rule_instances().zip_eq(&mut self.cursors)
             {
                 let rule = &rule_instance.rule;
@@ -100,13 +115,20 @@ impl Interpreter {
 
                 if modified {
                     // Start again
-                    n_modifications += 1;
+                    let application = RuleApplication {
+                        real_time: monotonic_time(),
+                        source_mtime: generic_rule
+                            .source
+                            .as_ref()
+                            .map(|source| source.modified_time),
+                    };
+                    applications.push(application);
                     continue 'outer;
                 }
             }
 
             // No modifications were made, so world is stable under all rules
-            return Ok(n_modifications);
+            return (StabilizeOutcome::Stable, applications);
         }
     }
 
@@ -125,25 +147,28 @@ impl Interpreter {
     ) -> Result<Ticked, InterpreterError> {
         let _span = tracy_client::span!("tick");
 
-        let n_modifications = self.stabilize(world, input, max_modifications)?;
+        let (stabilize_outcome, applications) = self.stabilize(world, input, max_modifications);
+
         let n_woken_up = self.wake_up(world);
 
         Ok(Ticked {
-            n_modifications,
+            stabilize_outcome,
+            applications,
             n_woken_up,
         })
     }
 }
 
 pub struct Ticked {
-    pub n_modifications: usize,
+    pub stabilize_outcome: StabilizeOutcome,
+    pub applications: Vec<RuleApplication>,
     pub n_woken_up: usize,
 }
 
 impl Ticked {
     /// A rule was applied or a region was woken up.
     pub fn changed(&self) -> bool {
-        self.n_modifications > 0 || self.n_woken_up > 0
+        self.applications.len() > 0 || self.n_woken_up > 0
     }
 }
 
@@ -177,11 +202,14 @@ pub fn wake_up(world: &mut World, excluded: &HashSet<RegionKey>) -> usize {
 #[cfg(test)]
 mod test {
     use crate::{
-        compiler::Compiler, field::RgbaField, interpreter::Interpreter, rule::CanvasInput,
+        compiler::Compiler,
+        field::RgbaField,
+        interpreter::{Interpreter, StabilizeOutcome},
+        rule::CanvasInput,
         world::World,
     };
 
-    fn assert_execute_world(name: &str, expected_modifications: usize) {
+    fn assert_execute_world(name: &str, expected_applications: usize) {
         let folder = format!("test_resources/compiler/{name}/");
         let mut world = World::load(format!("{folder}/world.png")).unwrap();
 
@@ -189,10 +217,10 @@ mod test {
         let rules = compiler.compile(&mut world).unwrap();
         let mut interpreter = Interpreter::new(rules);
 
-        let n_modifications = interpreter
-            .stabilize(&mut world, &CanvasInput::default(), 64)
-            .unwrap();
-        assert_eq!(n_modifications, expected_modifications);
+        let (outcome, applications) =
+            interpreter.stabilize(&mut world, &CanvasInput::default(), 64);
+        assert_eq!(outcome, StabilizeOutcome::Stable);
+        assert_eq!(applications.len(), expected_applications);
 
         let result_pixmap = world.material_map();
 

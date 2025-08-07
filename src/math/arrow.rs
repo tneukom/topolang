@@ -3,7 +3,7 @@ use super::{
     rect::{Rect, RectBounds},
 };
 use crate::math::generic::{Dot, FloatNum, Num, SignedNum};
-use num_traits::{AsPrimitive, clamp};
+use num_traits::{AsPrimitive, clamp, real::Real};
 use std::{clone::Clone, fmt::Debug};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
@@ -41,6 +41,17 @@ impl<T> Arrow<T> {
         Self {
             a: self.a.swap_xy(),
             b: self.b.swap_xy(),
+        }
+    }
+
+    pub fn cwise_as<S>(self) -> Arrow<S>
+    where
+        T: AsPrimitive<S>,
+        S: Copy + 'static,
+    {
+        Arrow {
+            a: self.a.cwise_as(),
+            b: self.b.cwise_as(),
         }
     }
 }
@@ -98,16 +109,11 @@ impl<T: Num> Arrow<T> {
         let offset = self.closest_point_offset(p);
         offset.norm_squared()
     }
+}
 
-    pub fn cwise_as<S>(self) -> Arrow<S>
-    where
-        T: AsPrimitive<S>,
-        S: Copy + 'static,
-    {
-        Arrow {
-            a: self.a.cwise_as(),
-            b: self.b.cwise_as(),
-        }
+impl<T: Real + Num> Arrow<T> {
+    pub fn length(self) -> T {
+        self.length_squared().sqrt()
     }
 }
 
@@ -124,5 +130,23 @@ impl<T: SignedNum> Arrow<T> {
 
     pub fn mirror_y(self) -> Self {
         Self::new(self.a.mirror_y(), self.b.mirror_y())
+    }
+}
+
+impl<T: AsPrimitive<f64>> Arrow<T> {
+    pub fn as_f64(self) -> Arrow<f64> {
+        self.cwise_as()
+    }
+}
+
+impl<T: AsPrimitive<f32>> Arrow<T> {
+    pub fn as_f32(self) -> Arrow<f32> {
+        self.cwise_as()
+    }
+}
+
+impl<T: AsPrimitive<i64>> Arrow<T> {
+    pub fn as_i64(self) -> Arrow<i64> {
+        self.cwise_as()
     }
 }

@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, fmt::Debug};
+use std::{collections::BTreeSet, fmt::Debug, sync::OnceLock, time::Instant};
 
 pub trait ReflectEnum: Sized + Copy + 'static {
     fn all() -> &'static [Self];
@@ -77,4 +77,11 @@ impl<Iter: Iterator> KeyValueItertools for Iter {
     {
         self.filter_map(move |(key, value)| pred(&value).then_some((key, value)))
     }
+}
+
+/// Monotonic time in seconds
+pub fn monotonic_time() -> f64 {
+    static START: OnceLock<Instant> = OnceLock::new();
+    let &start = START.get_or_init(|| Instant::now());
+    (Instant::now() - start).as_secs_f64()
 }
