@@ -8,7 +8,7 @@ use crate::{
     math::rect::Rect,
     painting::{
         checkerboard_painter::CheckerboardPainter, line_painter::LinePainter,
-        material_map_painter::RgbaFieldPainter, rule_activity_painter::RuleActivityPainter,
+        material_map_painter::RgbaFieldPainter,
     },
     rule_activity_effect::RuleActivity,
     view::{DraggingKind, UiState, View, ViewInput, ViewSettings},
@@ -72,7 +72,6 @@ pub struct ViewPainter {
     pub world_painter: RgbaFieldPainter,
     pub overlay_painter: RgbaFieldPainter,
     pub selection_painter: RgbaFieldPainter,
-    pub rule_activity_painter: RuleActivityPainter,
     pub i_frame: usize,
 }
 
@@ -85,7 +84,6 @@ impl ViewPainter {
             world_painter: RgbaFieldPainter::new(gl),
             overlay_painter: RgbaFieldPainter::new(gl),
             selection_painter: RgbaFieldPainter::new(gl),
-            rule_activity_painter: RuleActivityPainter::new(gl),
             i_frame: 0,
         }
     }
@@ -149,15 +147,6 @@ impl ViewPainter {
             read_world_rgba_field.bounds(),
             &draw.camera,
             &draw.frames,
-            draw.time,
-        );
-
-        // Draw rule activity
-        self.rule_activity_painter.draw(
-            gl,
-            &draw.rule_activity,
-            draw.camera.world_to_view(),
-            draw.frames.view_to_device(),
             draw.time,
         );
 
