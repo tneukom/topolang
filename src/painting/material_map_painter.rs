@@ -59,7 +59,7 @@ impl RgbaFieldPainter {
             Rect::low_size(Point::ZERO, texture_size),
             Rgba8::TRANSPARENT,
         );
-        texture.texture_image(gl, &transparent);
+        texture.texture_image_srgba8(gl, &transparent);
 
         texture
     }
@@ -102,7 +102,7 @@ impl RgbaFieldPainter {
 
         // We only need to update the expired part of the image
         self.texture
-            .texture_sub_image(gl, expired, expired - rgba_field.low(), &rgba_field);
+            .texture_sub_image_srgba8(gl, expired, expired - rgba_field.low(), &rgba_field);
 
         let texture_rect = Rect::low_size(Point::ZERO, rgba_field.size());
         let rect = texture_rect + rgba_field.bounds().low();

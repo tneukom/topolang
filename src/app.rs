@@ -155,6 +155,8 @@ impl EguiApp {
 
         let (channel_sender, channel_receiver) = mpsc::sync_channel(1);
 
+        let rule_activity = RuleActivity::new(view.world.bounds(), &[]);
+
         Self {
             view_painter: Arc::new(Mutex::new(view_painter)),
             view,
@@ -176,7 +178,7 @@ impl EguiApp {
             compiler: Compiler::new(),
             compile_error: None,
             interpreter: None,
-            rule_activity: Default::default(),
+            rule_activity,
             gif_recorder: None,
             clipboard: None,
             channel_sender,
@@ -509,12 +511,19 @@ impl EguiApp {
 
     pub fn compile(&mut self) {
         info!("Compiling");
-        let compiled_rules = self.compiler.compile(&self.view.world);
-        match compiled_rules {
-            Ok(compiled_rules) => {
-                self.rule_activity.update_program(&compiled_rules);
+        let program = self.compiler.compile(&self.view.world);
+        match program {
+            Ok(program) => {
+                self.rule_activity = RuleActivity::new(self.view.world.bounds(), &program.rules);
 
-                self.interpreter = Some(Interpreter::new(compiled_rules));
+                let mut view_painter = self.view_painter.lock().unwrap();
+                unsafe {
+                    view_painter
+                        .rule_activity_painter
+                        .update_glows(&self.gl, &self.rule_activity);
+                }
+
+                self.interpreter = Some(Interpreter::new(program));
                 self.compile_error = None;
                 info!("Compiling successful");
             }
@@ -841,6 +850,7 @@ impl EguiApp {
     }
 
     fn set_world(&mut self, world: World) {
+        self.rule_activity = RuleActivity::new(world.bounds(), &[]);
         self.view = View::new(world);
         self.reset_camera_requested = true;
     }
@@ -996,12 +1006,14 @@ impl EguiApp {
             self.reset_camera_requested = false;
         }
 
+        let rule_glow_intensities = self.rule_activity.glow_intensities();
+
         let draw_view = DrawView::from_view(
             &self.view,
             &self.view_settings,
             &self.view_input,
             frames,
-            self.rule_activity.clone(),
+            self.rule_activity.glow_intensities(),
             monotonic_time(),
         );
 

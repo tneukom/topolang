@@ -2,6 +2,7 @@ use crate::{
     field::{Field, RgbaField},
     math::{affine_map::AffineMap, point::Point, rect::Rect, rgba8::Rgba8},
 };
+use bytemuck::{Pod, cast_slice};
 use glow::{HasContext, PixelUnpackData};
 use log::warn;
 
@@ -11,11 +12,45 @@ pub struct GlTexture {
     pub height: i64,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug, Clone, Copy)]
 #[repr(u32)]
 pub enum Filter {
     Linear = glow::LINEAR,
     Nearest = glow::NEAREST,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TextureFormat {
+    SRGBA8,
+    R16U,
+    R8,
+}
+
+impl TextureFormat {
+    pub fn internal_format(self) -> u32 {
+        match self {
+            Self::SRGBA8 => glow::SRGB8_ALPHA8,
+            Self::R16U => glow::R16UI,
+            Self::R8 => glow::R8,
+        }
+    }
+
+    pub fn format(self) -> u32 {
+        match self {
+            Self::SRGBA8 => glow::RGBA,
+            Self::R16U => glow::RED_INTEGER,
+            Self::R8 => glow::RED,
+        }
+    }
+
+    /// type
+    pub fn ty(self) -> u32 {
+        match self {
+            Self::SRGBA8 => glow::UNSIGNED_BYTE,
+            Self::R16U => glow::UNSIGNED_SHORT,
+            Self::R8 => glow::UNSIGNED_BYTE,
+        }
+    }
 }
 
 impl GlTexture {
@@ -44,38 +79,55 @@ impl GlTexture {
     /// Bitmap colorspace is assumed to be SRGB
     pub unsafe fn from_bitmap(gl: &glow::Context, bitmap: &RgbaField, filter: Filter) -> Self {
         let mut texture = Self::from_size(gl, bitmap.width(), bitmap.height(), filter);
-        texture.texture_image(gl, bitmap);
+        texture.texture_image_srgba8(gl, bitmap);
         texture
     }
 
-    pub unsafe fn texture_image(&mut self, gl: &glow::Context, bitmap: &Field<Rgba8>) {
+    unsafe fn texture_image_raw<T: Pod>(
+        &mut self,
+        gl: &glow::Context,
+        format: TextureFormat,
+        bitmap: &Field<T>,
+    ) {
         assert_eq!(bitmap.width(), self.width);
         assert_eq!(bitmap.height(), self.height);
 
-        let bitmap_bytes = bitmap.linear_slice().align_to::<u8>().1;
+        let bitmap_bytes: &[u8] = cast_slice(bitmap.as_slice());
 
         gl.active_texture(glow::TEXTURE0);
         gl.bind_texture(glow::TEXTURE_2D, Some(self.id));
         gl.tex_image_2d(
             glow::TEXTURE_2D,
             0,
-            glow::SRGB8_ALPHA8 as i32, // internal_format, see notes/srgb.md
-            // glow::RGBA8 as i32, // internal_format
+            format.internal_format() as i32,
             bitmap.width() as i32,
             bitmap.height() as i32,
             0,
-            glow::RGBA,
-            glow::UNSIGNED_BYTE,
+            format.format(),
+            format.ty(),
             PixelUnpackData::Slice(Some(bitmap_bytes)),
         );
     }
 
-    pub unsafe fn texture_sub_image(
+    pub unsafe fn texture_image_srgba8(&mut self, gl: &glow::Context, bitmap: &Field<Rgba8>) {
+        self.texture_image_raw(gl, TextureFormat::SRGBA8, bitmap);
+    }
+
+    pub unsafe fn texture_image_red_u16(&mut self, gl: &glow::Context, gray: &Field<u16>) {
+        self.texture_image_raw(gl, TextureFormat::R16U, gray)
+    }
+
+    pub unsafe fn texture_image_red8(&mut self, gl: &glow::Context, gray: &Field<u8>) {
+        self.texture_image_raw(gl, TextureFormat::R8, gray)
+    }
+
+    pub unsafe fn texture_sub_image_raw<T: Pod>(
         &mut self,
         gl: &glow::Context,
+        format: TextureFormat,
         bitmap_rect: Rect<i64>,
         texture_rect: Rect<i64>,
-        field: &Field<Rgba8>,
+        field: &Field<T>,
     ) {
         assert_eq!(bitmap_rect.size(), texture_rect.size());
         if bitmap_rect.is_empty() {
@@ -84,7 +136,7 @@ impl GlTexture {
         assert!(field.bounds().contains_rect(bitmap_rect));
 
         let bitmap_offset = field.linear_index(bitmap_rect.top_left()).unwrap();
-        let bitmap_bytes = field.linear_slice()[bitmap_offset..].align_to::<u8>().1;
+        let bitmap_bytes: &[u8] = cast_slice(&field.linear_slice()[bitmap_offset..]);
 
         gl.active_texture(glow::TEXTURE0);
         gl.bind_texture(glow::TEXTURE_2D, Some(self.id));
@@ -96,11 +148,21 @@ impl GlTexture {
             texture_rect.top() as i32,
             texture_rect.width() as i32,
             texture_rect.height() as i32,
-            glow::RGBA,
-            glow::UNSIGNED_BYTE,
+            format.format(),
+            format.ty(),
             PixelUnpackData::Slice(Some(bitmap_bytes)),
         );
         gl.pixel_store_i32(glow::UNPACK_ROW_LENGTH, 0);
+    }
+
+    pub unsafe fn texture_sub_image_srgba8(
+        &mut self,
+        gl: &glow::Context,
+        bitmap_rect: Rect<i64>,
+        texture_rect: Rect<i64>,
+        field: &Field<Rgba8>,
+    ) {
+        self.texture_sub_image_raw(gl, TextureFormat::SRGBA8, bitmap_rect, texture_rect, field);
     }
 
     /// Affine map from bitmap coordinates (0,0 at top left) to Gltexture coordinates.

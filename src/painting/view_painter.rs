@@ -8,11 +8,13 @@ use crate::{
     math::rect::Rect,
     painting::{
         checkerboard_painter::CheckerboardPainter, line_painter::LinePainter,
-        material_map_painter::RgbaFieldPainter,
+        material_map_painter::RgbaFieldPainter, rule_activity_painter::RuleActivityPainter,
     },
     rule_activity_effect::RuleActivity,
+    topology::ModificationTime,
     view::{DraggingKind, UiState, View, ViewInput, ViewSettings},
 };
+use ahash::HashMap;
 use std::sync::{Arc, RwLock};
 
 /// What is necessary to paint the view
@@ -26,7 +28,7 @@ pub struct DrawView {
     overlay_rgba_field: Option<RgbaField>,
     ui_state: UiState,
     grid_size: Option<i64>,
-    rule_activity: RuleActivity,
+    rule_glow_intensities: HashMap<ModificationTime, f64>,
 }
 
 impl DrawView {
@@ -35,7 +37,7 @@ impl DrawView {
         view_settings: &ViewSettings,
         view_input: &ViewInput,
         frames: CoordinateFrames,
-        rule_activity: RuleActivity,
+        rule_glow_intensities: HashMap<ModificationTime, f64>,
         time: f64,
     ) -> Self {
         let (world_rgba_field, world_rgba_expired) = view.world.fresh_rgba_field();
@@ -60,7 +62,7 @@ impl DrawView {
             world_rgba_expired,
             frames,
             time,
-            rule_activity,
+            rule_glow_intensities,
         }
     }
 }
@@ -72,6 +74,7 @@ pub struct ViewPainter {
     pub world_painter: RgbaFieldPainter,
     pub overlay_painter: RgbaFieldPainter,
     pub selection_painter: RgbaFieldPainter,
+    pub rule_activity_painter: RuleActivityPainter,
     pub i_frame: usize,
 }
 
@@ -84,6 +87,7 @@ impl ViewPainter {
             world_painter: RgbaFieldPainter::new(gl),
             overlay_painter: RgbaFieldPainter::new(gl),
             selection_painter: RgbaFieldPainter::new(gl),
+            rule_activity_painter: RuleActivityPainter::new(gl),
             i_frame: 0,
         }
     }
@@ -127,19 +131,15 @@ impl ViewPainter {
             draw.time,
         );
 
-        // Draw solid outline
-        // self.solid_outline
-        //     .update(&draw.solid_boundary, |boundary| Self::outline(boundary));
-
-        // TODO: Vertex buffers only need to be updated if solid_outline has changed.
-        //   NiceLinePainter could store vertex and index buffers as Frozen
-        // self.nice_line_painter.draw_lines(
-        //     gl,
-        //     &self.solid_outline.payload,
-        //     draw.camera.world_to_view(),
-        //     draw.frames.view_to_device(),
-        //     draw.time,
-        // );
+        for (&rule_modified_time, &glow_intensity) in &draw.rule_glow_intensities {
+            self.rule_activity_painter.draw_glow(
+                gl,
+                rule_modified_time,
+                glow_intensity,
+                draw.camera.world_to_view(),
+                draw.frames.view_to_device(),
+            )
+        }
 
         // Draw a rectangle around the scene
         self.draw_selection_outline(

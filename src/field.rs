@@ -151,6 +151,16 @@ impl<T> Field<T> {
         std::mem::replace(&mut self.elems[i], value)
     }
 
+    /// If index is not contained, return `Err(value)` otherwise replace `self[index]` and return
+    /// the replaced value.
+    pub fn try_set(&mut self, index: impl FieldIndex, value: T) -> Result<T, T> {
+        if let Some(i) = self.linear_index(index) {
+            Ok(std::mem::replace(&mut self.elems[i], value))
+        } else {
+            Err(value)
+        }
+    }
+
     pub fn translated(self, offset: Point<i64>) -> Self {
         Self {
             bounds: self.bounds + offset,

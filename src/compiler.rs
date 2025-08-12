@@ -3,7 +3,7 @@ use crate::{
     material::{Material, MaterialClass},
     math::{
         interval::Interval,
-        pixel::Side,
+        pixel::{Pixel, Side},
         point::Point,
         rect::Rect,
         rgba8::{Rgb8, Rgba8},
@@ -11,6 +11,7 @@ use crate::{
     morphism::Morphism,
     new_regions::cancel_opposing_sides,
     pixmap::MaterialMap,
+    regions::area_left_of_boundary,
     rule::{InputCondition, InputEvent, Pattern, Rule},
     solver::plan::{
         ConstraintSystem, GuessChooser, GuessChooserUsingStatistics, SearchPlan, SearchStrategy,
@@ -46,11 +47,18 @@ pub struct RuleSource {
 }
 
 impl RuleSource {
+    /// Before and after border merged
     pub fn outline(&self) -> HashSet<Side> {
         let before_sides = self.before_outer_border.iter_sides();
         let after_sides = self.after_outer_border.iter_sides();
         let sides = before_sides.chain(after_sides);
         cancel_opposing_sides(sides)
+    }
+
+    pub fn area(&self) -> Vec<Pixel> {
+        let mut area = area_left_of_boundary(self.before_outer_border.iter_sides());
+        area.extend(area_left_of_boundary(self.after_outer_border.iter_sides()));
+        area
     }
 }
 
