@@ -3,32 +3,24 @@ use crate::{
     field::Field,
     interpreter::RuleApplication,
     math::{pixel::Pixel, point::Point, rect::Rect},
+    painting::glow_painter::Glow,
     topology::ModificationTime,
     utils::monotonic_time,
 };
 use ahash::HashMap;
-use std::collections::VecDeque;
-
-#[derive(Debug, Clone)]
-pub struct Glow {
-    pub id: u16,
-    pub bounds: Rect<i64>,
-}
+use std::{collections::VecDeque, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub struct RuleActivity {
-    pub glow_ids: Field<u16>,
-
-    pub glow_alphas: Field<u8>,
-
-    pub glows: HashMap<ModificationTime, Glow>,
+    /// Maps rule modification time to outline bitmap
+    pub outlines: HashMap<ModificationTime, Arc<Field<u8>>>,
 
     /// (mtime, application_time) pairs
     pub applications: VecDeque<RuleApplication>,
 }
 
 impl RuleActivity {
-    fn area_glow_alpha(area: impl Iterator<Item = Pixel> + Clone) -> Field<u8> {
+    fn area_outline(area: impl Iterator<Item = Pixel> + Clone) -> Field<u8> {
         let bounds = Rect::index_bounds(area.clone()).padded(2);
         let mut alpha = Field::filled(bounds, 0);
 
@@ -50,10 +42,8 @@ impl RuleActivity {
         alpha
     }
 
-    pub fn new(bounds: Rect<i64>, rules: &[GenericRule]) -> Self {
-        let mut glow_alphas = Field::filled(bounds, 0);
-        let mut glow_ids = Field::filled(bounds, 0);
-        let mut glows: HashMap<ModificationTime, Glow> = HashMap::default();
+    pub fn new(rules: &[GenericRule]) -> Self {
+        let mut outlines = HashMap::default();
 
         for generic_rule in rules {
             let Some(source) = &generic_rule.source else {
@@ -61,23 +51,8 @@ impl RuleActivity {
             };
 
             let area = source.area();
-            let alphas = Self::area_glow_alpha(area.iter().copied());
-
-            let glow_id = glows.len().try_into().unwrap();
-            glows.insert(
-                source.modified_time,
-                Glow {
-                    id: glow_id,
-                    bounds: alphas.bounds(),
-                },
-            );
-
-            for (pixel, &alpha) in alphas.enumerate() {
-                if alpha > 0 {
-                    glow_alphas.try_set(pixel, alpha).ok();
-                    glow_ids.try_set(pixel, glow_id).ok();
-                }
-            }
+            let outline = Self::area_outline(area.iter().copied());
+            outlines.insert(source.modified_time, Arc::new(outline));
         }
 
         // For debugging
@@ -85,9 +60,7 @@ impl RuleActivity {
         // alphas_rgba.save("wtf.png");
 
         Self {
-            glow_ids,
-            glow_alphas,
-            glows,
+            outlines,
             applications: VecDeque::default(),
         }
     }
@@ -111,10 +84,10 @@ impl RuleActivity {
         self.discard_obsolete_applications();
     }
 
-    pub fn glow_intensities(&self) -> HashMap<ModificationTime, f64> {
+    pub fn glows(&self) -> Vec<Glow> {
         let real_time = monotonic_time();
+        let mut glows = Vec::new();
 
-        let mut intensities = HashMap::default();
         for application in &self.applications {
             let Some(rule_mtime) = application.source_mtime else {
                 continue;
@@ -123,12 +96,17 @@ impl RuleActivity {
             // intensity is 1 if real_time == application.real_time and 0 delta_t later, so
             let animation_time = real_time - application.real_time;
             if animation_time > 0.0 {
-                let intensity = 1.0 - 3.0 * animation_time;
-                if intensity > 0.0 {
-                    intensities.insert(rule_mtime, intensity);
+                let alpha = 1.0 - 3.0 * animation_time;
+                if alpha > 0.0 {
+                    let glow = Glow {
+                        outline: self.outlines.get(&rule_mtime).unwrap().clone(),
+                        alpha,
+                    };
+                    glows.push(glow);
                 }
             }
         }
-        intensities
+
+        glows
     }
 }

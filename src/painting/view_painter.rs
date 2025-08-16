@@ -7,13 +7,13 @@ use crate::{
     material_effects::{CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA},
     math::rect::Rect,
     painting::{
-        checkerboard_painter::CheckerboardPainter, line_painter::LinePainter,
-        material_map_painter::RgbaFieldPainter, rule_activity_painter::RuleActivityPainter,
+        checkerboard_painter::CheckerboardPainter,
+        glow_painter::{Glow, GlowPainter},
+        line_painter::LinePainter,
+        material_map_painter::RgbaFieldPainter,
     },
-    topology::ModificationTime,
     view::{DraggingKind, UiState, View, ViewInput, ViewSettings},
 };
-use ahash::HashMap;
 use std::sync::{Arc, RwLock};
 
 /// What is necessary to paint the view
@@ -27,7 +27,7 @@ pub struct DrawView {
     overlay_rgba_field: Option<RgbaField>,
     ui_state: UiState,
     grid_size: Option<i64>,
-    rule_glow_intensities: HashMap<ModificationTime, f64>,
+    rule_glows: Vec<Glow>,
 }
 
 impl DrawView {
@@ -36,7 +36,7 @@ impl DrawView {
         view_settings: &ViewSettings,
         view_input: &ViewInput,
         frames: CoordinateFrames,
-        rule_glow_intensities: HashMap<ModificationTime, f64>,
+        rule_glows: Vec<Glow>,
         time: f64,
     ) -> Self {
         let (world_rgba_field, world_rgba_expired) = view.world.fresh_rgba_field();
@@ -61,7 +61,7 @@ impl DrawView {
             world_rgba_expired,
             frames,
             time,
-            rule_glow_intensities,
+            rule_glows,
         }
     }
 }
@@ -73,7 +73,7 @@ pub struct ViewPainter {
     pub world_painter: RgbaFieldPainter,
     pub overlay_painter: RgbaFieldPainter,
     pub selection_painter: RgbaFieldPainter,
-    pub rule_activity_painter: RuleActivityPainter,
+    pub glow_painter: GlowPainter,
     pub i_frame: usize,
 }
 
@@ -86,7 +86,7 @@ impl ViewPainter {
             world_painter: RgbaFieldPainter::new(gl),
             overlay_painter: RgbaFieldPainter::new(gl),
             selection_painter: RgbaFieldPainter::new(gl),
-            rule_activity_painter: RuleActivityPainter::new(gl),
+            glow_painter: GlowPainter::new(gl),
             i_frame: 0,
         }
     }
@@ -130,14 +130,13 @@ impl ViewPainter {
             draw.time,
         );
 
-        for (&rule_modified_time, &glow_intensity) in &draw.rule_glow_intensities {
-            self.rule_activity_painter.draw_glow(
+        for rule_glow in &draw.rule_glows {
+            self.glow_painter.draw(
                 gl,
-                rule_modified_time,
-                glow_intensity,
+                rule_glow,
                 draw.camera.world_to_view(),
                 draw.frames.view_to_device(),
-            )
+            );
         }
 
         // Draw a rectangle around the scene

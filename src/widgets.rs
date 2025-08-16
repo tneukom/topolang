@@ -88,7 +88,7 @@ pub fn palette_widget(ui: &mut egui::Ui, palette: &Palette, rgba: &mut Rgba8) ->
     color_set
 }
 
-pub fn styled_button(name: &str) -> egui::Button {
+pub fn styled_button(name: &str) -> egui::Button<'_> {
     egui::Button::new(name).corner_radius(4)
 }
 

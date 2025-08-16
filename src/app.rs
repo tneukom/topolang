@@ -16,7 +16,7 @@ use crate::{
     },
     pixmap::MaterialMap,
     rule::CanvasInput,
-    rule_activity_effect::RuleActivity,
+    rule_activity::RuleActivity,
     utils::{ReflectEnum, monotonic_time},
     view::{EditMode, Selection, View, ViewInput, ViewSettings},
     widgets::{FileChooser, brush_chooser, enum_choice_buttons, prefab_picker, styled_button},
@@ -158,7 +158,7 @@ impl EguiApp {
 
         let (channel_sender, channel_receiver) = mpsc::sync_channel(1);
 
-        let rule_activity = RuleActivity::new(view.world.bounds(), &[]);
+        let rule_activity = RuleActivity::new(&[]);
 
         Self {
             view_painter: Arc::new(Mutex::new(view_painter)),
@@ -517,14 +517,7 @@ impl EguiApp {
         let program = self.compiler.compile(&self.view.world);
         match program {
             Ok(program) => {
-                self.rule_activity = RuleActivity::new(self.view.world.bounds(), &program.rules);
-
-                let mut view_painter = self.view_painter.lock().unwrap();
-                unsafe {
-                    view_painter
-                        .rule_activity_painter
-                        .update_glows(&self.gl, &self.rule_activity);
-                }
+                self.rule_activity = RuleActivity::new(&program.rules);
 
                 self.interpreter = Some(Interpreter::new(program));
                 self.compile_error = None;
@@ -853,7 +846,7 @@ impl EguiApp {
     }
 
     fn set_world(&mut self, world: World) {
-        self.rule_activity = RuleActivity::new(world.bounds(), &[]);
+        self.rule_activity = RuleActivity::new(&[]);
         self.view = View::new(world);
         self.reset_camera_requested = true;
     }
@@ -1014,7 +1007,7 @@ impl EguiApp {
             &self.view_settings,
             &self.view_input,
             frames,
-            self.rule_activity.glow_intensities(),
+            self.rule_activity.glows(),
             monotonic_time(),
         );
 

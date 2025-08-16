@@ -50,6 +50,7 @@ cached = "0.55.1"
 # Add "enable" flag to enable tracy-client, causes issues with stacktrace on Windows, see trace_stacktrace_missing.md
 tracy-client = { version = "0.18.1", default-features = false, features = ["system-tracing",
     "context-switch-tracing", "code-transfer", "callstack-inlines", "only-localhost"] }
+weak-table = { version = "0.3.2", features = ["ahash"] }
 
 [dev-dependencies]
 fastrand = { version = "2.3.0", default-features = false }
