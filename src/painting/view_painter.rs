@@ -10,7 +10,6 @@ use crate::{
         checkerboard_painter::CheckerboardPainter, line_painter::LinePainter,
         material_map_painter::RgbaFieldPainter, rule_activity_painter::RuleActivityPainter,
     },
-    rule_activity_effect::RuleActivity,
     topology::ModificationTime,
     view::{DraggingKind, UiState, View, ViewInput, ViewSettings},
 };

@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
+use crate::painting::gl_garbage::{GlResource, gl_release};
 use glow::HasContext;
-use log::warn;
 
 #[derive(Copy, Clone, Debug)]
 pub enum GlBufferTarget {
@@ -57,10 +57,7 @@ impl<T> GlBuffer<T> {
 
 impl<T> Drop for GlBuffer<T> {
     fn drop(&mut self) {
-        warn!("Leaking GlBuffer");
-        // unsafe {
-        //     self.context.delete_buffer(self.id);
-        // }
+        gl_release(GlResource::Buffer(self.id));
     }
 }
 
@@ -87,9 +84,6 @@ impl GlVertexArrayObject {
 
 impl Drop for GlVertexArrayObject {
     fn drop(&mut self) {
-        warn!("Leaking GlVertexArray");
-        // unsafe {
-        //     self.context.delete_vertex_array(self.id);
-        // }
+        gl_release(GlResource::VertexArray(self.id));
     }
 }

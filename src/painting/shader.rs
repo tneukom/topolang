@@ -1,4 +1,7 @@
-use crate::math::{matrix2::Matrix2, matrix3::Matrix3, point::Point};
+use crate::{
+    math::{matrix2::Matrix2, matrix3::Matrix3, point::Point},
+    painting::gl_garbage::{GlResource, gl_release},
+};
 use glow::{self, HasContext};
 use log::warn;
 use std::collections::HashMap;
@@ -255,12 +258,9 @@ impl Shader {
 
 impl Drop for Shader {
     fn drop(&mut self) {
-        warn!("Leaking OpneGL program, vertex and fragment shader.");
-        // unsafe {
-        //     self.context.delete_program(self.program);
-        //     self.context.delete_shader(self.vertex_shader);
-        //     self.context.delete_shader(self.fragment_shader);
-        // }
+        gl_release(GlResource::Program(self.program));
+        gl_release(GlResource::Shader(self.vertex_shader));
+        gl_release(GlResource::Shader(self.fragment_shader));
     }
 }
 

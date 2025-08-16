@@ -10,7 +10,10 @@ use crate::{
     material::Material,
     material_effects::material_map_effects,
     math::{point::Point, rect::Rect, rgba8::Rgba8},
-    painting::view_painter::{DrawView, ViewPainter},
+    painting::{
+        gl_garbage::gl_gc,
+        view_painter::{DrawView, ViewPainter},
+    },
     pixmap::MaterialMap,
     rule::CanvasInput,
     rule_activity_effect::RuleActivity,
@@ -1006,8 +1009,6 @@ impl EguiApp {
             self.reset_camera_requested = false;
         }
 
-        let rule_glow_intensities = self.rule_activity.glow_intensities();
-
         let draw_view = DrawView::from_view(
             &self.view,
             &self.view_settings,
@@ -1056,6 +1057,9 @@ impl EguiApp {
                 // self.gl.enable(glow::FRAMEBUFFER_SRGB);
 
                 view_painter.draw_view(gl, &draw_view);
+
+                // Actually delete Opengl resources that were release in Drop impls
+                gl_gc(gl);
             }
         });
 

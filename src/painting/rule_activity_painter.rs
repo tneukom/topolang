@@ -1,5 +1,4 @@
 use crate::{
-    field::Field,
     math::{affine_map::AffineMap, matrix3::Matrix3, rect::Rect},
     painting::{
         gl_buffer::GlVertexArrayObject,
@@ -110,7 +109,6 @@ impl RuleActivityPainter {
         self.position_vertices.update(gl, world_rect.cwise_as());
         let bitmap_rect = glow.bounds - textures.bitmap_bounds.low();
         self.texcoord_vertices.update(gl, bitmap_rect.cwise_as());
-        println!("world_rect: {world_rect:?}, bitmap_rect: {bitmap_rect:?}");
 
         self.vao.bind(gl);
         self.shader.use_program(gl);

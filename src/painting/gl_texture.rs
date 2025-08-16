@@ -1,10 +1,10 @@
 use crate::{
     field::{Field, RgbaField},
     math::{affine_map::AffineMap, point::Point, rect::Rect, rgba8::Rgba8},
+    painting::gl_garbage::{GlResource, gl_release},
 };
 use bytemuck::{Pod, cast_slice};
 use glow::{HasContext, PixelUnpackData};
-use log::warn;
 
 pub struct GlTexture {
     pub id: glow::Texture,
@@ -184,9 +184,6 @@ impl GlTexture {
 
 impl Drop for GlTexture {
     fn drop(&mut self) {
-        warn!("Leaking GlTexture");
-        // unsafe {
-        //     self.context.delete_texture(self.id);
-        // }
+        gl_release(GlResource::Texture(self.id));
     }
 }

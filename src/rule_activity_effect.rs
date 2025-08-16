@@ -1,8 +1,8 @@
 use crate::{
     compiler::GenericRule,
-    field::{Field, RgbaField},
+    field::Field,
     interpreter::RuleApplication,
-    math::{pixel::Pixel, point::Point, rect::Rect, rgba8::Rgba},
+    math::{pixel::Pixel, point::Point, rect::Rect},
     topology::ModificationTime,
     utils::monotonic_time,
 };
