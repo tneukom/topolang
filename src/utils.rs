@@ -1,4 +1,5 @@
-use std::{collections::BTreeSet, fmt::Debug, sync::OnceLock, time::Instant};
+use std::{collections::BTreeSet, fmt::Debug, sync::OnceLock};
+use web_time::Instant;
 
 pub trait ReflectEnum: Sized + Copy + 'static {
     fn all() -> &'static [Self];
