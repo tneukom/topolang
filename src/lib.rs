@@ -18,7 +18,6 @@ pub(crate) mod coordinate_frame;
 pub(crate) mod cycle_segments;
 pub(crate) mod demos;
 pub(crate) mod field;
-pub(crate) mod gif_recorder;
 pub(crate) mod history;
 pub(crate) mod interpreter;
 pub(crate) mod line_drawing;

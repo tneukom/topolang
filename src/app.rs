@@ -4,7 +4,6 @@ use crate::{
     coordinate_frame::CoordinateFrames,
     demos::Demo,
     field::RgbaField,
-    gif_recorder::GifRecorder,
     history::SnapshotCause,
     interpreter::{Interpreter, InterpreterError, StabilizeOutcome},
     material::Material,
@@ -110,8 +109,6 @@ pub struct EguiApp {
     #[cfg(not(target_arch = "wasm32"))]
     file_chooser: FileChooser,
 
-    gif_recorder: Option<GifRecorder>,
-
     channel_receiver: mpsc::Receiver<Vec<u8>>,
     channel_sender: mpsc::SyncSender<Vec<u8>>,
 
@@ -182,7 +179,6 @@ impl EguiApp {
             compile_error: None,
             interpreter: None,
             rule_activity,
-            gif_recorder: None,
             clipboard: None,
             channel_sender,
             channel_receiver,
@@ -440,39 +436,6 @@ impl EguiApp {
         }
     }
 
-    pub fn gif_ui(&mut self, ui: &mut egui::Ui) {
-        let n_frames = if let Some(gif_encoder) = &self.gif_recorder {
-            gif_encoder.frames.len()
-        } else {
-            0
-        };
-        ui.label(format!("Frames: {n_frames}"));
-
-        ui.horizontal(|ui| {
-            if ui.button("Start").clicked() {
-                self.gif_recorder = Some(GifRecorder::new());
-            }
-
-            if ui.button("Stop").clicked() {
-                if let Some(gif_recorder) = self.gif_recorder.take() {
-                    if let Err(err) = gif_recorder.export("movie.gif") {
-                        warn!("Failed to export gif with {err}");
-                    }
-                }
-            }
-
-            if ui.button("Cancel").clicked() {
-                self.gif_recorder = None;
-            }
-        });
-    }
-
-    pub fn record_gif_frame(&mut self) {
-        if let Some(gif_recorder) = &mut self.gif_recorder {
-            gif_recorder.add_frame(self.view.world.material_map());
-        }
-    }
-
     pub fn document_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             let bounds = self.view.world.bounds();
@@ -555,7 +518,6 @@ impl EguiApp {
         };
 
         if modified {
-            self.record_gif_frame();
             self.view.add_snapshot(SnapshotCause::Tick);
         }
     }
@@ -616,14 +578,6 @@ impl EguiApp {
     }
 
     pub fn run(&mut self) {
-        // Tick at lower rate than 60fps
-        let tick_frame = self.i_frame % self.run_speed.frames_per_tick() == 0;
-
-        // Add gif frame if previous tick there were modifications or regions woken up
-        if tick_frame && (self.modifications_during_tick > 0 || self.woken_up_during_tick > 0) {
-            self.record_gif_frame();
-        }
-
         // Check if mouse is pressed on a link
         if let Some(link) = self.pressed_link() {
             println!("{link}");
@@ -785,7 +739,6 @@ impl EguiApp {
         #[cfg(not(feature = "minimal_ui"))]
         {
             ui.label("Gif");
-            self.gif_ui(ui);
             ui.separator();
         }
 

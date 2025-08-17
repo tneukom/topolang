@@ -741,7 +741,7 @@ impl Topology {
         let lhs_index = self.seam_indices[&lhs.start];
         let rhs_index = self.seam_indices[&rhs.start];
         if lhs_index.border_index() != rhs_index.border_index() {
-            println!("lhs_index.border_index() != rhs_index.border_index()");
+            // println!("lhs_index.border_index() != rhs_index.border_index()");
             return false;
         }
 
