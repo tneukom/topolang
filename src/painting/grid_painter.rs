@@ -4,7 +4,7 @@ use super::shader::Shader;
 use crate::{
     camera::Camera,
     coordinate_frame::CoordinateFrames,
-    math::{matrix3::Matrix3, rect::Rect},
+    math::rect::Rect,
     painting::{gl_buffer::GlVertexArrayObject, rect_vertices::RectVertices},
 };
 
@@ -56,14 +56,11 @@ impl GridPainter {
         self.shader.uniform(gl, "world_spacing", spacing);
 
         let view_from_world = camera.view_from_world();
-        let mat_view_from_world = Matrix3::from(view_from_world);
-        self.shader
-            .uniform(gl, "world_to_view", &mat_view_from_world);
+        self.shader.uniform(gl, "world_to_view", &view_from_world);
 
         let device_from_world = frames.device_from_view() * camera.view_from_world();
-        let mat_device_from_world = Matrix3::from(device_from_world);
         self.shader
-            .uniform(gl, "device_from_world", &mat_device_from_world);
+            .uniform(gl, "device_from_world", &device_from_world);
 
         // Paint 2 triangles
         gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);

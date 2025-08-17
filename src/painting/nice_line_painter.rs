@@ -2,7 +2,6 @@ use crate::{
     math::{
         affine_map::AffineMap,
         arrow::Arrow,
-        matrix3::Matrix3,
         pixel::{Side, SideName},
         point::Point,
     },
@@ -181,12 +180,10 @@ impl NiceLinePainter {
 
         self.shader.use_program(gl);
 
-        let mat_device_from_view = Matrix3::from(device_from_view);
         self.shader
-            .uniform(gl, "device_from_view", &mat_device_from_view);
+            .uniform(gl, "device_from_view", &device_from_view);
 
-        let mat_view_from = Matrix3::from(view_from);
-        self.shader.uniform(gl, "view_from", &mat_view_from);
+        self.shader.uniform(gl, "view_from", &view_from);
 
         self.shader.uniform(gl, "time", time);
 

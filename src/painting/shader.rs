@@ -1,8 +1,8 @@
 use crate::{
-    math::{matrix2::Matrix2, matrix3::Matrix3, point::Point},
+    math::{affine_map::AffineMap, matrix2::Matrix2, matrix3::Matrix3, point::Point},
     painting::gl_garbage::{GlResource, gl_release},
 };
-use glow::{self, HasContext};
+use glow::{self, Context, HasContext, UniformLocation};
 use log::warn;
 use std::collections::HashMap;
 
@@ -290,6 +290,12 @@ impl AssignUniform for &Matrix2<f64> {
 impl AssignUniform for &Matrix3<f64> {
     unsafe fn assign_uniform(gl: &glow::Context, location: &glow::UniformLocation, value: Self) {
         gl.uniform_matrix_3_f32_slice(Some(location), true, &value.cwise_as().to_array());
+    }
+}
+
+impl AssignUniform for &AffineMap<f64> {
+    unsafe fn assign_uniform(gl: &Context, location: &UniformLocation, value: Self) {
+        AssignUniform::assign_uniform(gl, location, &Matrix3::from(*value))
     }
 }
 

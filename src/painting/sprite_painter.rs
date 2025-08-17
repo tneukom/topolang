@@ -1,6 +1,6 @@
 use crate::{
     field::Field,
-    math::{affine_map::AffineMap, matrix3::Matrix3, rgba8::Rgba8},
+    math::{affine_map::AffineMap, rgba8::Rgba8},
     painting::{
         gl_buffer::GlVertexArrayObject,
         gl_texture::{Filter, GlTexture},
@@ -122,14 +122,12 @@ impl SpritePainter {
         self.shader.uniform(gl, "alpha_texture", 0i32);
 
         let device_from_world = device_from_view * view_from_world;
-        let mat_device_from_world = Matrix3::from(device_from_world);
         self.shader
-            .uniform(gl, "device_from_world", &mat_device_from_world);
+            .uniform(gl, "device_from_world", &device_from_world);
 
         let gltexture_from_bitmap = texture.gltexture_from_bitmap();
-        let mat_gltexture_from_bitmap = Matrix3::from(gltexture_from_bitmap);
         self.shader
-            .uniform(gl, "gltexture_from_bitmap", &mat_gltexture_from_bitmap);
+            .uniform(gl, "gltexture_from_bitmap", &gltexture_from_bitmap);
     }
 
     pub unsafe fn draw(&self, gl: &glow::Context) {

@@ -1,6 +1,6 @@
 use crate::{
     field::RgbaField,
-    math::{affine_map::AffineMap, matrix3::Matrix3, point::Point, rect::Rect, rgba8::Rgba8},
+    math::{affine_map::AffineMap, point::Point, rect::Rect, rgba8::Rgba8},
     painting::{
         gl_buffer::GlVertexArrayObject,
         gl_texture::{Filter, GlTexture},
@@ -126,24 +126,19 @@ impl RgbaFieldPainter {
         self.shader.uniform(gl, "material_texture", glow::TEXTURE0);
 
         let device_from_world = device_from_view * view_from_world;
-        let mat_device_from_world = Matrix3::from(device_from_world);
         self.shader
-            .uniform(gl, "device_from_world", &mat_device_from_world);
+            .uniform(gl, "device_from_world", &device_from_world);
 
-        let mat_view_from_world = Matrix3::from(view_from_world);
-        self.shader
-            .uniform(gl, "world_to_view", &mat_view_from_world);
+        self.shader.uniform(gl, "world_to_view", &view_from_world);
 
         let gltexture_from_bitmap = self.texture.gltexture_from_bitmap();
-        let mat_gltexture_from_bitmap = Matrix3::from(gltexture_from_bitmap);
         self.shader
-            .uniform(gl, "gltexture_from_bitmap", &mat_gltexture_from_bitmap);
+            .uniform(gl, "gltexture_from_bitmap", &gltexture_from_bitmap);
 
         // World coordinates are same bitmap coordinates
         let gltexture_from_view = gltexture_from_bitmap * view_from_world.inv();
-        let mat_gltexture_from_view = Matrix3::from(gltexture_from_view);
         self.shader
-            .uniform(gl, "view_to_gltexture", &mat_gltexture_from_view);
+            .uniform(gl, "view_to_gltexture", &gltexture_from_view);
 
         self.shader.uniform(gl, "time", time);
 
