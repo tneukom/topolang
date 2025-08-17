@@ -471,6 +471,11 @@ impl View {
             return UiState::MoveCamera(move_camera);
         }
 
+        // Only moving camera allowed when locked
+        if settings.locked {
+            return self.ui_state.clone();
+        }
+
         match settings.edit_mode {
             EditMode::Brush | EditMode::Eraser => {
                 if input.left_mouse_down {
@@ -543,10 +548,6 @@ impl View {
 
     pub fn handle_input(&mut self, input: &mut ViewInput, settings: &mut ViewSettings) {
         self.handle_camera_input(input);
-
-        if settings.locked {
-            return;
-        }
 
         if input.escape_pressed {
             self.cancel_selection();
