@@ -162,7 +162,12 @@ impl<T: Num> Rect<T> {
     /// Returns the smallest rectangle `rect` such that `rect.half_open_contains(index)` for all
     /// indices.
     pub fn index_bounds(indices: impl IntoIterator<Item = Point<T>>) -> Self {
-        Self::iter_bounds(indices).inc_high()
+        let bounds = Self::iter_bounds(indices);
+        if bounds.is_empty() {
+            Self::EMPTY
+        } else {
+            Self::low_high(bounds.low(), bounds.high() + Point::ONE)
+        }
     }
 
     pub fn intersect(self, rhs: Self) -> Self {
@@ -221,11 +226,6 @@ impl<T: Num> Rect<T> {
 
     pub fn padded(self, padding: T) -> Self {
         Self::new(self.x.padded(padding), self.y.padded(padding))
-    }
-
-    /// Add one cwise to high, useful for indexing half open / closed rectangles
-    pub fn inc_high(self) -> Self {
-        Self::new(self.x.inc_high(), self.y.inc_high())
     }
 
     pub fn contains_point(self, p: Point<T>) -> bool {

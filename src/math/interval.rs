@@ -136,11 +136,7 @@ impl<T: Num> Interval<T> {
 
     pub fn padded(self, padding: T) -> Self {
         assert!(!self.is_empty());
-        return Self::new(self.low - padding, self.high + padding);
-    }
-
-    pub fn inc_high(self) -> Self {
-        return Self::new(self.low, self.high + T::ONE);
+        Self::new(self.low - padding, self.high + padding)
     }
 
     // Must be true:

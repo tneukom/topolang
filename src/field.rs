@@ -205,7 +205,12 @@ impl<T> Field<T> {
     }
 
     pub fn sub_map<S>(&self, bounds: Rect<i64>, mut f: impl FnMut(&T) -> S) -> Field<S> {
-        assert!(self.bounds.contains_rect(bounds));
+        assert!(
+            self.bounds.contains_rect(bounds),
+            "self.bounds: {:?}, bounds: {:?}",
+            self.bounds,
+            bounds
+        );
         Field::from_map(bounds, |index| f(&self[index]))
     }
 
