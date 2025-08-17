@@ -55,14 +55,15 @@ impl GridPainter {
         // Update uniforms
         self.shader.uniform(gl, "world_spacing", spacing);
 
-        let world_to_view = camera.world_to_view();
-        let mat_world_to_view = Matrix3::from(world_to_view);
-        self.shader.uniform(gl, "world_to_view", &mat_world_to_view);
-
-        let world_to_device = frames.view_to_device() * camera.world_to_view();
-        let mat_world_to_device = Matrix3::from(world_to_device);
+        let view_from_world = camera.view_from_world();
+        let mat_view_from_world = Matrix3::from(view_from_world);
         self.shader
-            .uniform(gl, "world_to_device", &mat_world_to_device);
+            .uniform(gl, "world_to_view", &mat_view_from_world);
+
+        let device_from_world = frames.device_from_view() * camera.view_from_world();
+        let mat_device_from_world = Matrix3::from(device_from_world);
+        self.shader
+            .uniform(gl, "device_from_world", &mat_device_from_world);
 
         // Paint 2 triangles
         gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);

@@ -24,14 +24,14 @@ impl GlowPainter {
         &mut self,
         gl: &glow::Context,
         glow: &Glow,
-        world_to_view: AffineMap<f64>,
-        view_to_device: AffineMap<f64>,
+        view_from_world: AffineMap<f64>,
+        device_from_view: AffineMap<f64>,
     ) {
         self.sprite_painter.setup_draw_red8(
             gl,
             glow.outline.clone(),
-            world_to_view,
-            view_to_device,
+            view_from_world,
+            device_from_view,
         );
 
         self.sprite_painter

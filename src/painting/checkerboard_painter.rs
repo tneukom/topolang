@@ -55,10 +55,10 @@ impl CheckerboardPainter {
         // Update uniforms
         self.shader.uniform(gl, "size", size);
 
-        let world_to_device = frames.view_to_device() * camera.world_to_view();
-        let mat_world_to_device = Matrix3::from(world_to_device);
+        let device_from_world = frames.device_from_view() * camera.view_from_world();
+        let mat_device_from_world = Matrix3::from(device_from_world);
         self.shader
-            .uniform(gl, "world_to_device", &mat_world_to_device);
+            .uniform(gl, "device_from_world", &mat_device_from_world);
         // Uniform assignment converts from SRGB to linear RGB
         self.shader
             .uniform(gl, "even_srgba", even_rgba.to_f32().to_array());

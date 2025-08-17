@@ -166,7 +166,7 @@ impl GlTexture {
     }
 
     /// Affine map from bitmap coordinates (0,0 at top left) to Gltexture coordinates.
-    pub fn bitmap_to_gltexture(&self) -> AffineMap<f64> {
+    pub fn gltexture_from_bitmap(&self) -> AffineMap<f64> {
         AffineMap::map_points(
             Point(0.0, 0.0),
             Point(0.0, 0.0),

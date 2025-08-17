@@ -46,11 +46,11 @@ impl CoordinateFrames {
     }
 
     pub fn view_center(self) -> Point<f64> {
-        self.window_to_view() * self.window_center()
+        self.view_from_window() * self.window_center()
     }
 
     /// Assuming glViewport is set to `self.viewport`
-    pub fn view_to_device(self) -> AffineMap<f64> {
+    pub fn device_from_view(self) -> AffineMap<f64> {
         AffineMap::map_points(
             Point(0.0, 0.0),
             Point(-1.0, 1.0),
@@ -62,11 +62,11 @@ impl CoordinateFrames {
     }
 
     /// Assuming glViewport is set to `self.viewport`
-    pub fn device_to_view(self) -> AffineMap<f64> {
-        self.view_to_device().inv()
+    pub fn view_from_device(self) -> AffineMap<f64> {
+        self.device_from_view().inv()
     }
 
-    pub fn view_to_window(self) -> AffineMap<f64> {
+    pub fn window_from_view(self) -> AffineMap<f64> {
         AffineMap::map_points(
             Point(0.0, 0.0),
             self.viewport.top_left(),
@@ -77,7 +77,7 @@ impl CoordinateFrames {
         )
     }
 
-    pub fn window_to_view(self) -> AffineMap<f64> {
-        self.view_to_window().inv()
+    pub fn view_from_window(self) -> AffineMap<f64> {
+        self.window_from_view().inv()
     }
 }

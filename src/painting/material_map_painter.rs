@@ -79,8 +79,8 @@ impl RgbaFieldPainter {
         gl: &glow::Context,
         rgba_field: &RgbaField,
         mut expired: Rect<i64>,
-        world_to_view: AffineMap<f64>,
-        view_to_device: AffineMap<f64>,
+        view_from_world: AffineMap<f64>,
+        device_from_view: AffineMap<f64>,
         time: f64,
     ) {
         expired = expired.intersect(rgba_field.bounds());
@@ -125,26 +125,25 @@ impl RgbaFieldPainter {
         // Update uniforms
         self.shader.uniform(gl, "material_texture", glow::TEXTURE0);
 
-        let world_to_device = view_to_device * world_to_view;
-        let mat_world_to_device = Matrix3::from(world_to_device);
+        let device_from_world = device_from_view * view_from_world;
+        let mat_device_from_world = Matrix3::from(device_from_world);
         self.shader
-            .uniform(gl, "world_to_device", &mat_world_to_device);
+            .uniform(gl, "device_from_world", &mat_device_from_world);
 
-        let mat_world_to_view = Matrix3::from(world_to_view);
-        self.shader.uniform(gl, "world_to_view", &mat_world_to_view);
-
-        let bitmap_to_gltexture = self.texture.bitmap_to_gltexture();
-        let mat_bitmap_to_gltexture = Matrix3::from(bitmap_to_gltexture);
+        let mat_view_from_world = Matrix3::from(view_from_world);
         self.shader
-            .uniform(gl, "bitmap_to_gltexture", &mat_bitmap_to_gltexture);
+            .uniform(gl, "world_to_view", &mat_view_from_world);
+
+        let gltexture_from_bitmap = self.texture.gltexture_from_bitmap();
+        let mat_gltexture_from_bitmap = Matrix3::from(gltexture_from_bitmap);
+        self.shader
+            .uniform(gl, "gltexture_from_bitmap", &mat_gltexture_from_bitmap);
 
         // World coordinates are same bitmap coordinates
-        let view_to_gltexture = bitmap_to_gltexture * world_to_view.inv();
-        let mat_view_to_gltexture = Matrix3::from(view_to_gltexture);
-        // self.shader
-        //     .uniform(gl, "view_to_gltexture", &mat_bitmap_to_gltexture);
+        let gltexture_from_view = gltexture_from_bitmap * view_from_world.inv();
+        let mat_gltexture_from_view = Matrix3::from(gltexture_from_view);
         self.shader
-            .uniform(gl, "view_to_gltexture", &mat_view_to_gltexture);
+            .uniform(gl, "view_to_gltexture", &mat_gltexture_from_view);
 
         self.shader.uniform(gl, "time", time);
 

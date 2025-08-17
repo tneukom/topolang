@@ -636,13 +636,13 @@ impl View {
 
     pub fn overlay(&self, settings: &ViewSettings, input: &ViewInput) -> Option<MaterialMap> {
         if settings.edit_mode == EditMode::Brush {
-            let world_mouse = self.camera.view_to_world() * input.view_mouse;
+            let world_mouse = self.camera.world_from_view() * input.view_mouse;
             let dot = settings.brush.dot(world_mouse);
             return Some(dot);
         }
 
         if settings.edit_mode == EditMode::Eraser {
-            let world_mouse = self.camera.view_to_world() * input.view_mouse;
+            let world_mouse = self.camera.world_from_view() * input.view_mouse;
             let mut dot = settings.brush.dot(world_mouse);
             // Invert world colors
             // TODO: Looks ugly, something like Aseprite would look much better!

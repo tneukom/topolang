@@ -53,15 +53,15 @@ impl SpritePainter {
         &mut self,
         gl: &glow::Context,
         sprite: Arc<Field<Rgba8>>,
-        world_to_view: AffineMap<f64>,
-        view_to_device: AffineMap<f64>,
+        view_from_world: AffineMap<f64>,
+        device_from_view: AffineMap<f64>,
     ) {
         self.setup_draw(
             gl,
             sprite,
             GlTexture::texture_image_srgba8,
-            world_to_view,
-            view_to_device,
+            view_from_world,
+            device_from_view,
         );
     }
 
@@ -69,15 +69,15 @@ impl SpritePainter {
         &mut self,
         gl: &glow::Context,
         sprite: Arc<Field<u8>>,
-        world_to_view: AffineMap<f64>,
-        view_to_device: AffineMap<f64>,
+        view_from_world: AffineMap<f64>,
+        device_from_view: AffineMap<f64>,
     ) {
         self.setup_draw(
             gl,
             sprite,
             GlTexture::texture_image_red8,
-            world_to_view,
-            view_to_device,
+            view_from_world,
+            device_from_view,
         );
     }
 
@@ -87,8 +87,8 @@ impl SpritePainter {
         gl: &glow::Context,
         sprite: Arc<Field<T>>,
         texture_upload: unsafe fn(&mut GlTexture, &glow::Context, &Field<T>),
-        world_to_view: AffineMap<f64>,
-        view_to_device: AffineMap<f64>,
+        view_from_world: AffineMap<f64>,
+        device_from_view: AffineMap<f64>,
     ) {
         self.textures.remove_expired();
 
@@ -121,15 +121,15 @@ impl SpritePainter {
         // Update uniforms
         self.shader.uniform(gl, "alpha_texture", 0i32);
 
-        let world_to_device = view_to_device * world_to_view;
-        let mat_world_to_device = Matrix3::from(world_to_device);
+        let device_from_world = device_from_view * view_from_world;
+        let mat_device_from_world = Matrix3::from(device_from_world);
         self.shader
-            .uniform(gl, "world_to_device", &mat_world_to_device);
+            .uniform(gl, "device_from_world", &mat_device_from_world);
 
-        let bitmap_to_gltexture = texture.bitmap_to_gltexture();
-        let mat_bitmap_to_gltexture = Matrix3::from(bitmap_to_gltexture);
+        let gltexture_from_bitmap = texture.gltexture_from_bitmap();
+        let mat_gltexture_from_bitmap = Matrix3::from(gltexture_from_bitmap);
         self.shader
-            .uniform(gl, "bitmap_to_gltexture", &mat_bitmap_to_gltexture);
+            .uniform(gl, "gltexture_from_bitmap", &mat_gltexture_from_bitmap);
     }
 
     pub unsafe fn draw(&self, gl: &glow::Context) {

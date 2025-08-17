@@ -39,12 +39,12 @@ impl Camera {
         Self::new(offset, self.scale)
     }
 
-    pub fn view_to_world(&self) -> AffineMap<f64> {
+    pub fn world_from_view(&self) -> AffineMap<f64> {
         AffineMap::similarity(self.scale, self.offset)
     }
 
-    pub fn world_to_view(&self) -> AffineMap<f64> {
-        self.view_to_world().inv()
+    pub fn view_from_world(&self) -> AffineMap<f64> {
+        self.world_from_view().inv()
     }
 
     pub fn default() -> Camera {
@@ -73,7 +73,7 @@ impl Camera {
             return *self;
         };
 
-        let world_point = self.view_to_world() * view_point;
+        let world_point = self.world_from_view() * view_point;
         Self::map_view_to_world(view_point, world_point, next_scale)
     }
 
@@ -87,7 +87,7 @@ impl Camera {
             return *self;
         };
 
-        let world_point = self.view_to_world() * view_point;
+        let world_point = self.world_from_view() * view_point;
         Self::map_view_to_world(view_point, world_point, next_scale)
     }
 

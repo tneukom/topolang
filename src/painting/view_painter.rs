@@ -99,14 +99,12 @@ impl ViewPainter {
         frames: &CoordinateFrames,
         time: f64,
     ) {
-        let world_to_device = frames.view_to_device() * camera.world_to_view();
+        let device_from_world = frames.device_from_view() * camera.view_from_world();
         self.line_painter
-            .draw_rect(gl, rect.cwise_as(), world_to_device, time);
+            .draw_rect(gl, rect.cwise_as(), device_from_world, time);
     }
 
     pub unsafe fn draw_view(&mut self, gl: &glow::Context, draw: &DrawView) {
-        // let world_to_view = draw.frames.
-        // let world_to_device = draw.frames.view_to_device() * draw.camera.world_to_view();
         let read_world_rgba_field = draw.world_rgba_field.read().unwrap();
 
         // Checkerboard pattern in background
@@ -125,8 +123,8 @@ impl ViewPainter {
             gl,
             &read_world_rgba_field,
             draw.world_rgba_expired,
-            draw.camera.world_to_view(),
-            draw.frames.view_to_device(),
+            draw.camera.view_from_world(),
+            draw.frames.device_from_view(),
             draw.time,
         );
 
@@ -134,8 +132,8 @@ impl ViewPainter {
             self.glow_painter.draw(
                 gl,
                 rule_glow,
-                draw.camera.world_to_view(),
-                draw.frames.view_to_device(),
+                draw.camera.view_from_world(),
+                draw.frames.device_from_view(),
             );
         }
 
@@ -155,8 +153,8 @@ impl ViewPainter {
                     gl,
                     &selection_rgba_field,
                     selection_rgba_field.bounds(),
-                    draw.camera.world_to_view(),
-                    draw.frames.view_to_device(),
+                    draw.camera.view_from_world(),
+                    draw.frames.device_from_view(),
                     draw.time,
                 );
 
@@ -175,8 +173,8 @@ impl ViewPainter {
                 gl,
                 &overlay_rgba_field,
                 overlay_rgba_field.bounds(),
-                draw.camera.world_to_view(),
-                draw.frames.view_to_device(),
+                draw.camera.view_from_world(),
+                draw.frames.device_from_view(),
                 draw.time,
             );
         }

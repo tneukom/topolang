@@ -868,8 +868,8 @@ impl EguiApp {
 
             let window_error_pos = if let Some(bounds) = err.bounds.first() {
                 let world_error_pos = bounds.bottom_left().as_f64();
-                let view_pos = self.view.camera.world_to_view() * world_error_pos;
-                let window_pos = frames.view_to_window() * view_pos;
+                let view_pos = self.view.camera.view_from_world() * world_error_pos;
+                let window_pos = frames.window_from_view() * view_pos;
                 window_pos
             } else {
                 viewport.top_left()
@@ -908,7 +908,7 @@ impl EguiApp {
         // `ctx.pointer_interact_pos()` is None if mouse is outside the window
         if let Some(egui_mouse) = ui.ctx().pointer_interact_pos() {
             let window_mouse = Point::new(egui_mouse.x as f64, egui_mouse.y as f64);
-            let view_mouse = frames.window_to_view() * window_mouse;
+            let view_mouse = frames.view_from_window() * window_mouse;
 
             // Scroll captured if the mouse pointer is over view, even if it doesn't have focus.
             let scroll_delta = if response.contains_pointer() {
@@ -922,7 +922,7 @@ impl EguiApp {
 
             let mouse = &input.pointer;
 
-            let world_mouse = self.view.camera.view_to_world() * view_mouse;
+            let world_mouse = self.view.camera.world_from_view() * view_mouse;
             let left_mouse_down = hovered && mouse.button_down(egui::PointerButton::Primary);
             let right_mouse_down = hovered && mouse.button_down(egui::PointerButton::Secondary);
             let middle_mouse_down = hovered && mouse.button_down(egui::PointerButton::Middle);
