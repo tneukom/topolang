@@ -327,7 +327,7 @@ pub struct Region {
 
     pub material: Material,
 
-    pub modified_time: ModificationTime,
+    pub modified_time: AtomicTime,
 }
 
 impl Region {
@@ -348,7 +348,7 @@ impl Region {
                 .get(boundary.top_left_interior_pixel())
                 .unwrap(),
             boundary,
-            modified_time: modification_time_counter(),
+            modified_time: atomic_time_counter(),
         }
     }
 
@@ -455,7 +455,7 @@ pub struct Topology {
 
     /// Mapping the modification time of each region to the region. Each region is contained
     /// exactly once!
-    modifications: BTreeMap<ModificationTime, RegionKey>,
+    modifications: BTreeMap<AtomicTime, RegionKey>,
 }
 
 impl Topology {
@@ -463,7 +463,7 @@ impl Topology {
         self.bounds
     }
 
-    pub fn modifications(&self) -> &BTreeMap<ModificationTime, RegionKey> {
+    pub fn modifications(&self) -> &BTreeMap<AtomicTime, RegionKey> {
         &self.modifications
     }
 
@@ -485,7 +485,7 @@ impl Topology {
         // Create Regions from cycle_groups
         let mut regions: BTreeMap<RegionKey, Region> = BTreeMap::new();
         let mut seam_indices: BTreeMap<Side, SeamIndex> = BTreeMap::new();
-        let mut modifications: BTreeMap<ModificationTime, RegionKey> = BTreeMap::new();
+        let mut modifications: BTreeMap<AtomicTime, RegionKey> = BTreeMap::new();
 
         {
             let _tracy_span = tracy_client::span!("build regions");
@@ -714,7 +714,7 @@ impl Topology {
 
         let region = self.regions.get_mut(&region_key).unwrap();
         self.modifications.remove(&region.modified_time);
-        let modified_time = modification_time_counter();
+        let modified_time = atomic_time_counter();
         // info!(
         //     "increasing modified_time of Region {} from {} to {}",
         //     region_key, region.modified_time, modified_time
@@ -770,21 +770,18 @@ impl Topology {
     /// Modifications after (not including) mtime
     pub fn modifications_after(
         &self,
-        mtime: ModificationTime,
-    ) -> impl Iterator<Item = (ModificationTime, RegionKey)> + use<'_> {
+        mtime: AtomicTime,
+    ) -> impl Iterator<Item = (AtomicTime, RegionKey)> + use<'_> {
         self.modifications
             .range((Excluded(mtime), Unbounded))
             .map(|(&mtime, &region_key)| (mtime, region_key))
     }
 
-    pub fn first_modification_after(
-        &self,
-        mtime: ModificationTime,
-    ) -> Option<(ModificationTime, RegionKey)> {
+    pub fn first_modification_after(&self, mtime: AtomicTime) -> Option<(AtomicTime, RegionKey)> {
         self.modifications_after(mtime).next()
     }
 
-    pub fn last_modification(&self) -> Option<(ModificationTime, &RegionKey)> {
+    pub fn last_modification(&self) -> Option<(AtomicTime, &RegionKey)> {
         let (&mtime, region_key) = self.modifications.last_key_value()?;
         Some((mtime, region_key))
     }
@@ -979,9 +976,10 @@ impl Display for Topology {
     }
 }
 
-pub type ModificationTime = i64;
+pub type AtomicTime = i64;
 
-pub fn modification_time_counter() -> ModificationTime {
+/// Returns a new time every time it's called.
+pub fn atomic_time_counter() -> AtomicTime {
     static MTIME: AtomicI64 = AtomicI64::new(0);
     MTIME.fetch_add(1, Ordering::Relaxed)
 }

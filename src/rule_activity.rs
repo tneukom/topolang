@@ -4,7 +4,7 @@ use crate::{
     interpreter::RuleApplication,
     math::{pixel::Pixel, point::Point, rect::Rect},
     painting::glow_painter::Glow,
-    topology::ModificationTime,
+    topology::AtomicTime,
     utils::monotonic_time,
 };
 use ahash::HashMap;
@@ -13,7 +13,7 @@ use std::{collections::VecDeque, sync::Arc};
 #[derive(Debug, Clone)]
 pub struct RuleActivity {
     /// Maps rule modification time to outline bitmap
-    pub outlines: HashMap<ModificationTime, Arc<Field<u8>>>,
+    pub outlines: HashMap<AtomicTime, Arc<Field<u8>>>,
 
     /// (mtime, application_time) pairs
     pub applications: VecDeque<RuleApplication>,

@@ -1,7 +1,7 @@
 use crate::{
     compiler::Program,
     rule::{CanvasInput, FillRegion, Rule, RuleApplicationContext},
-    topology::{ModificationTime, RegionKey},
+    topology::{AtomicTime, RegionKey},
     utils::monotonic_time,
     world::World,
 };
@@ -12,7 +12,7 @@ pub struct Interpreter {
     pub program: Program,
 
     /// Modification time that each rule has been stabilized up to (inclusive bound).
-    pub cursors: Vec<ModificationTime>,
+    pub cursors: Vec<AtomicTime>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -23,7 +23,7 @@ pub enum InterpreterError {
 #[derive(Debug, Clone, Copy)]
 pub struct RuleApplication {
     /// Modification time of the source of the rule
-    pub source_mtime: Option<ModificationTime>,
+    pub source_mtime: Option<AtomicTime>,
 
     pub real_time: f64,
 }
@@ -45,7 +45,7 @@ impl Interpreter {
         world: &mut World,
         rule: &Rule,
         ctx: &RuleApplicationContext,
-        cursor: &mut ModificationTime,
+        cursor: &mut AtomicTime,
     ) -> bool {
         while let Some((mtime, modified_region_key)) =
             world.topology().first_modification_after(*cursor)

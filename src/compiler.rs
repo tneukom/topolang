@@ -18,7 +18,7 @@ use crate::{
         SimpleGuessChooser,
     },
     topology::{
-        Border, BorderKey, MaskedTopology, ModificationTime, Region, RegionKey, Topology,
+        AtomicTime, Border, BorderKey, MaskedTopology, Region, RegionKey, Topology,
         TopologyStatistics,
     },
     world::World,
@@ -43,7 +43,7 @@ pub struct RuleSource {
     pub before_outer_border: Border,
     pub after_outer_border: Border,
     pub bounds: Rect<i64>,
-    pub modified_time: ModificationTime,
+    pub modified_time: AtomicTime,
 }
 
 impl RuleSource {
