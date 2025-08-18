@@ -11,34 +11,35 @@ impl Demo {
         Self { png, filename }
     }
 
-    const PUZZLE_15: Demo = Demo::new(
+    pub const PUZZLE_15: Demo = Demo::new(
         "15_puzzle.png",
         include_bytes!("../resources/saves/15_puzzle.png"),
     );
 
-    const ADDER_4BIT: Demo = Demo::new(
+    pub const ADDER_4BIT: Demo = Demo::new(
         "4bit_adder.png",
         include_bytes!("../resources/saves/4bit_adder.png"),
     );
 
-    const GAME_2048: Demo = Demo::new("2048.png", include_bytes!("../resources/saves/2048.png"));
+    pub const GAME_2048: Demo =
+        Demo::new("2048.png", include_bytes!("../resources/saves/2048.png"));
 
     const FINITE_AUTOMATON: Demo = Demo::new(
         "automaton.png",
         include_bytes!("../resources/saves/automaton.png"),
     );
 
-    const BINARY_COUNTER: Demo = Demo::new(
+    pub const BINARY_COUNTER: Demo = Demo::new(
         "binary_counter.png",
         include_bytes!("../resources/saves/binary_counter.png"),
     );
 
-    const RULE_30: Demo = Demo::new(
+    pub const RULE_30: Demo = Demo::new(
         "rule30.png",
         include_bytes!("../resources/saves/rule30.png"),
     );
 
-    const RULE_110: Demo = Demo::new(
+    pub const RULE_110: Demo = Demo::new(
         "rule110.png",
         include_bytes!("../resources/saves/rule110.png"),
     );
@@ -53,7 +54,7 @@ impl Demo {
         Self::RULE_110,
     ];
 
-    pub fn by_filename(filename: &str) -> Option<&Demo> {
+    pub fn by_filename(filename: &str) -> Option<&'static Demo> {
         Self::DEMOS.iter().find(|demo| demo.filename == filename)
     }
 

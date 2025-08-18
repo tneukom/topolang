@@ -45,7 +45,7 @@ rfd = { version = "0.15.4", default-features = false, features = ["gtk3"] }
 # memory addresses as a source of randomness.
 # Meh good enough, otherwise it's a hassle with WASM
 ahash = { version = "0.8.11", default-features = false, features = ["std"] }
-web-sys = "0.3.77"
+web-sys = { version = "0.3.77", features = ["UrlSearchParams"] }
 cached = "0.55.1"
 # Add "enable" flag to enable tracy-client, causes issues with stacktrace on Windows, see trace_stacktrace_missing.md
 tracy-client = { version = "0.18.1", default-features = false, features = ["system-tracing",

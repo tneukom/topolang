@@ -127,22 +127,46 @@ pub struct EguiApp {
 }
 
 impl EguiApp {
+    #[cfg(target_arch = "wasm32")]
+    fn get_url_demo() -> Option<&'static Demo> {
+        let href = web_sys::window()?.location().href().ok()?;
+
+        let url = web_sys::Url::new(&href).ok()?;
+        let params = url.search_params();
+
+        let demo_filename = params.get("demo")?;
+        Demo::by_filename(&demo_filename)
+    }
+
     pub unsafe fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // let gl = cc.gl.as_ref().map(|arc| arc.as_ref());
         let gl_arc = cc.gl.clone().unwrap();
         let gl = gl_arc.as_ref();
         let view_painter = ViewPainter::new(gl);
 
-        // Load topology from file
-        // TODO: Should be fetched instead of included
-        let world_image_bytes = include_bytes!("../resources/saves/turing.png");
-        // let world_bitmap = Bitmap::transparent(512, 512);
-        let world_color_map = RgbaField::load_from_memory(world_image_bytes)
-            .unwrap()
-            .into_material()
-            .into();
-        let world = World::from_material_map(world_color_map);
+        let demo = {
+            #[cfg(target_arch = "wasm32")]
+            {
+                Self::get_url_demo().unwrap_or(&Demo::BINARY_COUNTER)
+            }
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                &Demo::BINARY_COUNTER
+            }
+        };
+
+        // // Load topology from file
+        // let world_image_bytes = include_bytes!("../resources/saves/turing.png");
+        // // let world_bitmap = Bitmap::transparent(512, 512);
+        // let world_color_map = RgbaField::load_from_memory(world_image_bytes)
+        //     .unwrap()
+        //     .into_material()
+        //     .into();
+        // let world = World::from_material_map(world_color_map);
         // let world = Topology::from_bitmap_path("test_resources/compiler/gate/world.png").unwrap();
+
+        let world = demo.load_world();
         let view = View::new(world);
 
         let gl = cc.gl.clone().unwrap();
