@@ -14,6 +14,7 @@ use crate::{
     utils::ReflectEnum,
 };
 use cached::proc_macro::cached;
+use egui::IntoAtoms;
 use itertools::Itertools;
 use std::{ffi::OsStr, fs, path::PathBuf, sync::OnceLock};
 
@@ -88,8 +89,8 @@ pub fn palette_widget(ui: &mut egui::Ui, palette: &Palette, rgba: &mut Rgba8) ->
     color_set
 }
 
-pub fn styled_button(name: &str) -> egui::Button<'_> {
-    egui::Button::new(name).corner_radius(4)
+pub fn styled_button<'a>(atoms: impl IntoAtoms<'a>) -> egui::Button<'a> {
+    egui::Button::new(atoms).corner_radius(4)
 }
 
 pub fn styled_space(ui: &mut egui::Ui) {

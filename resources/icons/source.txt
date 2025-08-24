@@ -3,4 +3,5 @@ https://github.com/tabler/tabler-icons
 MIT license
 
 https://fonts.google.com/icons
+Use rounded, weight 200
 Apache license

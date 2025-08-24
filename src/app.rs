@@ -644,7 +644,11 @@ impl EguiApp {
 
     pub fn run_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            let pause_button = styled_button("Pause").selected(self.run_mode == RunMode::Paused);
+            let icon_size = egui::Vec2::splat(20.0);
+
+            let pause_icon = egui::include_image!("icons/pause.png").atom_size(icon_size);
+            let pause_button =
+                styled_button((pause_icon, "Pause")).selected(self.run_mode == RunMode::Paused);
             if ui.add(pause_button).clicked() {
                 if self.run_mode != RunMode::Paused {
                     self.view.add_snapshot(SnapshotCause::Run);
@@ -652,7 +656,9 @@ impl EguiApp {
                 }
             }
 
-            let run_button = styled_button("Run").selected(self.run_mode == RunMode::Run);
+            let run_icon = egui::include_image!("icons/play.png").atom_size(icon_size);
+            let run_button =
+                styled_button((run_icon, "Run")).selected(self.run_mode == RunMode::Run);
             if ui.add(run_button).clicked() {
                 if self.run_mode != RunMode::Run {
                     self.compile();
@@ -660,7 +666,9 @@ impl EguiApp {
                 }
             }
 
-            let slowmo_button = styled_button("Slowmo").selected(self.run_mode == RunMode::Slowmo);
+            let slowmo_icon = egui::include_image!("icons/slow_motion.png").atom_size(icon_size);
+            let slowmo_button =
+                styled_button((slowmo_icon, "Slowmo")).selected(self.run_mode == RunMode::Slowmo);
             if ui.add(slowmo_button).clicked() {
                 if self.run_mode != RunMode::Slowmo {
                     self.compile();
@@ -668,7 +676,8 @@ impl EguiApp {
                 }
             }
 
-            let step_button = styled_button("Step");
+            let step_icon = egui::include_image!("icons/step.png").atom_size(icon_size);
+            let step_button = styled_button((step_icon, "Step"));
             if ui
                 .add_enabled(self.run_mode == RunMode::Paused, step_button)
                 .clicked()
