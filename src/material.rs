@@ -197,7 +197,8 @@ impl Material {
     /// Not symmetric!
     pub fn matches(self, other: Self) -> bool {
         if self.is_wildcard() {
-            other != Self::TRANSPARENT
+            // Don't match sleeping or any other special class
+            other.is_normal()
         } else if self.is_solid() {
             self.rgb == other.rgb
                 && [MaterialClass::Solid, MaterialClass::Normal].contains(&other.class)
