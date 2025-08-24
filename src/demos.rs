@@ -44,7 +44,17 @@ impl Demo {
         include_bytes!("../resources/saves/rule110.png"),
     );
 
-    pub const DEMOS: [Demo; 7] = [
+    pub const TURING: Demo = Demo::new(
+        "turing.png",
+        include_bytes!("../resources/saves/turing.png"),
+    );
+
+    pub const GAME_OF_LIFE: Demo = Demo::new(
+        "game_of_life.png",
+        include_bytes!("../resources/saves/game_of_life.png"),
+    );
+
+    pub const DEMOS: [Demo; 9] = [
         Self::PUZZLE_15,
         Self::ADDER_4BIT,
         Self::GAME_2048,
@@ -52,6 +62,8 @@ impl Demo {
         Self::BINARY_COUNTER,
         Self::RULE_30,
         Self::RULE_110,
+        Self::TURING,
+        Self::GAME_OF_LIFE,
     ];
 
     pub fn by_filename(filename: &str) -> Option<&'static Demo> {
