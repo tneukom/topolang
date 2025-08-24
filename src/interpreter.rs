@@ -149,7 +149,11 @@ impl Interpreter {
 
         let (stabilize_outcome, applications) = self.stabilize(world, input, max_modifications);
 
-        let n_woken_up = self.wake_up(world);
+        let n_woken_up = if applications.len() == 0 {
+            self.wake_up(world)
+        } else {
+            0
+        };
 
         Ok(Ticked {
             stabilize_outcome,
