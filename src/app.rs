@@ -752,6 +752,21 @@ impl EguiApp {
     }
 
     pub fn side_panel_ui(&mut self, ui: &mut egui::Ui) {
+        // For debugging scaling issues
+        #[cfg(true)]
+        {
+            // Show some ui rendering settings
+            let zoom_factor = ui.ctx().zoom_factor();
+            ui.label(format!("zoom_factor: {zoom_factor}"));
+            let native_pixels_per_points = ui.ctx().native_pixels_per_point();
+            ui.label(format!(
+                "native_pixels_per_points: {native_pixels_per_points:?}"
+            ));
+            let input = ui.input(|input| input.clone());
+            ui.label(format!("input.screen_rect: {}", input.screen_rect));
+            ui.label(format!("input.pixels_per_point {}", input.pixels_per_point));
+        }
+
         self.run_ui(ui);
         ui.separator();
 

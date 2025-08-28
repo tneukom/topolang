@@ -1,7 +1,12 @@
-<!doctype html>
-<html lang="en-US">
+<!DOCTYPE html>
+<html>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+
+<!-- Disable zooming: -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
 <head>
-    <meta charset="utf-8" />
+    <meta charset="utf-8"/>
     <title>hello-wasm example</title>
 
     <style>
@@ -50,7 +55,8 @@
 </head>
 <body>
 <script type="module">
-    import init, { main } from "./pkg/seamlang.js";
+    import init, {main} from "./pkg/seamlang.js";
+
     init().then(() => {
         main();
     });
