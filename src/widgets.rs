@@ -14,7 +14,7 @@ use crate::{
     utils::ReflectEnum,
 };
 use cached::proc_macro::cached;
-use egui::IntoAtoms;
+use egui::{AtomExt, IntoAtoms};
 use itertools::Itertools;
 use std::{ffi::OsStr, fs, path::PathBuf, sync::OnceLock};
 
@@ -91,6 +91,11 @@ pub fn palette_widget(ui: &mut egui::Ui, palette: &Palette, rgba: &mut Rgba8) ->
 
 pub fn styled_button<'a>(atoms: impl IntoAtoms<'a>) -> egui::Button<'a> {
     egui::Button::new(atoms).corner_radius(4)
+}
+
+pub fn icon_button<'a>(icon: egui::ImageSource<'a>, size: f32) -> egui::Button<'a> {
+    let icon_size = egui::Vec2::splat(size);
+    styled_button(icon.atom_size(icon_size))
 }
 
 pub fn styled_space(ui: &mut egui::Ui) {
@@ -217,7 +222,9 @@ pub fn material_chooser(ui: &mut egui::Ui, material: &mut Material) {
     ];
 
     ui.add_enabled_ui(!is_reserved, |ui| {
-        choice_buttons(ui, None, choices, &mut material.class);
+        ui.horizontal(|ui| {
+            choice_buttons(ui, None, choices, &mut material.class);
+        });
     });
 }
 
@@ -353,17 +360,15 @@ pub fn choice_buttons<'a, T: Copy + Eq>(
         ui.label(title);
     }
 
-    ui.horizontal(|ui| {
-        for (choice, label) in choices.into_iter() {
-            if ui
-                .add(styled_button(label).selected(choice == *selected))
-                .clicked()
-            {
-                *selected = choice;
-                clicked = true;
-            }
+    for (choice, label) in choices.into_iter() {
+        if ui
+            .add(styled_button(label).selected(choice == *selected))
+            .clicked()
+        {
+            *selected = choice;
+            clicked = true;
         }
-    });
+    }
 
     clicked
 }

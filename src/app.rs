@@ -18,10 +18,12 @@ use crate::{
     rule_activity::RuleActivity,
     utils::{ReflectEnum, monotonic_time},
     view::{EditMode, Selection, View, ViewInput, ViewSettings},
-    widgets::{FileChooser, brush_chooser, enum_choice_buttons, prefab_picker, styled_button},
+    widgets::{
+        FileChooser, brush_chooser, enum_choice_buttons, icon_button, prefab_picker, styled_button,
+    },
     world::World,
 };
-use egui::AtomExt;
+use egui::{AtomExt, ImageSource};
 use glow::HasContext;
 use itertools::Itertools;
 use log::{info, warn};
@@ -74,11 +76,11 @@ impl ReflectEnum for RunSpeed {
 
     fn as_str(self) -> &'static str {
         match self {
-            Self::Hz1 => "1 Hz",
-            Self::Hz2 => "2 Hz",
-            Self::Hz5 => "3 Hz",
-            Self::Hz10 => "10 Hz",
-            Self::Hz30 => "30 Hz",
+            Self::Hz1 => "1",
+            Self::Hz2 => "2",
+            Self::Hz5 => "3",
+            Self::Hz10 => "10",
+            Self::Hz30 => "30",
         }
     }
 }
@@ -228,11 +230,6 @@ impl EguiApp {
         }
     }
 
-    fn icon_button(icon: egui::ImageSource, size: f32) -> egui::Button {
-        let icon_size = egui::Vec2::splat(size);
-        egui::Button::new(icon.atom_size(icon_size)).corner_radius(4)
-    }
-
     pub fn view_ui(&mut self, ui: &mut egui::Ui) {
         ui.add_enabled_ui(self.run_mode == RunMode::Paused, |ui| {
             ui.horizontal_wrapped(|ui| {
@@ -248,7 +245,7 @@ impl EguiApp {
                         // aborts the clicked state if the mouse is moved too much. So we also
                         // consider dragging and check if the pointer is still over the button.
 
-                        let button = Self::icon_button(Self::edit_mode_icon(mode), 32.0)
+                        let button = icon_button(Self::edit_mode_icon(mode), 32.0)
                             .selected(mode == self.view_settings.edit_mode)
                             .sense(egui::Sense::click_and_drag());
                         let response = ui.add(button);
@@ -262,7 +259,7 @@ impl EguiApp {
 
                     // Prefabs popup
                     let folder_icon = egui::include_image!("icons/folder.png");
-                    let button = Self::icon_button(folder_icon, 32.0);
+                    let button = icon_button(folder_icon, 32.0);
                     let response = ui.add(button);
                     egui::Popup::menu(&response).show(|ui| {
                         if let Some(prefab) = prefab_picker(ui) {
@@ -325,17 +322,17 @@ impl EguiApp {
 
                     // Copy, cut, past UI
                     let copy_icon = egui::include_image!("icons/copy.png");
-                    if ui.add(Self::icon_button(copy_icon, 32.0)).clicked() {
+                    if ui.add(icon_button(copy_icon, 32.0)).clicked() {
                         self.clipboard_copy(ui.ctx());
                     }
 
                     let cut_icon = egui::include_image!("icons/cut.png");
-                    if ui.add(Self::icon_button(cut_icon, 32.0)).clicked() {
+                    if ui.add(icon_button(cut_icon, 32.0)).clicked() {
                         self.clipboard_cut(ui.ctx());
                     }
 
                     let paste_icon = egui::include_image!("icons/paste.png");
-                    if ui.add(Self::icon_button(paste_icon, 32.0)).clicked() {
+                    if ui.add(icon_button(paste_icon, 32.0)).clicked() {
                         if let Some(clipboard) = &self.clipboard {
                             self.view
                                 .clipboard_paste(None, clipboard.material_map.clone());
@@ -349,12 +346,12 @@ impl EguiApp {
 
                     // Undo, Redo buttons
                     let undo_icon = egui::include_image!("icons/undo.png");
-                    if ui.add(Self::icon_button(undo_icon, 32.0)).clicked() {
+                    if ui.add(icon_button(undo_icon, 32.0)).clicked() {
                         history.undo();
                     }
 
                     let redo_icon = egui::include_image!("icons/redo.png");
-                    if ui.add(Self::icon_button(redo_icon, 32.0)).clicked() {
+                    if ui.add(icon_button(redo_icon, 32.0)).clicked() {
                         history.redo();
                     }
 
@@ -642,65 +639,77 @@ impl EguiApp {
         }
     }
 
-    pub fn run_ui(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            let icon_size = egui::Vec2::splat(20.0);
+    fn run_button<'a>(compact_ui: bool, icon: ImageSource<'a>, label: &'a str) -> egui::Button<'a> {
+        let icon_size = egui::Vec2::splat(20.0);
+        let icon = icon.atom_size(icon_size);
+        if compact_ui {
+            styled_button(icon)
+        } else {
+            styled_button((icon, label))
+        }
+    }
 
-            let pause_icon = egui::include_image!("icons/pause.png").atom_size(icon_size);
-            let pause_button =
-                styled_button((pause_icon, "Pause")).selected(self.run_mode == RunMode::Paused);
-            if ui.add(pause_button).clicked() {
-                if self.run_mode != RunMode::Paused {
-                    self.view.add_snapshot(SnapshotCause::Run);
-                    self.run_mode = RunMode::Paused;
-                }
-            }
-
-            let run_icon = egui::include_image!("icons/play.png").atom_size(icon_size);
-            let run_button =
-                styled_button((run_icon, "Run")).selected(self.run_mode == RunMode::Run);
-            if ui.add(run_button).clicked() {
-                if self.run_mode != RunMode::Run {
-                    self.compile();
-                    self.run_mode = RunMode::Run;
-                }
-            }
-
-            let slowmo_icon = egui::include_image!("icons/slow_motion.png").atom_size(icon_size);
-            let slowmo_button =
-                styled_button((slowmo_icon, "Slowmo")).selected(self.run_mode == RunMode::Slowmo);
-            if ui.add(slowmo_button).clicked() {
-                if self.run_mode != RunMode::Slowmo {
-                    self.compile();
-                    self.run_mode = RunMode::Slowmo;
-                }
-            }
-
-            let step_icon = egui::include_image!("icons/step.png").atom_size(icon_size);
-            let step_button = styled_button((step_icon, "Step"));
-            if ui
-                .add_enabled(self.run_mode == RunMode::Paused, step_button)
-                .clicked()
-            {
-                // Single step
-                self.compile();
-                self.tick(1);
-            }
-
-            if self.interpreter.is_none() {
+    pub fn run_buttons(&mut self, compact_ui: bool, ui: &mut egui::Ui) {
+        let pause_icon = egui::include_image!("icons/pause.png");
+        let pause_button = Self::run_button(compact_ui, pause_icon, "Pause")
+            .selected(self.run_mode == RunMode::Paused);
+        if ui.add(pause_button).clicked() {
+            if self.run_mode != RunMode::Paused {
+                self.view.add_snapshot(SnapshotCause::Run);
                 self.run_mode = RunMode::Paused;
             }
+        }
 
-            if self.run_mode == RunMode::Slowmo {
-                self.slowmo();
-            } else if self.run_mode == RunMode::Run {
-                self.run();
+        let run_icon = egui::include_image!("icons/play.png");
+        let run_button =
+            Self::run_button(compact_ui, run_icon, "Run").selected(self.run_mode == RunMode::Run);
+        if ui.add(run_button).clicked() {
+            if self.run_mode != RunMode::Run {
+                self.compile();
+                self.run_mode = RunMode::Run;
             }
+        }
+
+        let slowmo_icon = egui::include_image!("icons/slow_motion.png");
+        let slowmo_button = Self::run_button(compact_ui, slowmo_icon, "Slowmo")
+            .selected(self.run_mode == RunMode::Slowmo);
+        if ui.add(slowmo_button).clicked() {
+            if self.run_mode != RunMode::Slowmo {
+                self.compile();
+                self.run_mode = RunMode::Slowmo;
+            }
+        }
+
+        let step_icon = egui::include_image!("icons/step.png");
+        let step_button = Self::run_button(compact_ui, step_icon, "Step");
+        if ui
+            .add_enabled(self.run_mode == RunMode::Paused, step_button)
+            .clicked()
+        {
+            // Single step
+            self.compile();
+            self.tick(1);
+        }
+
+        if self.interpreter.is_none() {
+            self.run_mode = RunMode::Paused;
+        }
+
+        if self.run_mode == RunMode::Slowmo {
+            self.slowmo();
+        } else if self.run_mode == RunMode::Run {
+            self.run();
+        }
+    }
+
+    pub fn run_ui(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            self.run_buttons(false, ui);
         });
 
-        // Run speed buttons
-        ui.label("Run speed");
-        enum_choice_buttons(ui, None, &mut self.run_speed);
+        ui.horizontal(|ui| {
+            self.run_speed_choice_ui(ui);
+        });
 
         #[cfg(not(feature = "minimal_ui"))]
         {
@@ -753,7 +762,7 @@ impl EguiApp {
 
     pub fn side_panel_ui(&mut self, ui: &mut egui::Ui) {
         // For debugging scaling issues
-        #[cfg(true)]
+        #[cfg(false)]
         {
             // Show some ui rendering settings
             let zoom_factor = ui.ctx().zoom_factor();
@@ -1068,6 +1077,75 @@ impl EguiApp {
         };
         ui.painter().add(callback);
     }
+
+    fn full_ui(&mut self, ctx: &egui::Context) {
+        egui::SidePanel::left("left_panel")
+            .show(ctx, |ui| {
+                self.side_panel_ui(ui);
+                ui.allocate_space(ui.available_size());
+            })
+            .response
+            .rect;
+
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            self.top_ui(ui);
+            // ui.allocate_space(ui.available_size());
+        });
+    }
+
+    fn zoom_buttons_ui(&mut self, ui: &mut egui::Ui) {
+        let view_center = self.view_input.frames.viewport.center();
+
+        let zoom_in_icon = egui::include_image!("icons/zoom_in.png");
+        if ui.add(icon_button(zoom_in_icon, 20.0)).clicked() {
+            self.view.zoom_in(view_center);
+        }
+
+        let zoom_out_icon = egui::include_image!("icons/zoom_out.png");
+        if ui.add(icon_button(zoom_out_icon, 20.0)).clicked() {
+            self.view.zoom_out(view_center);
+        }
+    }
+
+    fn run_speed_choice_ui(&mut self, ui: &mut egui::Ui) {
+        // Label with padding to make it same height as
+        egui::Frame::NONE
+            .inner_margin(egui::Margin::symmetric(0, 6))
+            .show(ui, |ui| {
+                ui.label("Speed (Hz)");
+            });
+
+        // Run speed buttons & demos button
+        enum_choice_buttons(ui, None, &mut self.run_speed);
+    }
+
+    fn compact_ui(&mut self, ctx: &egui::Context) {
+        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            // Run buttons and camera zoom buttons on the first line
+            ui.horizontal(|ui| {
+                self.run_buttons(true, ui);
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    self.zoom_buttons_ui(ui);
+                });
+            });
+
+            ui.horizontal(|ui| {
+                self.run_speed_choice_ui(ui);
+
+                // Demo menu button
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.menu_button("Demos", |ui| {
+                        self.demo_ui(ui);
+                    });
+                });
+            });
+
+            // ui.horizontal(|ui| {
+            //
+            // })
+        });
+    }
 }
 
 impl eframe::App for EguiApp {
@@ -1128,18 +1206,12 @@ impl eframe::App for EguiApp {
         // visual.window_shadow = epaint::Shadow::NONE;
         ctx.set_visuals(visual);
 
-        egui::SidePanel::left("left_panel")
-            .show(ctx, |ui| {
-                self.side_panel_ui(ui);
-                ui.allocate_space(ui.available_size());
-            })
-            .response
-            .rect;
-
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            self.top_ui(ui);
-            // ui.allocate_space(ui.available_size());
-        });
+        let compact_ui = ctx.input(|input| input.screen_rect.width() < 800.0);
+        if compact_ui {
+            self.compact_ui(ctx);
+        } else {
+            self.full_ui(ctx);
+        }
 
         egui::CentralPanel::default().show(ctx, |ui| {
             self.central_panel(ui);

@@ -5,6 +5,9 @@ use crate::math::{affine_map::AffineMap, point::Point, rect::Rect};
 /// `view_to_world`
 pub struct Camera {
     pub offset: Point<f64>,
+
+    /// Scale of world_from_view or 1/scale of view_from_world. Meaning a smaller scale is more
+    /// zoomed in.
     pub scale: f64,
 }
 
@@ -62,9 +65,9 @@ impl Camera {
         Camera::new(offset, scale)
     }
 
-    // Zoom in at the given point in the view reference frame.
+    // Zoom out at the given point in the view reference frame.
     // The result maps `view_point` to `view_to_world * view_point`
-    pub fn zoom_in_at_view_point(&self, view_point: Point<f64>) -> Camera {
+    pub fn zoom_out_at_view_point(&self, view_point: Point<f64>) -> Camera {
         let Some(next_scale) = Self::ZOOM_LEVELS
             .into_iter()
             .filter(|&zoom| zoom > self.scale)
@@ -77,8 +80,8 @@ impl Camera {
         Self::map_view_to_world(view_point, world_point, next_scale)
     }
 
-    /// See `zoom_in_at_view_point`
-    pub fn zoom_out_at_view_point(&self, view_point: Point<f64>) -> Camera {
+    /// See `zoom_out_at_view_point`
+    pub fn zoom_in_at_view_point(&self, view_point: Point<f64>) -> Camera {
         let Some(next_scale) = Self::ZOOM_LEVELS
             .into_iter()
             .filter(|&zoom| zoom < self.scale)

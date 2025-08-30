@@ -290,6 +290,14 @@ impl View {
         self.camera = Camera::fit_world_into_view(world_bounds.cwise_as(), view_rect).round();
     }
 
+    pub fn zoom_in(&mut self, view_point: Point<f64>) {
+        self.camera = self.camera.zoom_in_at_view_point(view_point);
+    }
+
+    pub fn zoom_out(&mut self, view_point: Point<f64>) {
+        self.camera = self.camera.zoom_out_at_view_point(view_point);
+    }
+
     pub fn empty(bounds: Rect<i64>) -> View {
         let field = Field::filled(bounds, Material::TRANSPARENT);
         let material_map = Pixmap::from_field(&field);
@@ -540,9 +548,9 @@ impl View {
 
     fn handle_camera_input(&mut self, input: &mut ViewInput) {
         if input.mouse_wheel < 0.0 {
-            self.camera = self.camera.zoom_in_at_view_point(input.view_mouse).round();
-        } else if input.mouse_wheel > 0.0 {
             self.camera = self.camera.zoom_out_at_view_point(input.view_mouse).round();
+        } else if input.mouse_wheel > 0.0 {
+            self.camera = self.camera.zoom_in_at_view_point(input.view_mouse).round();
         }
     }
 
