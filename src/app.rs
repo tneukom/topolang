@@ -129,6 +129,8 @@ pub struct EguiApp {
 }
 
 impl EguiApp {
+    const ICON_SIZE: f32 = 20.0;
+
     #[cfg(target_arch = "wasm32")]
     fn get_url_demo() -> Option<&'static Demo> {
         let href = web_sys::window()?.location().href().ok()?;
@@ -234,40 +236,35 @@ impl EguiApp {
     pub fn view_ui(&mut self, ui: &mut egui::Ui) {
         ui.add_enabled_ui(self.run_mode == RunMode::Paused, |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.scope(|ui| {
-                    const BUTTON_PADDING: f32 = 3.0;
-                    ui.style_mut().spacing.button_padding = egui::Vec2::splat(BUTTON_PADDING);
+                // Edit mode choices
+                for mode in EditMode::ALL {
+                    // The behavior of Egui when clicking a button and moving the mouse is a bit
+                    // weird. If a native Windows button is pressed down, the mouse moved while
+                    // still inside the button and then released, it counts as a click. Egui
+                    // aborts the clicked state if the mouse is moved too much. So we also
+                    // consider dragging and check if the pointer is still over the button.
 
-                    // Edit mode choices
-                    for mode in EditMode::ALL {
-                        // The behavior of Egui when clicking a button and moving the mouse is a bit
-                        // weird. If a native Windows button is pressed down, the mouse moved while
-                        // still inside the button and then released, it counts as a click. Egui
-                        // aborts the clicked state if the mouse is moved too much. So we also
-                        // consider dragging and check if the pointer is still over the button.
-
-                        let button = icon_button(Self::edit_mode_icon(mode), 32.0)
-                            .selected(mode == self.view_settings.edit_mode)
-                            .sense(egui::Sense::click_and_drag());
-                        let response = ui.add(button);
-
-                        if response.clicked()
-                            || response.drag_stopped() && response.hover_pos().is_some()
-                        {
-                            self.view_settings.edit_mode = mode;
-                        }
-                    }
-
-                    // Prefabs popup
-                    let folder_icon = egui::include_image!("icons/folder.png");
-                    let button = icon_button(folder_icon, 32.0);
+                    let button = icon_button(Self::edit_mode_icon(mode), Self::ICON_SIZE)
+                        .selected(mode == self.view_settings.edit_mode)
+                        .sense(egui::Sense::click_and_drag());
                     let response = ui.add(button);
-                    egui::Popup::menu(&response).show(|ui| {
-                        if let Some(prefab) = prefab_picker(ui) {
-                            self.view_settings.edit_mode = EditMode::SelectRect;
-                            self.view.paste(prefab.clone());
-                        }
-                    });
+
+                    if response.clicked()
+                        || response.drag_stopped() && response.hover_pos().is_some()
+                    {
+                        self.view_settings.edit_mode = mode;
+                    }
+                }
+
+                // Prefabs popup
+                let folder_icon = egui::include_image!("icons/folder.png");
+                let button = icon_button(folder_icon, Self::ICON_SIZE);
+                let response = ui.add(button);
+                egui::Popup::menu(&response).show(|ui| {
+                    if let Some(prefab) = prefab_picker(ui) {
+                        self.view_settings.edit_mode = EditMode::SelectRect;
+                        self.view.paste(prefab.clone());
+                    }
                 });
             });
         });
@@ -317,52 +314,46 @@ impl EguiApp {
     pub fn tool_buttons_ui(&mut self, ui: &mut egui::Ui) {
         ui.add_enabled_ui(self.run_mode == RunMode::Paused, |ui| {
             ui.horizontal(|ui| {
-                ui.scope(|ui| {
-                    const BUTTON_PADDING: f32 = 3.0;
-                    ui.style_mut().spacing.button_padding = egui::Vec2::splat(BUTTON_PADDING);
+                // Copy, cut, past UI
+                let copy_icon = egui::include_image!("icons/copy.png");
+                if ui.add(icon_button(copy_icon, Self::ICON_SIZE)).clicked() {
+                    self.clipboard_copy(ui.ctx());
+                }
 
-                    // Copy, cut, past UI
-                    let copy_icon = egui::include_image!("icons/copy.png");
-                    if ui.add(icon_button(copy_icon, 32.0)).clicked() {
-                        self.clipboard_copy(ui.ctx());
+                let cut_icon = egui::include_image!("icons/cut.png");
+                if ui.add(icon_button(cut_icon, Self::ICON_SIZE)).clicked() {
+                    self.clipboard_cut(ui.ctx());
+                }
+
+                let paste_icon = egui::include_image!("icons/paste.png");
+                if ui.add(icon_button(paste_icon, Self::ICON_SIZE)).clicked() {
+                    if let Some(clipboard) = &self.clipboard {
+                        self.view
+                            .clipboard_paste(None, clipboard.material_map.clone());
                     }
+                    // TODO: Use ViewportCommand::RequestPaste
+                }
 
-                    let cut_icon = egui::include_image!("icons/cut.png");
-                    if ui.add(icon_button(cut_icon, 32.0)).clicked() {
-                        self.clipboard_cut(ui.ctx());
-                    }
+                // Undo/redo ui
+                let current_head = self.view.history.head.clone();
+                let history = &mut self.view.history;
 
-                    let paste_icon = egui::include_image!("icons/paste.png");
-                    if ui.add(icon_button(paste_icon, 32.0)).clicked() {
-                        if let Some(clipboard) = &self.clipboard {
-                            self.view
-                                .clipboard_paste(None, clipboard.material_map.clone());
-                        }
-                        // TODO: Use ViewportCommand::RequestPaste
-                    }
+                // Undo, Redo buttons
+                let undo_icon = egui::include_image!("icons/undo.png");
+                if ui.add(icon_button(undo_icon, Self::ICON_SIZE)).clicked() {
+                    history.undo();
+                }
 
-                    // Undo/redo ui
-                    let current_head = self.view.history.head.clone();
-                    let history = &mut self.view.history;
+                let redo_icon = egui::include_image!("icons/redo.png");
+                if ui.add(icon_button(redo_icon, Self::ICON_SIZE)).clicked() {
+                    history.redo();
+                }
 
-                    // Undo, Redo buttons
-                    let undo_icon = egui::include_image!("icons/undo.png");
-                    if ui.add(icon_button(undo_icon, 32.0)).clicked() {
-                        history.undo();
-                    }
-
-                    let redo_icon = egui::include_image!("icons/redo.png");
-                    if ui.add(icon_button(redo_icon, 32.0)).clicked() {
-                        history.redo();
-                    }
-
-                    // If head has changed, update world
-                    if !Rc::ptr_eq(&history.head, &current_head) {
-                        self.view.world =
-                            World::from_material_map(history.head.material_map().clone());
-                        self.view.selection = history.head.selection().clone();
-                    }
-                });
+                // If head has changed, update world
+                if !Rc::ptr_eq(&history.head, &current_head) {
+                    self.view.world = World::from_material_map(history.head.material_map().clone());
+                    self.view.selection = history.head.selection().clone();
+                }
             });
         });
     }
@@ -641,7 +632,7 @@ impl EguiApp {
     }
 
     fn run_button<'a>(compact_ui: bool, icon: ImageSource<'a>, label: &'a str) -> egui::Button<'a> {
-        let icon_size = egui::Vec2::splat(20.0);
+        let icon_size = egui::Vec2::splat(Self::ICON_SIZE);
         let icon = icon.atom_size(icon_size);
         if compact_ui {
             styled_button(icon)
@@ -1097,12 +1088,15 @@ impl EguiApp {
         let view_center = self.view_input.frames.viewport.center();
 
         let zoom_in_icon = egui::include_image!("icons/zoom_in.png");
-        if ui.add(icon_button(zoom_in_icon, 20.0)).clicked() {
+        if ui.add(icon_button(zoom_in_icon, Self::ICON_SIZE)).clicked() {
             self.view.zoom_in(view_center);
         }
 
         let zoom_out_icon = egui::include_image!("icons/zoom_out.png");
-        if ui.add(icon_button(zoom_out_icon, 20.0)).clicked() {
+        if ui
+            .add(icon_button(zoom_out_icon, Self::ICON_SIZE))
+            .clicked()
+        {
             self.view.zoom_out(view_center);
         }
     }
@@ -1164,8 +1158,15 @@ impl eframe::App for EguiApp {
         }
 
         ctx.style_mut(|style| {
-            style.spacing.button_padding = egui::Vec2::new(8.0, 8.0);
+            style.spacing.button_padding = egui::Vec2::splat(6.0);
+            style
+                .text_styles
+                .get_mut(&egui::TextStyle::Body)
+                .unwrap()
+                .size = 15.0;
         });
+
+        // ctx.set_pixels_per_point(1.7);
 
         // We cannot lock input while called clipboard_copy, clipboard_cut, ...
         // TODO: Only clone Paste, Copy, Cut events

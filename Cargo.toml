@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 # Force the app to update at 120Hz and disable vsync, for reduced latency. Hack, for experiments only
-default = ["minimal_ui", "link_ui"]
+default = ["minimal_ui"]
 force_120hz = []
 minimal_ui = []
 link_ui = []
