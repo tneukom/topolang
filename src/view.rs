@@ -51,13 +51,18 @@ impl ViewInput {
     };
 
     /// Either middle mouse or ctrl + left mouse
-    pub fn move_camera_down(&self) -> bool {
-        self.middle_mouse_down || (self.left_mouse_down && self.ctrl_down)
+    pub fn move_camera_down(&self, view_settings: &ViewSettings) -> bool {
+        self.middle_mouse_down
+            || (self.left_mouse_down && self.ctrl_down)
+            || (view_settings.edit_mode == EditMode::Pointer && self.left_mouse_down)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EditMode {
+    /// Only move camera, zoom in/out, interact with running program
+    Pointer,
+
     Brush,
     Eraser,
     Fill,
@@ -71,6 +76,7 @@ pub enum EditMode {
 impl EditMode {
     pub fn ui_label(self) -> &'static str {
         match self {
+            Self::Pointer => "Pointer",
             Self::Brush => "Brush",
             Self::Eraser => "Eraser",
             Self::Fill => "Fill",
@@ -82,7 +88,8 @@ impl EditMode {
         }
     }
 
-    pub const ALL: [EditMode; 8] = [
+    pub const ALL: [EditMode; 9] = [
+        Self::Pointer,
         Self::Brush,
         Self::Eraser,
         Self::Fill,
@@ -317,9 +324,9 @@ impl View {
         &mut self,
         op: MoveCamera,
         input: &ViewInput,
-        _settings: &ViewSettings,
+        settings: &ViewSettings,
     ) -> UiState {
-        if !input.move_camera_down() {
+        if !input.move_camera_down(settings) {
             return UiState::Idle;
         }
 
@@ -472,7 +479,7 @@ impl View {
 
     /// Transition from None state
     pub fn begin_action(&mut self, input: &ViewInput, settings: &mut ViewSettings) -> UiState {
-        if input.move_camera_down() {
+        if input.move_camera_down(settings) {
             let move_camera = MoveCamera {
                 world_mouse: input.world_mouse,
             };
@@ -485,6 +492,7 @@ impl View {
         }
 
         match settings.edit_mode {
+            EditMode::Pointer => {}
             EditMode::Brush | EditMode::Eraser => {
                 if input.left_mouse_down {
                     let mut brush = settings.brush;

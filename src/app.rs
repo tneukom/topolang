@@ -175,7 +175,7 @@ impl EguiApp {
 
         let view_settings = ViewSettings {
             locked: false,
-            edit_mode: EditMode::Brush,
+            edit_mode: EditMode::Pointer,
             brush: Brush::default(),
         };
 
@@ -219,6 +219,7 @@ impl EguiApp {
 
     pub fn edit_mode_icon(edit_mode: EditMode) -> egui::ImageSource<'static> {
         match edit_mode {
+            EditMode::Pointer => egui::include_image!("icons/pointer.png"),
             EditMode::Brush => egui::include_image!("icons/brush.png"),
             EditMode::Eraser => egui::include_image!("icons/eraser.png"),
             EditMode::Fill => egui::include_image!("icons/fill.png"),
