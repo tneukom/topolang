@@ -63,12 +63,23 @@ pub fn material_button(ui: &mut egui::Ui, material: Material, selected: bool) ->
 //     ui.add_sized([28.0, 28.0], button)
 // }
 
+fn palette_btn_style(ui: &mut egui::Ui) {
+    // 2 pixel padding and spacing
+    ui.style_mut().spacing.button_padding = egui::Vec2::splat(2.0);
+    ui.spacing_mut().item_spacing = egui::Vec2::splat(2.0);
+
+    // Set padding color to same as panel background
+    let padding_fill = ui.style_mut().visuals.panel_fill;
+    ui.style_mut().visuals.widgets.inactive.weak_bg_fill = padding_fill;
+    ui.style_mut().visuals.widgets.active.weak_bg_fill = padding_fill;
+    ui.style_mut().visuals.widgets.noninteractive.weak_bg_fill = padding_fill;
+}
+
 pub fn palette_widget(ui: &mut egui::Ui, palette: &Palette, rgba: &mut Rgba8) -> bool {
     let mut color_set = false;
 
     ui.scope(|ui| {
-        ui.style_mut().spacing.button_padding =
-            egui::Vec2::new(COLOR_BUTTON_MARGIN, COLOR_BUTTON_MARGIN);
+        palette_btn_style(ui);
 
         // 8 colors per row
         ui.horizontal_wrapped(|ui| {
@@ -170,8 +181,7 @@ pub fn system_material_widget(ui: &mut egui::Ui, material: &mut Material) -> boo
     };
 
     ui.scope(|ui| {
-        ui.style_mut().spacing.button_padding =
-            egui::Vec2::new(COLOR_BUTTON_MARGIN, COLOR_BUTTON_MARGIN);
+        palette_btn_style(ui);
 
         ui.horizontal(|ui| {
             btn(ui, "Rule Before", Material::RULE_BEFORE);

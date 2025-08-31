@@ -786,7 +786,6 @@ impl EguiApp {
         self.tool_buttons_ui(ui);
         ui.separator();
 
-        ui.label("Brush");
         brush_chooser(ui, &mut self.view_settings.brush);
         ui.separator();
 
