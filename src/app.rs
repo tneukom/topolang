@@ -17,7 +17,7 @@ use crate::{
     rule::CanvasInput,
     rule_activity::RuleActivity,
     utils::{ReflectEnum, monotonic_time},
-    view::{EditMode, Selection, View, ViewInput, ViewSettings},
+    view::{EditMode, View, ViewInput, ViewSettings},
     widgets::{
         FileChooser, brush_chooser, enum_choice_buttons, icon_button, prefab_picker, styled_button,
     },
@@ -752,20 +752,44 @@ impl EguiApp {
         }
     }
 
+    fn debug_info_zoom_input(ui: &mut egui::Ui) {
+        let input = ui.input(|input| input.clone());
+        let mut small_label = |text: &str| {
+            ui.label(egui::RichText::new(text).size(12.0));
+        };
+
+        small_label(&format!("input.zoom_delta: {}", input.zoom_delta()));
+        small_label(&format!("input.zoom_delta_2d: {}", input.zoom_delta_2d()));
+        let touch_zoom_delta = input.multi_touch().map(|touch| touch.zoom_delta);
+        small_label(&format!("multi_touch_zoom_delta: {touch_zoom_delta:?}"));
+        let touch_center = input.multi_touch().map(|touch| touch.center_pos);
+        small_label(&format!("touch_center: {touch_center:?}"));
+    }
+
+    /// Show some ui rendering settings
+    fn debug_info_scaling(ui: &mut egui::Ui) {
+        let zoom_factor = ui.ctx().zoom_factor();
+        ui.label(format!("zoom_factor: {zoom_factor}"));
+        let native_pixels_per_points = ui.ctx().native_pixels_per_point();
+        ui.label(format!(
+            "native_pixels_per_points: {native_pixels_per_points:?}"
+        ));
+        let input = ui.input(|input| input.clone());
+        ui.label(format!("input.screen_rect: {}", input.screen_rect));
+        ui.label(format!("input.pixels_per_point {}", input.pixels_per_point));
+    }
+
     pub fn side_panel_ui(&mut self, ui: &mut egui::Ui) {
         // For debugging scaling issues
         #[cfg(false)]
         {
-            // Show some ui rendering settings
-            let zoom_factor = ui.ctx().zoom_factor();
-            ui.label(format!("zoom_factor: {zoom_factor}"));
-            let native_pixels_per_points = ui.ctx().native_pixels_per_point();
-            ui.label(format!(
-                "native_pixels_per_points: {native_pixels_per_points:?}"
-            ));
-            let input = ui.input(|input| input.clone());
-            ui.label(format!("input.screen_rect: {}", input.screen_rect));
-            ui.label(format!("input.pixels_per_point {}", input.pixels_per_point));
+            Self::debug_info_scaling(ui);
+        }
+
+        // For debugging zoom
+        #[cfg(false)]
+        {
+            Self::debug_info_zoom_input(ui);
         }
 
         self.run_ui(ui);
@@ -977,6 +1001,14 @@ impl EguiApp {
             let left_mouse_click = hovered && mouse.button_clicked(egui::PointerButton::Primary);
             let right_mouse_click = hovered && mouse.button_clicked(egui::PointerButton::Secondary);
 
+            let (pinch_delta, view_pinch_center) = if let Some(touch) = input.multi_touch() {
+                let window_pinch_center: Point<f64> = touch.center_pos.into();
+                let view_pinch_center = frames.view_from_window() * window_pinch_center;
+                (1.0 / touch.zoom_delta as f64, view_pinch_center)
+            } else {
+                (0.0, Point::ZERO)
+            };
+
             // TODO: wants_keyboard is false when cursor is in textbox and escape is pressed, so a
             //   selection is cancelled. It should not be cancelled!
             self.view_input = ViewInput {
@@ -990,6 +1022,9 @@ impl EguiApp {
                 delete_pressed: !wants_keyboard && input.key_pressed(egui::Key::Delete),
 
                 mouse_wheel: scroll_delta,
+
+                pinch_delta,
+                view_pinch_center,
             };
 
             self.canvas_input = CanvasInput {
@@ -1135,9 +1170,11 @@ impl EguiApp {
                 });
             });
 
-            // ui.horizontal(|ui| {
-            //
-            // })
+            // For debugging zoom
+            #[cfg(false)]
+            {
+                Self::debug_info_zoom_input(ui);
+            }
         });
     }
 }

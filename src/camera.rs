@@ -94,6 +94,11 @@ impl Camera {
         Self::map_view_to_world(view_point, world_point, next_scale)
     }
 
+    pub fn zoom_delta_at_view_point(&self, view_point: Point<f64>, delta: f64) -> Camera {
+        let world_point = self.world_from_view() * view_point;
+        Self::map_view_to_world(view_point, world_point, self.scale * delta)
+    }
+
     /// A camera that maps the center of world_rect to the center of view_rect and
     /// camera.world_to_view * world_rect fits into view_rect
     /// scale is power of 2

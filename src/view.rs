@@ -28,6 +28,10 @@ pub struct ViewInput {
     pub delete_pressed: bool,
 
     pub mouse_wheel: f64,
+
+    pub pinch_delta: f64,
+    /// Point::ZERO if pinch_to_zoom_delta is 0
+    pub view_pinch_center: Point<f64>,
 }
 
 impl ViewInput {
@@ -48,6 +52,9 @@ impl ViewInput {
         delete_pressed: false,
 
         mouse_wheel: 0.0,
+
+        pinch_delta: 0.0,
+        view_pinch_center: Point::ZERO,
     };
 
     /// Either middle mouse or ctrl + left mouse
@@ -559,6 +566,12 @@ impl View {
             self.camera = self.camera.zoom_out_at_view_point(input.view_mouse).round();
         } else if input.mouse_wheel > 0.0 {
             self.camera = self.camera.zoom_in_at_view_point(input.view_mouse).round();
+        }
+
+        if input.pinch_delta != 0.0 {
+            self.camera = self
+                .camera
+                .zoom_delta_at_view_point(input.view_pinch_center, input.pinch_delta);
         }
     }
 
