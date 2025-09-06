@@ -2,11 +2,17 @@ use crate::{
     field::RgbaField,
     material::Material,
     material_effects::paint_material_map_effects,
-    math::{pixel::Pixel, rect::Rect, rgba8::Rgba8},
+    math::{
+        pixel::Pixel,
+        rect::Rect,
+        rgba8::{Rgb8, Rgba8},
+    },
     pixmap::MaterialMap,
+    rule::FillRegion,
     topology::{RegionKey, Topology},
     view::Selection,
 };
+use itertools::Itertools;
 use std::{
     cell::Cell,
     path::Path,
@@ -86,27 +92,65 @@ impl World {
         self.material_map.bounding_rect()
     }
 
-    /// Returns true if the region was modified, it did not already have the assigned material.
+    pub fn fill_region(&mut self, region_key: RegionKey, material: Material) {
+        let fills = vec![FillRegion::new(region_key, material)];
+        self.fill_regions(fills);
+    }
+
+    /// Retain only fills that actually have an effect when applied.
+    pub fn retain_effective_fills(&self, fills: &mut Vec<FillRegion>) {
+        fills.retain(|fill| {
+            let region = &self.topology[fill.region_key];
+            region.material != fill.material
+        });
+    }
+
+    /// Returns number of regions
     #[inline(never)]
-    pub fn fill_region(&mut self, region_key: RegionKey, material: Material) -> bool {
-        let region = &self.topology[region_key];
-        if region.material == material {
-            return false;
+    pub fn fill_regions(&mut self, mut fills: Vec<FillRegion>) {
+        // All keys must be different
+        assert!(fills.iter().map(|&fill| fill.region_key).all_unique());
+
+        let mut temporary_materials = Rgb8::iter_all().map(Material::temporary);
+
+        // Assign a temporary material to the topology region. Without assigning temporary
+        // materials certain assignments require falling back to updating Topology from
+        // the material_map. For example when swapping the materials of two touching
+        // regions. Also fill regions in the material_map.
+        for &fill in &fills {
+            let region = &mut self.topology[fill.region_key];
+
+            // Update material_map.
+            let region_area = region.boundary.interior_area();
+            for &pixel in &region_area {
+                self.material_map.set(pixel, fill.material);
+            }
+            self.rgba_field.expire_rgba_rect(region.bounds());
+
+            // Assign temporary material in topology.
+            region.material = temporary_materials.next().unwrap();
         }
 
-        let region_area = region.boundary.interior_area();
-        for &pixel in &region_area {
-            self.material_map.set(pixel, material);
+        // Try to assign material without collapsing neighboring regions
+        fills.retain(|&fill| {
+            // Retain if setting region material directly failed.
+            !self
+                .topology
+                .set_region_material_without_collapsing(fill.region_key, fill.material)
+        });
+
+        if fills.is_empty() {
+            return;
         }
 
-        self.rgba_field.expire_rgba_rect(region.bounds());
-
-        if !self.topology.try_set_region_material(region_key, material) {
-            self.topology
-                .update(&self.material_map, region_area.into_iter());
+        // Update topology from remaining regions, expensive
+        let mut remaining_area = Vec::new();
+        for fill in fills {
+            let region = &self.topology[fill.region_key];
+            remaining_area.extend(region.boundary.interior_area());
         }
-
-        true
+        self.topology
+            .update(&self.material_map, remaining_area.into_iter());
     }
 
     /// Returns true if any pixels material was changed.
@@ -212,7 +256,8 @@ impl From<MaterialMap> for World {
 #[cfg(test)]
 mod test {
     use crate::{
-        field::RgbaField, material::Material, pixmap::MaterialMap, utils::IntoT, world::World,
+        field::RgbaField, material::Material, math::rgba8::Rgb8, pixmap::MaterialMap,
+        rule::FillRegion, topology::Topology, utils::IntoT, world::World,
     };
 
     fn assert_blit(name: &str) {
@@ -266,5 +311,81 @@ mod test {
     #[test]
     fn blit_f() {
         assert_blit("f");
+    }
+
+    fn test_fill_region(name: &str, material_fills: Vec<(Material, Material)>) {
+        let folder = format!("test_resources/world/fill_region");
+
+        let mut world = World::load(format!("{folder}/{name}.png")).unwrap();
+        let fills = material_fills
+            .into_iter()
+            .map(|(from_material, to_material)| {
+                let from_region_key = world
+                    .topology
+                    .unique_region_by_material(from_material)
+                    .unwrap()
+                    .key();
+                FillRegion::new(from_region_key, to_material)
+            })
+            .collect();
+        world.fill_regions(fills);
+
+        let topology = Topology::new(world.material_map());
+        assert_eq!(world.topology, topology);
+    }
+
+    #[test]
+    fn fill_region_a() {
+        test_fill_region("a", vec![(Material::RED, Material::GREEN)]);
+        test_fill_region("a", vec![(Material::RED, Material::BLUE)]);
+    }
+
+    #[test]
+    fn fill_region_b() {
+        test_fill_region("b", vec![(Material::RED, Material::GREEN)]);
+        test_fill_region("b", vec![(Material::RED, Material::BLUE)]);
+        test_fill_region("b", vec![(Material::RED, Material::WHITE)]);
+
+        test_fill_region("b", vec![(Material::BLUE, Material::GREEN)]);
+        test_fill_region("b", vec![(Material::BLUE, Material::RED)]);
+        test_fill_region("b", vec![(Material::BLUE, Material::WHITE)]);
+
+        test_fill_region(
+            "b",
+            vec![
+                (Material::BLUE, Material::WHITE),
+                (Material::RED, Material::WHITE),
+            ],
+        );
+        test_fill_region(
+            "b",
+            vec![
+                (Material::BLUE, Material::RED),
+                (Material::RED, Material::BLUE),
+            ],
+        );
+    }
+
+    #[test]
+    fn fill_region_c() {
+        test_fill_region(
+            "c",
+            vec![
+                (Material::RED, Material::GREEN),
+                (Material::GREEN, Material::BLUE),
+                (Material::BLUE, Material::RED),
+            ],
+        );
+    }
+
+    #[test]
+    fn fill_region_d() {
+        test_fill_region(
+            "d",
+            vec![
+                (Material::RED, Material::TRANSPARENT),
+                (Material::BLUE, Material::TRANSPARENT),
+            ],
+        );
     }
 }

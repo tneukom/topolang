@@ -120,6 +120,15 @@ pub struct FillRegion {
     pub material: Material,
 }
 
+impl FillRegion {
+    pub fn new(region_key: RegionKey, material: Material) -> Self {
+        Self {
+            region_key,
+            material,
+        }
+    }
+}
+
 /// Draw operation on a matched Region. Assumes the matched Region has the same shape as the pattern
 /// Region.
 #[derive(Debug, Clone)]
@@ -262,11 +271,7 @@ impl Rule {
                 Self::constant_material_map_over_region(&after_material_map, before_region)?
             {
                 if before_region.material != after_material {
-                    let fill_region = FillRegion {
-                        region_key: before_region_key,
-                        material: after_material,
-                    };
-
+                    let fill_region = FillRegion::new(before_region_key, after_material);
                     fills.push(fill_region);
                 }
             }
@@ -287,9 +292,19 @@ impl Rule {
     pub fn substitute(&self, phi: &Morphism, world: &mut World) -> bool {
         let mut modified = false;
 
-        for fill_region in &self.fills {
-            let phi_region_key = phi[fill_region.region_key];
-            modified |= world.fill_region(phi_region_key, fill_region.material);
+        let mut phi_fills = self
+            .fills
+            .iter()
+            .map(|fill| FillRegion {
+                region_key: phi[fill.region_key],
+                material: fill.material,
+            })
+            .collect();
+
+        world.retain_effective_fills(&mut phi_fills);
+        if !phi_fills.is_empty() {
+            world.fill_regions(phi_fills);
+            modified = true;
         }
 
         for draw_region in &self.draws {

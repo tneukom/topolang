@@ -55,6 +55,11 @@ impl Rgb<u8> {
 
     pub const PALETTE_ORANGE: Self = Rgb(0xff, 0xa8, 0x00);
     pub const PALETTE_BLUE: Self = Rgb(0x49, 0x3a, 0xc1);
+
+    pub fn iter_all() -> impl Iterator<Item = Self> {
+        itertools::iproduct!(u8::MIN..=u8::MAX, u8::MIN..=u8::MAX, u8::MIN..=u8::MAX)
+            .map(|(r, g, b)| Self::new(r, g, b))
+    }
 }
 
 impl Rgb<f32> {

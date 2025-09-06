@@ -14,10 +14,11 @@ pub enum MaterialClass {
     Wildcard,
     Transparent,
     Sleeping,
+    Temporary,
 }
 
 impl MaterialClass {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Normal,
         Self::Solid,
         Self::Rule,
@@ -25,6 +26,7 @@ impl MaterialClass {
         Self::Wildcard,
         Self::Transparent,
         Self::Sleeping,
+        Self::Temporary,
     ];
 }
 
@@ -42,6 +44,7 @@ impl ReflectEnum for MaterialClass {
             Self::Wildcard => "Wildcard",
             Self::Transparent => "Transparent",
             Self::Sleeping => "Sleeping",
+            Self::Temporary => "Temporary",
         }
     }
 }
@@ -159,6 +162,13 @@ impl Material {
         }
     }
 
+    pub const fn temporary(rgb: Rgb8) -> Self {
+        Self {
+            rgb,
+            class: MaterialClass::Temporary,
+        }
+    }
+
     pub fn is_solid(self) -> bool {
         self.class == MaterialClass::Solid
     }
@@ -237,6 +247,7 @@ impl Material {
             MaterialClass::Wildcard => Rgba8::from_rgb_a(self.rgb, Self::WILDCARD_ALPHA),
             MaterialClass::Transparent => Rgba8::from_rgb_a(self.rgb, 0),
             MaterialClass::Sleeping => Rgba8::from_rgb_a(self.rgb, Self::SLEEPING_ALPHA),
+            MaterialClass::Temporary => panic!("Cannot convert Temporary Material to Rgba8"),
         }
     }
 }

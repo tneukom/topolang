@@ -197,15 +197,13 @@ impl Symbol {
         let guess_chooser = SimpleGuessChooser::default();
         let search_strategy = SearchStrategy::for_morphism(&topology, &guess_chooser);
 
-        let (border_region_key, border_region) = topology
-            .regions_by_material(Self::BORDER_MATERIAL)
-            .exactly_one()
-            .ok()
+        let border_region = topology
+            .unique_region_by_material(Self::BORDER_MATERIAL)
             .unwrap();
 
         // Unique outer border
         assert_eq!(border_region.boundary.outer_border().seams_len(), 1);
-        let outer_border_key = BorderKey::new(border_region_key, 0);
+        let outer_border_key = BorderKey::new(border_region.key(), 0);
 
         let pattern = Pattern {
             material_map,
@@ -287,25 +285,21 @@ impl Compiler {
             .map(|event| (event, Symbol::load(event.symbol_png())))
             .collect();
 
-        let (before_frame_key, before_frame) = rule_frame
-            .regions_by_material(Material::RULE_BEFORE)
-            .exactly_one()
-            .ok()
+        let before_frame = rule_frame
+            .unique_region_by_material(Material::RULE_BEFORE)
             .unwrap();
         assert_eq!(before_frame.boundary.borders.len(), 1);
 
-        let (after_frame_key, after_frame) = rule_frame
-            .regions_by_material(Material::RULE_AFTER)
-            .exactly_one()
-            .ok()
+        let after_frame = rule_frame
+            .unique_region_by_material(Material::RULE_AFTER)
             .unwrap();
         assert_eq!(after_frame.boundary.borders.len(), 1);
 
         Self {
-            rule_frame,
-            before_outer_border_key: BorderKey::new(before_frame_key, 0),
-            after_outer_border_key: BorderKey::new(after_frame_key, 0),
+            before_outer_border_key: BorderKey::new(before_frame.key(), 0),
+            after_outer_border_key: BorderKey::new(after_frame.key(), 0),
             input_event_symbols,
+            rule_frame,
         }
     }
 
@@ -696,7 +690,6 @@ mod test {
         rule::InputEvent, solver::plan::SimpleGuessChooser, world::World,
     };
     use ahash::HashMap;
-    use itertools::Itertools;
 
     #[test]
     fn init() {
@@ -733,11 +726,9 @@ mod test {
         let region_by_color = |color| {
             pattern
                 .topology
-                .regions_by_material(Material::normal(color))
-                .exactly_one()
-                .ok()
+                .unique_region_by_material(Material::normal(color))
                 .unwrap()
-                .0
+                .key()
         };
 
         let expected_event_to_region: HashMap<_, _> = [

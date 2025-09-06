@@ -697,7 +697,11 @@ impl Topology {
     }
 
     /// Try to set the material of `region_key` to `material`, returns true if successful.
-    pub fn try_set_region_material(&mut self, region_key: RegionKey, material: Material) -> bool {
+    pub fn set_region_material_without_collapsing(
+        &mut self,
+        region_key: RegionKey,
+        material: Material,
+    ) -> bool {
         let region = &self.regions.get(&region_key).unwrap();
         if region.material == material {
             return true;
@@ -759,12 +763,14 @@ impl Topology {
         Ok(Topology::new(&material_map))
     }
 
-    pub fn regions_by_material(
-        &self,
-        material: Material,
-    ) -> impl Iterator<Item = (RegionKey, &Region)> {
-        self.iter_regions()
-            .filter(move |(_, region)| region.material == material)
+    pub fn regions_by_material(&self, material: Material) -> impl Iterator<Item = &Region> {
+        self.regions
+            .values()
+            .filter(move |region| region.material == material)
+    }
+
+    pub fn unique_region_by_material(&self, material: Material) -> Option<&Region> {
+        self.regions_by_material(material).exactly_one().ok()
     }
 
     /// Modifications after (not including) mtime
@@ -803,7 +809,7 @@ impl Topology {
 
         let mut borders = HashMap::default();
 
-        // Discard regions that potentially touch the draw pixels with their seam indices.
+        // Discard regions (including `self.seam_indices`) that potentially touch the draw pixels.
         self.regions.retain(|_, region| {
             let discard = region.bounds().intersects(padded_draw_bounds);
             if discard {
@@ -1391,12 +1397,7 @@ pub mod test {
 
     fn unique_region_by_color(topology: &Topology, rgb: Rgb8) -> &Region {
         let material = Material::normal(rgb);
-        let (_, region) = topology
-            .regions_by_material(material)
-            .exactly_one()
-            .ok()
-            .unwrap();
-        region
+        topology.unique_region_by_material(material).unwrap()
     }
 
     #[test]

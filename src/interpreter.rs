@@ -189,18 +189,14 @@ pub fn wake_up(world: &mut World, excluded: &HashSet<RegionKey>) -> usize {
                 continue;
             }
 
-            let fill_region = FillRegion {
-                region_key,
-                material: region.material.as_normal(),
-            };
+            let fill_region = FillRegion::new(region_key, region.material.as_normal());
             fill_regions.push(fill_region);
         }
     }
 
-    for fill_region in &fill_regions {
-        world.fill_region(fill_region.region_key, fill_region.material);
-    }
-    fill_regions.len()
+    let n_woken_up = fill_regions.len();
+    world.fill_regions(fill_regions);
+    n_woken_up
 }
 
 #[cfg(test)]
