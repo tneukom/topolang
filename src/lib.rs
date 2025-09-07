@@ -32,6 +32,7 @@ pub(crate) mod pixmap;
 pub(crate) mod regions;
 pub(crate) mod rule;
 pub(crate) mod rule_activity;
+pub(crate) mod run_mode;
 pub(crate) mod solver;
 pub(crate) mod topology;
 pub(crate) mod utils;

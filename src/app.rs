@@ -16,7 +16,8 @@ use crate::{
     pixmap::MaterialMap,
     rule::CanvasInput,
     rule_activity::RuleActivity,
-    utils::{ReflectEnum, monotonic_time},
+    run_mode::{RunMode, RunSettings, RunSpeed},
+    utils::monotonic_time,
     view::{EditMode, View, ViewInput, ViewSettings},
     widgets::{
         FileChooser, brush_chooser, enum_choice_buttons, icon_button, prefab_picker, styled_button,
@@ -46,45 +47,6 @@ impl Clipboard {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum RunSpeed {
-    Hz1,
-    Hz2,
-    Hz5,
-    Hz10,
-    Hz30,
-}
-
-impl RunSpeed {
-    const ALL: [Self; 5] = [Self::Hz1, Self::Hz2, Self::Hz5, Self::Hz10, Self::Hz30];
-
-    pub fn frames_per_tick(self) -> usize {
-        match self {
-            Self::Hz1 => 60,
-            Self::Hz2 => 30,
-            Self::Hz5 => 12,
-            Self::Hz10 => 6,
-            Self::Hz30 => 2,
-        }
-    }
-}
-
-impl ReflectEnum for RunSpeed {
-    fn all() -> &'static [Self] {
-        &Self::ALL
-    }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Hz1 => "1",
-            Self::Hz2 => "2",
-            Self::Hz5 => "3",
-            Self::Hz10 => "10",
-            Self::Hz30 => "30",
-        }
-    }
-}
-
 pub struct EguiApp {
     view_painter: Arc<Mutex<ViewPainter>>,
     pub view_settings: ViewSettings,
@@ -101,8 +63,7 @@ pub struct EguiApp {
     compiler: Compiler,
     compile_error: Option<CompileError>,
     interpreter: Option<Interpreter>,
-    run_mode: RunMode,
-    run_speed: RunSpeed,
+    run_settings: RunSettings,
 
     rule_activity: RuleActivity,
 
@@ -192,8 +153,7 @@ impl EguiApp {
             gl,
             new_size: Point(512, 512),
             file_name: "".to_string(),
-            run_mode: RunMode::Paused,
-            run_speed: RunSpeed::Hz30,
+            run_settings: RunSettings::new(RunMode::Paused, RunSpeed::Hz30),
             view_input: ViewInput::EMPTY,
             canvas_input: CanvasInput::default(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -234,7 +194,7 @@ impl EguiApp {
     }
 
     pub fn view_ui(&mut self, ui: &mut egui::Ui) {
-        ui.add_enabled_ui(self.run_mode == RunMode::Paused, |ui| {
+        ui.add_enabled_ui(self.run_settings.mode == RunMode::Paused, |ui| {
             ui.horizontal_wrapped(|ui| {
                 // Edit mode choices
                 for mode in EditMode::ALL {
@@ -312,7 +272,7 @@ impl EguiApp {
     // }
 
     pub fn tool_buttons_ui(&mut self, ui: &mut egui::Ui) {
-        ui.add_enabled_ui(self.run_mode == RunMode::Paused, |ui| {
+        ui.add_enabled_ui(self.run_settings.mode == RunMode::Paused, |ui| {
             ui.horizontal(|ui| {
                 // Copy, cut, past UI
                 let copy_icon = egui::include_image!("icons/copy.png");
@@ -469,9 +429,11 @@ impl EguiApp {
 
     pub fn demo_ui(&mut self, ui: &mut egui::Ui) {
         for demo in &Demo::DEMOS {
-            if ui.button(demo.filename).clicked() {
+            if ui.button(demo.name).clicked() {
                 let world = demo.load_world();
+                self.run_settings = demo.autorun;
                 self.set_world(world);
+                self.compile();
             }
         }
     }
@@ -537,7 +499,7 @@ impl EguiApp {
 
     pub fn slowmo(&mut self) {
         // Tick at lower rate than 60fps
-        let tick_frame = self.i_frame % self.run_speed.frames_per_tick() == 0;
+        let tick_frame = self.i_frame % self.run_settings.speed.frames_per_tick() == 0;
         if !tick_frame {
             return;
         }
@@ -601,7 +563,7 @@ impl EguiApp {
         };
 
         // Only tick once every `self.frames_per_tick`
-        if self.i_frame % self.run_speed.frames_per_tick() == 0 {
+        if self.i_frame % self.run_settings.speed.frames_per_tick() == 0 {
             // wake up
             self.woken_up_during_tick = interpreter.wake_up(&mut self.view.world);
             self.modifications_during_tick = 0;
@@ -644,38 +606,38 @@ impl EguiApp {
     pub fn run_buttons(&mut self, compact_ui: bool, ui: &mut egui::Ui) {
         let pause_icon = egui::include_image!("icons/pause.png");
         let pause_button = Self::run_button(compact_ui, pause_icon, "Pause")
-            .selected(self.run_mode == RunMode::Paused);
+            .selected(self.run_settings.mode == RunMode::Paused);
         if ui.add(pause_button).clicked() {
-            if self.run_mode != RunMode::Paused {
+            if self.run_settings.mode != RunMode::Paused {
                 self.view.add_snapshot(SnapshotCause::Run);
-                self.run_mode = RunMode::Paused;
+                self.run_settings.mode = RunMode::Paused;
             }
         }
 
         let run_icon = egui::include_image!("icons/play.png");
-        let run_button =
-            Self::run_button(compact_ui, run_icon, "Run").selected(self.run_mode == RunMode::Run);
+        let run_button = Self::run_button(compact_ui, run_icon, "Run")
+            .selected(self.run_settings.mode == RunMode::Run);
         if ui.add(run_button).clicked() {
-            if self.run_mode != RunMode::Run {
+            if self.run_settings.mode != RunMode::Run {
                 self.compile();
-                self.run_mode = RunMode::Run;
+                self.run_settings.mode = RunMode::Run;
             }
         }
 
         let slowmo_icon = egui::include_image!("icons/slow_motion.png");
         let slowmo_button = Self::run_button(compact_ui, slowmo_icon, "Slowmo")
-            .selected(self.run_mode == RunMode::Slowmo);
+            .selected(self.run_settings.mode == RunMode::Slowmo);
         if ui.add(slowmo_button).clicked() {
-            if self.run_mode != RunMode::Slowmo {
+            if self.run_settings.mode != RunMode::Slowmo {
                 self.compile();
-                self.run_mode = RunMode::Slowmo;
+                self.run_settings.mode = RunMode::Slowmo;
             }
         }
 
         let step_icon = egui::include_image!("icons/step.png");
         let step_button = Self::run_button(compact_ui, step_icon, "Step");
         if ui
-            .add_enabled(self.run_mode == RunMode::Paused, step_button)
+            .add_enabled(self.run_settings.mode == RunMode::Paused, step_button)
             .clicked()
         {
             // Single step
@@ -683,13 +645,14 @@ impl EguiApp {
             self.tick(1);
         }
 
+        // If compile failed we set back to Paused mode.
         if self.interpreter.is_none() {
-            self.run_mode = RunMode::Paused;
+            self.run_settings.mode = RunMode::Paused;
         }
 
-        if self.run_mode == RunMode::Slowmo {
+        if self.run_settings.mode == RunMode::Slowmo {
             self.slowmo();
-        } else if self.run_mode == RunMode::Run {
+        } else if self.run_settings.mode == RunMode::Run {
             self.run();
         }
     }
@@ -707,7 +670,10 @@ impl EguiApp {
         {
             // Tick button
             if ui
-                .add_enabled(self.run_mode == RunMode::Paused, egui::Button::new("Tick"))
+                .add_enabled(
+                    self.run_settings.mode == RunMode::Paused,
+                    egui::Button::new("Tick"),
+                )
                 .clicked()
             {
                 self.compile();
@@ -876,6 +842,7 @@ impl EguiApp {
     }
 
     fn set_world(&mut self, world: World) {
+        self.interpreter = None;
         self.rule_activity = RuleActivity::new(&[]);
         self.view = View::new(world);
         self.reset_camera_requested = true;
@@ -1145,7 +1112,7 @@ impl EguiApp {
             });
 
         // Run speed buttons & demos button
-        enum_choice_buttons(ui, None, &mut self.run_speed);
+        enum_choice_buttons(ui, None, &mut self.run_settings.speed);
     }
 
     fn compact_ui(&mut self, ctx: &egui::Context) {
@@ -1255,7 +1222,8 @@ impl eframe::App for EguiApp {
             self.central_panel(ui);
         });
 
-        self.view_settings.locked = [RunMode::Slowmo, RunMode::Run].contains(&self.run_mode);
+        self.view_settings.locked =
+            [RunMode::Slowmo, RunMode::Run].contains(&self.run_settings.mode);
         self.view
             .handle_input(&mut self.view_input, &mut self.view_settings);
 
@@ -1274,30 +1242,5 @@ impl eframe::App for EguiApp {
 
         #[cfg(not(feature = "force_120hz"))]
         ctx.request_repaint();
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RunMode {
-    Paused,
-    Slowmo,
-    Run,
-}
-
-impl RunMode {
-    pub const ALL: [Self; 3] = [Self::Paused, Self::Slowmo, Self::Run];
-}
-
-impl ReflectEnum for RunMode {
-    fn all() -> &'static [Self] {
-        &Self::ALL
-    }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Paused => "Paused",
-            Self::Slowmo => "Walk",
-            Self::Run => "Run",
-        }
     }
 }

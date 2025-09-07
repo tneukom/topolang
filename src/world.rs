@@ -256,8 +256,8 @@ impl From<MaterialMap> for World {
 #[cfg(test)]
 mod test {
     use crate::{
-        field::RgbaField, material::Material, math::rgba8::Rgb8, pixmap::MaterialMap,
-        rule::FillRegion, topology::Topology, utils::IntoT, world::World,
+        field::RgbaField, material::Material, pixmap::MaterialMap, rule::FillRegion,
+        topology::Topology, utils::IntoT, world::World,
     };
 
     fn assert_blit(name: &str) {
