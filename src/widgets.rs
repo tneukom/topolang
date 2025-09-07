@@ -2,7 +2,7 @@ use crate::{
     brush::Brush,
     field::RgbaField,
     material::{Material, MaterialClass},
-    material_effects::material_map_effects,
+    material_effects::{CHECKERBOARD_EVEN_RGBA, CHECKERBOARD_ODD_RGBA, material_map_effects},
     math::{
         point::Point,
         rect::Rect,
@@ -30,21 +30,27 @@ fn rgba_field_egui_texture(ui: &mut egui::Ui, rgba_field: &RgbaField) -> egui::T
         .load_texture("icon_texture", image, Default::default())
 }
 
-fn material_map_egui_texture(
-    ui: &mut egui::Ui,
-    material_map: &MaterialMap,
-    background: Rgba8,
-) -> egui::TextureHandle {
-    let rgba_field = material_map_effects(material_map, background);
-    rgba_field_egui_texture(ui, &rgba_field)
-}
-
 #[cached(key = "(Material, i64)", convert = r#"{ (material, icon_size) }"#)]
 fn material_icon(ui: &mut egui::Ui, material: Material, icon_size: i64) -> egui::TextureHandle {
     let bounds = Rect::low_size(Point(0, 0), Point(icon_size, icon_size));
     let material_map = MaterialMap::filled(bounds, material);
 
-    material_map_egui_texture(ui, &material_map, Rgba8::BLACK)
+    let mut rgba_field = material_map_effects(&material_map, Rgba8::TRANSPARENT);
+
+    // Checkerboard background with squares of 7 by 7 pixels
+    for (pixel, rgba) in rgba_field.enumerate_mut() {
+        let background_f32 = if (pixel.x / 7 + pixel.y / 7) % 2 == 0 {
+            CHECKERBOARD_EVEN_RGBA.to_f32()
+        } else {
+            CHECKERBOARD_ODD_RGBA.to_f32()
+        };
+
+        let rgba_f32 = rgba.to_f32();
+        let blended_rgb_f32 =
+            rgba_f32.a * rgba_f32.rgb() + (1.0 - rgba_f32.a) * background_f32.rgb();
+        *rgba = Rgba8::from_rgb_a(blended_rgb_f32.to_u8(), 255);
+    }
+    rgba_field_egui_texture(ui, &rgba_field)
 }
 
 /// Warning: A new egui texture is created for each material, and is cached forever.
@@ -261,7 +267,8 @@ fn brush_icon(
 
     material_map.blit(&dot);
 
-    material_map_egui_texture(ui, &material_map, Rgba8::TRANSPARENT)
+    let rgba_field = material_map_effects(&material_map, Rgba8::TRANSPARENT);
+    rgba_field_egui_texture(ui, &rgba_field)
 }
 
 pub fn brush_size_chooser(ui: &mut egui::Ui, size: &mut i64) {
