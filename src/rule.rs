@@ -258,8 +258,17 @@ impl Rule {
 
     #[inline(never)]
     pub fn new(before: Pattern, mut after_material_map: MaterialMap) -> Result<Self, CompileError> {
-        // Compute draw operations to be applied
+        // Currently filling holes (undefined regions in the pattern) is not allowed, drawing over
+        // is.
+        for (pixel, material) in after_material_map.iter() {
+            if !material.is_rule() && !material.is_solid() {
+                if before.material_map.get(pixel).is_none() {
+                    return CompileError::err("Filling holes not yet supported.");
+                }
+            }
+        }
 
+        // Compute draw operations to be applied
         let draws =
             Self::extract_draw_region_operations(&before.material_map, &mut after_material_map)?;
 
@@ -276,8 +285,6 @@ impl Rule {
                 }
             }
         }
-
-        // Compute draw operations to be applied
 
         Ok(Rule {
             before,
