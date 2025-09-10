@@ -4,6 +4,36 @@ use crate::{
 };
 use std::time::Instant;
 
+pub fn benchmark_cellular_automaton() {
+    let folder = "test_resources/benchmark";
+    let mut world = World::load(format!("{folder}/cellular_automaton_triangles.png")).unwrap();
+
+    let compiler = Compiler::new();
+    let program = compiler.compile(&world).unwrap();
+    let mut interpreter = Interpreter::new(program.clone());
+
+    // First step takes much longer
+    println!("First stabilize...");
+    interpreter
+        .tick(&mut world, &CanvasInput::default(), 10000)
+        .ok()
+        .unwrap();
+    println!("Done");
+
+    for _ in 0..500 {
+        let now = Instant::now();
+        let ticked = interpreter
+            .tick(&mut world, &CanvasInput::default(), 10000)
+            .ok()
+            .unwrap();
+        println!(
+            "elapsed = {:.3?}, applications = {}",
+            now.elapsed(),
+            ticked.applications.len()
+        );
+    }
+}
+
 /// Run a scene by repeatedly stabilizing and waking up sleeping components.
 pub fn benchmark_run() {
     let folder = "test_resources/benchmark";

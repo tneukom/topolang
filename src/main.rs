@@ -98,6 +98,8 @@ pub fn main() {
 
         // seamlang::benchmarks::benchmark_topology_draw();
 
+        // seamlang::benchmarks::benchmark_cellular_automaton();
+
         main_editor();
 
         // color_replace();
