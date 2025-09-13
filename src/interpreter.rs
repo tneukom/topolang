@@ -16,11 +16,6 @@ pub struct Interpreter {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum InterpreterError {
-    MaxModificationReached,
-}
-
-#[derive(Debug, Clone, Copy)]
 pub struct RuleApplication {
     /// Modification time of the source of the rule
     pub source_mtime: Option<AtomicTime>,
@@ -144,22 +139,22 @@ impl Interpreter {
         world: &mut World,
         input: &CanvasInput,
         max_modifications: usize,
-    ) -> Result<Ticked, InterpreterError> {
+    ) -> Ticked {
         let _span = tracy_client::span!("tick");
 
         let (stabilize_outcome, applications) = self.stabilize(world, input, max_modifications);
 
-        let n_woken_up = if applications.len() == 0 {
+        let n_woken_up = if stabilize_outcome == StabilizeOutcome::Stable {
             self.wake_up(world)
         } else {
             0
         };
 
-        Ok(Ticked {
+        Ticked {
             stabilize_outcome,
             applications,
             n_woken_up,
-        })
+        }
     }
 }
 

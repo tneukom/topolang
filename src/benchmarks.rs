@@ -14,18 +14,12 @@ pub fn benchmark_cellular_automaton() {
 
     // First step takes much longer
     println!("First stabilize...");
-    interpreter
-        .tick(&mut world, &CanvasInput::default(), 10000)
-        .ok()
-        .unwrap();
+    interpreter.tick(&mut world, &CanvasInput::default(), 10000);
     println!("Done");
 
     for _ in 0..500 {
         let now = Instant::now();
-        let ticked = interpreter
-            .tick(&mut world, &CanvasInput::default(), 10000)
-            .ok()
-            .unwrap();
+        let ticked = interpreter.tick(&mut world, &CanvasInput::default(), 10000);
         println!(
             "elapsed = {:.3?}, applications = {}",
             now.elapsed(),
@@ -65,9 +59,7 @@ pub fn benchmark_run() {
         let mut ticks = 0usize;
         loop {
             ticks += 1;
-            let ticked = interpreter
-                .tick(&mut world, &CanvasInput::default(), 1024)
-                .unwrap();
+            let ticked = interpreter.tick(&mut world, &CanvasInput::default(), 1024);
             if !ticked.changed() {
                 break;
             }

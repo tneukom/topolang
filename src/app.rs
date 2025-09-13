@@ -5,7 +5,7 @@ use crate::{
     demos::Demo,
     field::RgbaField,
     history::SnapshotCause,
-    interpreter::{Interpreter, InterpreterError, StabilizeOutcome},
+    interpreter::{Interpreter, StabilizeOutcome},
     material::Material,
     material_effects::material_map_effects,
     math::{point::Point, rect::Rect, rgba8::Rgba8},
@@ -82,8 +82,7 @@ pub struct EguiApp {
     reset_camera_requested: bool,
 
     i_frame: usize,
-    modifications_during_tick: usize,
-    woken_up_during_tick: usize,
+    tick_finished: bool,
 
     #[cfg(feature = "link_ui")]
     link: String,
@@ -172,8 +171,7 @@ impl EguiApp {
             channel_receiver,
             reset_camera_requested: true,
             i_frame: 0,
-            modifications_during_tick: 0,
-            woken_up_during_tick: 0,
+            tick_finished: false,
             #[cfg(feature = "link_ui")]
             link: "".to_string(),
         }
@@ -487,12 +485,8 @@ impl EguiApp {
         };
 
         let ticked = interpreter.tick(&mut self.view.world, &self.canvas_input, max_modifications);
-        let modified = match ticked {
-            Ok(ticked) => ticked.changed(),
-            Err(InterpreterError::MaxModificationReached) => true,
-        };
 
-        if modified {
+        if ticked.changed() {
             self.view.add_snapshot(SnapshotCause::Tick);
         }
     }
@@ -553,43 +547,39 @@ impl EguiApp {
     }
 
     pub fn run(&mut self) {
+        // Reset tick once every `self.frames_per_tick`
+        if self.i_frame % self.run_settings.speed.frames_per_tick() == 0 {
+            self.tick_finished = false;
+        }
+
+        if self.tick_finished {
+            return;
+        }
+
         // Check if mouse is pressed on a link
         if let Some(link) = self.pressed_link() {
-            println!("{link}");
+            println!("Link pressed {link}");
         }
 
         let Some(interpreter) = &mut self.interpreter else {
             return;
         };
 
-        // Only tick once every `self.frames_per_tick`
-        if self.i_frame % self.run_settings.speed.frames_per_tick() == 0 {
-            // wake up
-            self.woken_up_during_tick = interpreter.wake_up(&mut self.view.world);
-            self.modifications_during_tick = 0;
-        }
-
         // Run for 10ms but don't wake up regions
         let now = Instant::now();
         while now.elapsed().as_secs_f64() < 0.01 {
             let max_modifications = 32;
-            let (outcome, applications) =
-                interpreter.stabilize(&mut self.view.world, &self.canvas_input, max_modifications);
-            self.modifications_during_tick += applications.len();
+            let ticked =
+                interpreter.tick(&mut self.view.world, &self.canvas_input, max_modifications);
 
-            for &application in &applications {
+            for &application in &ticked.applications {
                 self.rule_activity.rule_applied(application);
             }
 
-            if outcome == StabilizeOutcome::Stable {
+            if ticked.stabilize_outcome == StabilizeOutcome::Stable {
+                self.tick_finished = true;
                 break;
             }
-
-            // let duration = now.elapsed().as_secs_f64();
-            // println!(
-            //     "Stabilize duration: {}, modifications: {}",
-            //     duration, modifications
-            // );
         }
     }
 
