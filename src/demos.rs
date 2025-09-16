@@ -91,7 +91,21 @@ impl Demo {
         RunSettings::new(RunMode::Slowmo, RunSpeed::Hz30),
     );
 
-    pub const DEMOS: [Demo; 9] = [
+    pub const TRIANGLE_CELLULAR_AUTOMATON: Demo = Demo::new(
+        "Triangle Cellular Automaton",
+        "triangle_cellular_automaton.png",
+        include_bytes!("../resources/saves/triangle_cellular_automaton.png"),
+        RunSettings::new(RunMode::Run, RunSpeed::Hz2),
+    );
+
+    pub const AUTUMN_TREE: Demo = Demo::new(
+        "Autumn Tree",
+        "autumn_tree.png",
+        include_bytes!("../resources/saves/autumn_tree.png"),
+        RunSettings::new(RunMode::Run, RunSpeed::Hz30),
+    );
+
+    pub const DEMOS: [Demo; 11] = [
         Self::TURING,
         Self::PUZZLE_15,
         Self::GAME_2048,
@@ -101,6 +115,8 @@ impl Demo {
         Self::BINARY_COUNTER,
         Self::RULE_30,
         Self::RULE_110,
+        Self::TRIANGLE_CELLULAR_AUTOMATON,
+        Self::AUTUMN_TREE,
     ];
 
     pub fn by_filename(filename: &str) -> Option<&'static Demo> {
