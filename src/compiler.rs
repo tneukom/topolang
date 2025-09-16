@@ -620,16 +620,8 @@ impl Compiler {
                 .shrink();
 
             // Find translation from after to before
-            let before_bounds = before_material_map.bounding_rect();
-            let after_bounds = after_material_map.bounding_rect();
-            if before_bounds.size() != after_bounds.size() {
-                return Err(
-                    CompileError::new("Bounds of before and after must be equal.")
-                        .with_bounds(source.bounds),
-                );
-            }
-
-            let offset = before_bounds.low() - after_bounds.low();
+            let offset = source.before_outer_border.min_side().left_pixel
+                - source.after_outer_border.min_side().left_pixel;
             let after_material_map = after_material_map.translated(offset);
 
             let rule_instances = self
