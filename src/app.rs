@@ -2,7 +2,7 @@ use crate::{
     brush::Brush,
     compiler::{CompileError, Compiler},
     coordinate_frame::CoordinateFrames,
-    demos::Demo,
+    demos::{Demo, DemoSection},
     field::RgbaField,
     history::SnapshotCause,
     interpreter::{Interpreter, StabilizeOutcome},
@@ -424,12 +424,16 @@ impl EguiApp {
     }
 
     pub fn demo_ui(&mut self, ui: &mut egui::Ui) {
-        for demo in &Demo::DEMOS {
-            if ui.button(demo.name).clicked() {
-                let world = demo.load_world();
-                self.run_settings = demo.autorun;
-                self.set_world(world);
-                self.compile();
+        for section in &DemoSection::SECTIONS {
+            ui.heading(section.name);
+
+            for (name, demo) in section.demos {
+                if ui.button(*name).clicked() {
+                    let world = demo.load_world();
+                    self.run_settings = demo.autorun;
+                    self.set_world(world);
+                    self.compile();
+                }
             }
         }
     }

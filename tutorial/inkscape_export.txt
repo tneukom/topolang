@@ -1,0 +1,3 @@
+Inkscape exported colors are not same as pngs embedded in document, maybe remultiplied alpha?
+
+For now just replace the embedded images with the real ones in some other editor (Aseprite).

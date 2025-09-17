@@ -292,7 +292,7 @@ impl From<Rgba8> for Material {
         } else if Self::SPECIAL_ALPHAS.contains(&a) {
             Self::new(rgb, MaterialClass::Special)
         } else {
-            unimplemented!();
+            unimplemented!("Alpha {a} not supported");
         }
     }
 }
