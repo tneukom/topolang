@@ -82,7 +82,6 @@ pub struct EguiApp {
     reset_camera_requested: bool,
 
     i_frame: usize,
-    tick_finished: bool,
 
     #[cfg(feature = "link_ui")]
     link: String,
@@ -171,7 +170,6 @@ impl EguiApp {
             channel_receiver,
             reset_camera_requested: true,
             i_frame: 0,
-            tick_finished: false,
             #[cfg(feature = "link_ui")]
             link: "".to_string(),
         }
@@ -547,15 +545,6 @@ impl EguiApp {
     }
 
     pub fn run(&mut self) {
-        // Reset tick once every `self.frames_per_tick`
-        if self.i_frame % self.run_settings.speed.frames_per_tick() == 0 {
-            self.tick_finished = false;
-        }
-
-        if self.tick_finished {
-            return;
-        }
-
         // Check if mouse is pressed on a link
         if let Some(link) = self.pressed_link() {
             println!("Link pressed {link}");
@@ -569,15 +558,19 @@ impl EguiApp {
         let now = Instant::now();
         while now.elapsed().as_secs_f64() < 0.01 {
             let max_modifications = 32;
-            let ticked =
-                interpreter.tick(&mut self.view.world, &self.canvas_input, max_modifications);
+            let (outcome, applications) =
+                interpreter.stabilize(&mut self.view.world, &self.canvas_input, max_modifications);
 
-            for &application in &ticked.applications {
+            for &application in &applications {
                 self.rule_activity.rule_applied(application);
             }
 
-            if ticked.stabilize_outcome == StabilizeOutcome::Stable {
-                self.tick_finished = true;
+            if outcome == StabilizeOutcome::Stable {
+                if (self.i_frame + 1) % self.run_settings.speed.frames_per_tick() == 0 {
+                    // Wake up if this is the first frame of the tick
+                    interpreter.wake_up(&mut self.view.world);
+                }
+
                 break;
             }
         }
@@ -1000,13 +993,21 @@ impl EguiApp {
             self.reset_camera_requested = false;
         }
 
+        let update_world = if self.run_settings.mode == RunMode::Run {
+            // During Run mode only update in final frame of tick
+            (self.i_frame + 1) % self.run_settings.speed.frames_per_tick() == 0
+        } else {
+            true
+        };
+
         let draw_view = DrawView::from_view(
-            &self.view,
+            &mut self.view,
             &self.view_settings,
             &self.view_input,
             frames,
             self.rule_activity.glows(),
             monotonic_time(),
+            update_world,
         );
 
         let view_painter = self.view_painter.clone();

@@ -14,46 +14,9 @@ use crate::{
 };
 use itertools::Itertools;
 use std::{
-    cell::Cell,
     path::Path,
     sync::{Arc, RwLock},
 };
-
-#[derive(Debug, Clone)]
-struct CachedRgbaField {
-    rgba_field: Arc<RwLock<RgbaField>>,
-
-    /// Where `rgba_field` is not fresh anymore and needs to be recomputed.
-    expired_bounds: Cell<Rect<i64>>,
-}
-
-impl CachedRgbaField {
-    fn new(bounds: Rect<i64>) -> Self {
-        let rgba_field = RgbaField::filled(bounds, Rgba8::TRANSPARENT);
-        Self {
-            rgba_field: Arc::new(RwLock::new(rgba_field)),
-            expired_bounds: Cell::new(bounds),
-        }
-    }
-
-    fn expire_rgba_rect(&self, rect: Rect<i64>) {
-        // Some effects (before, after material) depend on neighboring pixels.
-        let padded = rect.padded(1);
-        let expanded = self.expired_bounds.get().bounds_with_rect(padded);
-        self.expired_bounds.set(expanded);
-    }
-
-    /// Recomputes stale areas of rgba_field, so can be expensive
-    fn fresh_rgba_field(&self, material_map: &MaterialMap) -> (Arc<RwLock<RgbaField>>, Rect<i64>) {
-        let expired_bounds = self.expired_bounds.get();
-        if !expired_bounds.is_empty() {
-            let mut write_rgba_field = self.rgba_field.write().unwrap();
-            paint_material_map_effects(material_map, &mut write_rgba_field);
-            self.expired_bounds.set(Rect::EMPTY);
-        }
-        (self.rgba_field.clone(), expired_bounds)
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct World {
@@ -62,13 +25,20 @@ pub struct World {
     /// None means the topology has to be recomputed from the material_map
     topology: Topology,
 
-    rgba_field: CachedRgbaField,
+    rgba_field: Arc<RwLock<RgbaField>>,
+
+    /// Where `rgba_field` is not fresh anymore and needs to be recomputed.
+    rgba_field_expired_bounds: Rect<i64>,
 }
 
 impl World {
     pub fn from_material_map(material_map: MaterialMap) -> Self {
         Self {
-            rgba_field: CachedRgbaField::new(material_map.bounding_rect()),
+            rgba_field: Arc::new(RwLock::new(RgbaField::filled(
+                material_map.bounding_rect(),
+                Rgba8::TRANSPARENT,
+            ))),
+            rgba_field_expired_bounds: material_map.bounding_rect(),
             topology: Topology::new(&material_map),
             material_map,
         }
@@ -88,8 +58,29 @@ impl World {
         &self.material_map
     }
 
+    pub fn rgba_field(&self) -> Arc<RwLock<RgbaField>> {
+        self.rgba_field.clone()
+    }
+
     pub fn bounds(&self) -> Rect<i64> {
         self.material_map.bounding_rect()
+    }
+
+    fn expire_rgba_rect(&mut self, rect: Rect<i64>) {
+        // Some effects (before, after material) depend on neighboring pixels.
+        let padded = rect.padded(1);
+        self.rgba_field_expired_bounds = self.rgba_field_expired_bounds.bounds_with_rect(padded);
+    }
+
+    /// Recomputes stale areas of rgba_field, so can be expensive
+    pub fn update_rgba_field(&mut self) -> Rect<i64> {
+        let expired_bounds = self.rgba_field_expired_bounds;
+        if !expired_bounds.is_empty() {
+            let mut write_rgba_field = self.rgba_field.write().unwrap();
+            paint_material_map_effects(&self.material_map, &mut write_rgba_field);
+            self.rgba_field_expired_bounds = Rect::EMPTY;
+        }
+        expired_bounds
     }
 
     pub fn fill_region(&mut self, region_key: RegionKey, material: Material) {
@@ -125,10 +116,12 @@ impl World {
             for &pixel in &region_area {
                 self.material_map.set(pixel, fill.material);
             }
-            self.rgba_field.expire_rgba_rect(region.bounds());
 
             // Assign temporary material in topology.
             region.material = temporary_materials.next().unwrap();
+
+            let region_bounds = region.bounds();
+            self.expire_rgba_rect(region_bounds);
         }
 
         // Try to assign material without collapsing neighboring regions
@@ -172,7 +165,7 @@ impl World {
             .topology
             .update(&self.material_map, changed_pixels.into_iter());
 
-        self.rgba_field.expire_rgba_rect(draw_bounds);
+        self.expire_rgba_rect(draw_bounds);
 
         true
     }
@@ -182,7 +175,7 @@ impl World {
         self.material_map.blit(other);
         self.topology
             .update(&self.material_map, other.bounding_rect().iter_indices());
-        self.rgba_field.expire_rgba_rect(other.bounding_rect());
+        self.expire_rgba_rect(other.bounding_rect());
     }
 
     pub fn rect_selection(&mut self, rect: Rect<i64>) -> Selection {
@@ -195,7 +188,7 @@ impl World {
         self.topology
             .update(&self.material_map, rect.iter_indices());
 
-        self.rgba_field.expire_rgba_rect(rect);
+        self.expire_rgba_rect(rect);
         Selection::new(selection)
     }
 
@@ -212,13 +205,8 @@ impl World {
         self.topology
             .update(&self.material_map, region_area.into_iter());
 
-        self.rgba_field.expire_rgba_rect(bounds);
+        self.expire_rgba_rect(bounds);
         Selection::new(selection)
-    }
-
-    /// Recomputes stale areas of rgba_field, so can be expensive
-    pub fn fresh_rgba_field(&self) -> (Arc<RwLock<RgbaField>>, Rect<i64>) {
-        self.rgba_field.fresh_rgba_field(&self.material_map)
     }
 
     // pub fn rgba_field(&self) -> &RgbaField {

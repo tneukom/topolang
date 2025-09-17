@@ -32,14 +32,20 @@ pub struct DrawView {
 
 impl DrawView {
     pub fn from_view(
-        view: &View,
+        view: &mut View,
         view_settings: &ViewSettings,
         view_input: &ViewInput,
         frames: CoordinateFrames,
         rule_glows: Vec<Glow>,
         time: f64,
+        update_world: bool,
     ) -> Self {
-        let (world_rgba_field, world_rgba_expired) = view.world.fresh_rgba_field();
+        let (world_rgba_expired, world_rgba_field) = if update_world {
+            let world_rgba_expired = view.world.update_rgba_field();
+            (world_rgba_expired, view.world.rgba_field())
+        } else {
+            (Rect::EMPTY, view.world.rgba_field())
+        };
 
         let selection_rgba_field = view
             .selection
