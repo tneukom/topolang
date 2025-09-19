@@ -3,7 +3,7 @@ use crate::{
     compiler::{CompileError, Compiler},
     coordinate_frame::CoordinateFrames,
     demos::{Demo, DemoSection},
-    field::{Field, RgbaField},
+    field::RgbaField,
     history::SnapshotCause,
     interpreter::{Interpreter, StabilizeOutcome},
     material::Material,
@@ -426,7 +426,15 @@ impl EguiApp {
         });
     }
 
-    pub fn demo_ui(&mut self, ui: &mut egui::Ui) {
+    pub fn demo_menu_button_ui(&mut self, ui: &mut egui::Ui) {
+        let mut demos_button = egui::containers::menu::MenuButton::new("Demos");
+        demos_button.button = demos_button.button.fill(egui::Color32::ORANGE);
+        demos_button.ui(ui, |ui| {
+            self.demo_menu_ui(ui);
+        });
+    }
+
+    pub fn demo_menu_ui(&mut self, ui: &mut egui::Ui) {
         for section in &DemoSection::SECTIONS {
             ui.label(section.name);
 
@@ -816,9 +824,7 @@ impl EguiApp {
                 self.document_ui(ui);
             });
 
-            ui.menu_button("Demos", |ui| {
-                self.demo_ui(ui);
-            });
+            self.demo_menu_button_ui(ui);
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button("Reset camera").clicked() {
@@ -1152,9 +1158,7 @@ impl EguiApp {
 
                 // Demo menu button
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.menu_button("Demos", |ui| {
-                        self.demo_ui(ui);
-                    });
+                    self.demo_menu_button_ui(ui);
                 });
             });
 
