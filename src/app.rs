@@ -54,6 +54,8 @@ pub struct EguiApp {
     gl: Arc<glow::Context>,
     view: View,
 
+    show_full_ui: bool,
+
     view_input: ViewInput,
     canvas_input: CanvasInput,
 
@@ -148,7 +150,7 @@ impl EguiApp {
             view,
             view_settings,
             gl,
-            new_size: Point(512, 512),
+            show_full_ui: true,
             file_name: "".to_string(),
             run_settings: RunSettings::new(RunMode::Paused, RunSpeed::Hz30),
             view_input: ViewInput::EMPTY,
@@ -581,19 +583,23 @@ impl EguiApp {
         }
     }
 
-    fn run_button<'a>(compact_ui: bool, icon: ImageSource<'a>, label: &'a str) -> egui::Button<'a> {
+    fn icon_button<'a>(
+        show_label: bool,
+        icon: ImageSource<'a>,
+        label: &'a str,
+    ) -> egui::Button<'a> {
         let icon_size = egui::Vec2::splat(Self::ICON_SIZE);
         let icon = icon.atom_size(icon_size);
-        if compact_ui {
-            styled_button(icon)
-        } else {
+        if show_label {
             styled_button((icon, label))
+        } else {
+            styled_button(icon)
         }
     }
 
-    pub fn run_buttons(&mut self, compact_ui: bool, ui: &mut egui::Ui) {
+    pub fn run_buttons(&mut self, show_labels: bool, ui: &mut egui::Ui) {
         let pause_icon = egui::include_image!("icons/pause.png");
-        let pause_button = Self::run_button(compact_ui, pause_icon, "Pause")
+        let pause_button = Self::icon_button(show_labels, pause_icon, "Pause")
             .selected(self.run_settings.mode == RunMode::Paused);
         if ui.add(pause_button).clicked() {
             if self.run_settings.mode != RunMode::Paused {
@@ -603,7 +609,7 @@ impl EguiApp {
         }
 
         let run_icon = egui::include_image!("icons/play.png");
-        let run_button = Self::run_button(compact_ui, run_icon, "Run")
+        let run_button = Self::icon_button(show_labels, run_icon, "Run")
             .selected(self.run_settings.mode == RunMode::Run);
         if ui.add(run_button).clicked() {
             if self.run_settings.mode != RunMode::Run {
@@ -613,7 +619,7 @@ impl EguiApp {
         }
 
         let slowmo_icon = egui::include_image!("icons/slow_motion.png");
-        let slowmo_button = Self::run_button(compact_ui, slowmo_icon, "Slowmo")
+        let slowmo_button = Self::icon_button(show_labels, slowmo_icon, "Slowmo")
             .selected(self.run_settings.mode == RunMode::Slowmo);
         if ui.add(slowmo_button).clicked() {
             if self.run_settings.mode != RunMode::Slowmo {
@@ -623,7 +629,7 @@ impl EguiApp {
         }
 
         let step_icon = egui::include_image!("icons/step.png");
-        let step_button = Self::run_button(compact_ui, step_icon, "Step");
+        let step_button = Self::icon_button(show_labels, step_icon, "Step");
         if ui
             .add_enabled(self.run_settings.mode == RunMode::Paused, step_button)
             .clicked()
@@ -648,6 +654,8 @@ impl EguiApp {
     pub fn run_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             self.run_buttons(false, ui);
+
+            self.show_full_ui_button(ui);
         });
 
         ui.horizontal(|ui| {
@@ -1110,11 +1118,25 @@ impl EguiApp {
         enum_choice_buttons(ui, None, &mut self.run_settings.speed);
     }
 
+    fn show_full_ui_button(&mut self, ui: &mut egui::Ui) {
+        // Button to show full UI only if screen is wide enough
+        if !Self::screen_is_narrow(ui.ctx()) {
+            let edit_icon = egui::include_image!("icons/edit.png");
+            let edit_button =
+                Self::icon_button(true, edit_icon, "Edit").selected(self.show_full_ui);
+            if ui.add(edit_button).clicked() {
+                self.show_full_ui = !self.show_full_ui;
+            }
+        }
+    }
+
     fn compact_ui(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // Run buttons and camera zoom buttons on the first line
             ui.horizontal(|ui| {
-                self.run_buttons(true, ui);
+                self.run_buttons(false, ui);
+
+                self.show_full_ui_button(ui);
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     self.zoom_buttons_ui(ui);
@@ -1138,6 +1160,10 @@ impl EguiApp {
                 Self::debug_info_zoom_input(ui);
             }
         });
+    }
+
+    fn screen_is_narrow(ctx: &egui::Context) -> bool {
+        ctx.input(|input| input.screen_rect.width() < 800.0)
     }
 }
 
@@ -1206,7 +1232,7 @@ impl eframe::App for EguiApp {
         // visual.window_shadow = epaint::Shadow::NONE;
         ctx.set_visuals(visual);
 
-        let compact_ui = ctx.input(|input| input.screen_rect.width() < 800.0);
+        let compact_ui = Self::screen_is_narrow(ctx) || !self.show_full_ui;
         if compact_ui {
             self.compact_ui(ctx);
         } else {
