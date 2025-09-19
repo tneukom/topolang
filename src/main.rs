@@ -66,11 +66,11 @@ pub fn main_editor() {
         };
 
         let result = eframe::run_native(
-            "SeamLang",
+            "TopoLang",
             native_options,
             Box::new(|cc| {
                 egui_extras::install_image_loaders(&cc.egui_ctx);
-                use seamlang::app::EguiApp;
+                use topolang::app::EguiApp;
                 let app = EguiApp::new(cc);
                 Ok(Box::new(app))
             }),
@@ -90,15 +90,15 @@ pub fn main() {
 
         tracy_client::Client::start();
 
-        // seamlang::benchmarks::benchmark_run();
+        // topolang::benchmarks::benchmark_run();
 
-        // seamlang::benchmarks::benchmark_compile();
+        // topolang::benchmarks::benchmark_compile();
 
-        // seamlang::benchmarks::benchmark_topology_new();
+        // topolang::benchmarks::benchmark_topology_new();
 
-        // seamlang::benchmarks::benchmark_topology_draw();
+        // topolang::benchmarks::benchmark_topology_draw();
 
-        // seamlang::benchmarks::benchmark_cellular_automaton();
+        // topolang::benchmarks::benchmark_cellular_automaton();
 
         main_editor();
 
