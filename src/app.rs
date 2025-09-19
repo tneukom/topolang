@@ -428,15 +428,19 @@ impl EguiApp {
 
     pub fn demo_ui(&mut self, ui: &mut egui::Ui) {
         for section in &DemoSection::SECTIONS {
-            ui.heading(section.name);
+            ui.label(section.name);
 
             for (name, demo) in section.demos {
-                if ui.button(*name).clicked() {
-                    let world = demo.load_world();
-                    self.run_settings = demo.autorun;
-                    self.set_world(world);
-                    self.compile();
-                }
+                ui.horizontal(|ui| {
+                    ui.add_space(10.0);
+
+                    if ui.button(*name).clicked() {
+                        let world = demo.load_world();
+                        self.run_settings = demo.autorun;
+                        self.set_world(world);
+                        self.compile();
+                    }
+                });
             }
         }
     }
