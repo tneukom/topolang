@@ -3,7 +3,7 @@ use crate::{
     compiler::{CompileError, Compiler},
     coordinate_frame::CoordinateFrames,
     demos::{Demo, DemoSection},
-    field::RgbaField,
+    field::{Field, RgbaField},
     history::SnapshotCause,
     interpreter::{Interpreter, StabilizeOutcome},
     material::Material,
@@ -13,7 +13,7 @@ use crate::{
         gl_garbage::gl_gc,
         view_painter::{DrawView, ViewPainter},
     },
-    pixmap::MaterialMap,
+    pixmap::{MaterialMap, Pixmap},
     rule::CanvasInput,
     rule_activity::RuleActivity,
     run_mode::{RunMode, RunSettings, RunSpeed},
@@ -57,7 +57,6 @@ pub struct EguiApp {
     view_input: ViewInput,
     canvas_input: CanvasInput,
 
-    new_size: Point<i64>,
     file_name: String,
     // current_folder: PathBuf,
     compiler: Compiler,
@@ -386,8 +385,10 @@ impl EguiApp {
     pub fn file_chooser_ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             if ui.button("New").clicked() {
-                let bounds = Rect::low_size(Point(0, 0), self.new_size);
-                self.view = View::empty(bounds);
+                let bounds = self.view.world.bounds();
+                let material_map = Pixmap::filled(bounds, Material::TRANSPARENT);
+                let world = World::from_material_map(material_map);
+                self.set_world(world);
                 ui.close();
             }
         });
@@ -841,7 +842,6 @@ impl EguiApp {
             warn!("Failed to load png file!");
             return;
         };
-        self.new_size = rgba_field.size();
         let material_map = MaterialMap::from(rgba_field);
         let world = World::from(material_map);
         self.set_world(world);

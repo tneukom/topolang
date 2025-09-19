@@ -2,7 +2,7 @@ use crate::{
     brush::Brush,
     camera::Camera,
     coordinate_frame::CoordinateFrames,
-    field::{Field, RgbaField},
+    field::RgbaField,
     history::{History, SnapshotCause},
     material::Material,
     material_effects::material_map_effects,
@@ -310,13 +310,6 @@ impl View {
 
     pub fn zoom_out(&mut self, view_point: Point<f64>) {
         self.camera = self.camera.zoom_out_at_view_point(view_point);
-    }
-
-    pub fn empty(bounds: Rect<i64>) -> View {
-        let field = Field::filled(bounds, Material::TRANSPARENT);
-        let material_map = Pixmap::from_field(&field);
-        let world = World::from_material_map(material_map);
-        Self::new(world)
     }
 
     /// If there currently is a selection, cancel it and integrate its content back into the world
