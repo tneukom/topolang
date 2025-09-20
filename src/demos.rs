@@ -105,7 +105,19 @@ impl Demo {
         RunSettings::new(RunMode::Paused, RunSpeed::Hz2),
     );
 
-    pub const DEMOS: [Demo; 11] = [
+    pub const HEX_WAVE: Demo = Demo::new(
+        "hex_wave.png",
+        include_bytes!("../resources/saves/hex_wave.png"),
+        RunSettings::new(RunMode::Run, RunSpeed::Hz30),
+    );
+
+    pub const SIMPLE_TRAIN: Demo = Demo::new(
+        "simple_train.png",
+        include_bytes!("../resources/saves/simple_train.png"),
+        RunSettings::new(RunMode::Run, RunSpeed::Hz5),
+    );
+
+    pub const DEMOS: [Demo; 13] = [
         Self::TURING,
         Self::PUZZLE_15,
         Self::GAME_2048,
@@ -117,6 +129,8 @@ impl Demo {
         Self::RULE_110,
         Self::TRIANGLE_CELLULAR_AUTOMATON,
         Self::AUTUMN_TREE,
+        Self::HEX_WAVE,
+        Self::SIMPLE_TRAIN,
     ];
 
     pub fn by_filename(filename: &str) -> Option<&'static Demo> {
@@ -163,21 +177,35 @@ impl DemoSection {
         ],
     };
 
-    pub const OTHER: DemoSection = DemoSection {
-        name: "Other",
+    pub const COMPUTERS: DemoSection = DemoSection {
+        name: "Computers",
         demos: &[
             ("4 Bit Adder", Demo::ADDER_4BIT),
             ("Finite Automaton", Demo::FINITE_AUTOMATON),
             ("Binary Counter", Demo::BINARY_COUNTER),
             ("Turing Machine", Demo::TURING),
+        ],
+    };
+
+    pub const ANIMATION: DemoSection = DemoSection {
+        name: "Animation",
+        demos: &[
+            ("Hex Wave", Demo::HEX_WAVE),
             ("Autumn Tree", Demo::AUTUMN_TREE),
         ],
     };
 
-    pub const SECTIONS: [Self; 4] = [
+    pub const BASIC: DemoSection = DemoSection {
+        name: "Basic",
+        demos: &[("Simple Train", Demo::SIMPLE_TRAIN)],
+    };
+
+    pub const SECTIONS: [Self; 6] = [
         Self::TUTORIALS,
         Self::GAMES,
         Self::CELLULAR_AUTOMATA,
-        Self::OTHER,
+        Self::COMPUTERS,
+        Self::ANIMATION,
+        Self::BASIC,
     ];
 }
