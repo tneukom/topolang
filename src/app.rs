@@ -47,6 +47,37 @@ impl Clipboard {
     }
 }
 
+pub struct TickTimer {
+    /// Time elapsed since tick start
+    pub tick_elapsed: f64,
+
+    pub tick_ending: bool,
+
+    /// Dt of the previous frame
+    pub dt: f64,
+}
+
+impl TickTimer {
+    pub fn new() -> Self {
+        Self {
+            tick_elapsed: 0.0,
+            tick_ending: false,
+            dt: 1.0 / 60.0,
+        }
+    }
+
+    pub fn elapse_dt(&mut self, dt: f64, speed: RunSpeed) {
+        self.dt = dt;
+        self.tick_elapsed += dt;
+        if self.tick_elapsed > speed.tick_dt() {
+            self.tick_elapsed -= speed.tick_dt();
+            self.tick_ending = true;
+        } else {
+            self.tick_ending = false;
+        }
+    }
+}
+
 pub struct EguiApp {
     view_painter: Arc<Mutex<ViewPainter>>,
     pub view_settings: ViewSettings,
@@ -82,7 +113,7 @@ pub struct EguiApp {
     /// have the proper view_rect
     reset_camera_requested: bool,
 
-    i_frame: usize,
+    tick_timer: TickTimer,
 
     #[cfg(feature = "link_ui")]
     link: String,
@@ -170,7 +201,7 @@ impl EguiApp {
             channel_sender,
             channel_receiver,
             reset_camera_requested: true,
-            i_frame: 0,
+            tick_timer: TickTimer::new(),
             #[cfg(feature = "link_ui")]
             link: "".to_string(),
         }
@@ -509,9 +540,8 @@ impl EguiApp {
     }
 
     pub fn slowmo(&mut self) {
-        // Tick at lower rate than 60fps
-        let tick_frame = self.i_frame % self.run_settings.speed.frames_per_tick() == 0;
-        if !tick_frame {
+        if !self.tick_timer.tick_ending {
+            // Only one rule application per tick
             return;
         }
 
@@ -573,9 +603,9 @@ impl EguiApp {
             return;
         };
 
-        // Run for 10ms but don't wake up regions
+        // Run for 0.75 * frame_dt but don't wake up regions
         let now = Instant::now();
-        while now.elapsed().as_secs_f64() < 0.01 {
+        while now.elapsed().as_secs_f64() < 0.75 * self.tick_timer.dt {
             let max_modifications = 32;
             let (outcome, applications) =
                 interpreter.stabilize(&mut self.view.world, &self.canvas_input, max_modifications);
@@ -585,8 +615,7 @@ impl EguiApp {
             }
 
             if outcome == StabilizeOutcome::Stable {
-                if (self.i_frame + 1) % self.run_settings.speed.frames_per_tick() == 0 {
-                    // Wake up if this is the first frame of the tick
+                if self.tick_timer.tick_ending {
                     interpreter.wake_up(&mut self.view.world);
                 }
 
@@ -1016,8 +1045,8 @@ impl EguiApp {
         }
 
         let update_world = if self.run_settings.mode == RunMode::Run {
-            // During Run mode only update in final frame of tick
-            (self.i_frame + 1) % self.run_settings.speed.frames_per_tick() == 0
+            // During Run mode only update when tick is done
+            self.tick_timer.tick_ending
         } else {
             true
         };
@@ -1177,9 +1206,19 @@ impl EguiApp {
 
 impl eframe::App for EguiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let dt = ctx.input(|input| input.unstable_dt) as f64;
+        self.tick_timer.elapse_dt(dt, self.run_settings.speed);
+
+        // For debugging frame egui timing
+        // ctx.input(|input| {
+        //     println!(
+        //         "predicted_dt: {}, unstable_dt: {}, stable_dt: {}",
+        //         input.predicted_dt, input.unstable_dt, input.stable_dt
+        //     );
+        // });
+
         tracy_client::frame_mark();
 
-        self.i_frame += 1;
         // let mut style = ctx.style().deref().clone();
         // style.visuals.dark_mode = false;
         // ctx.set_style(style);
@@ -1266,10 +1305,6 @@ impl eframe::App for EguiApp {
         };
         ctx.set_cursor_icon(cursor_icon);
 
-        #[cfg(feature = "force_120hz")]
-        ctx.request_repaint_after_secs(1.0f32 / 120.0f32);
-
-        #[cfg(not(feature = "force_120hz"))]
         ctx.request_repaint();
     }
 }

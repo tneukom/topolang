@@ -58,8 +58,7 @@ pub fn main_editor() {
         let native_options = eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default().with_drag_and_drop(true),
             depth_buffer: 24,
-            #[cfg(feature = "force_120hz")]
-            vsync: false,
+            vsync: true,
             #[cfg(not(target_arch = "wasm32"))]
             window_builder: Some(Box::new(|builder| builder.with_maximized(true))),
             ..eframe::NativeOptions::default()

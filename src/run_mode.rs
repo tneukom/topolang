@@ -7,24 +7,32 @@ pub enum RunSpeed {
     Hz5,
     Hz10,
     Hz30,
+    Hz60,
 }
 
 impl RunSpeed {
-    const ALL: [Self; 5] = [Self::Hz1, Self::Hz2, Self::Hz5, Self::Hz10, Self::Hz30];
+    const ALL: [Self; 6] = [
+        Self::Hz1,
+        Self::Hz2,
+        Self::Hz5,
+        Self::Hz10,
+        Self::Hz30,
+        Self::Hz60,
+    ];
 
-    pub fn frames_per_tick(self) -> usize {
-        assert_eq!(60 % self.ticks_per_frame(), 0);
-        60 / self.ticks_per_frame()
-    }
-
-    pub fn ticks_per_frame(self) -> usize {
+    pub fn ticks_per_second(self) -> usize {
         match self {
             Self::Hz1 => 1,
             Self::Hz2 => 2,
             Self::Hz5 => 5,
             Self::Hz10 => 10,
             Self::Hz30 => 30,
+            Self::Hz60 => 60,
         }
+    }
+
+    pub fn tick_dt(self) -> f64 {
+        1.0 / self.ticks_per_second() as f64
     }
 }
 
@@ -40,6 +48,7 @@ impl ReflectEnum for RunSpeed {
             Self::Hz5 => "5",
             Self::Hz10 => "10",
             Self::Hz30 => "30",
+            Self::Hz60 => "60",
         }
     }
 }
