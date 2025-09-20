@@ -41,6 +41,15 @@ pub struct CoordinateFrames {
 }
 
 impl CoordinateFrames {
+    pub fn new(window_size: Point<f64>, viewport: Rect<f64>) -> Self {
+        assert!(window_size.x >= 1.0 && window_size.y >= 1.0);
+        assert!(viewport.width() >= 1.0 && viewport.height() >= 1.0);
+        Self {
+            window_size,
+            viewport,
+        }
+    }
+
     pub fn window_center(self) -> Point<f64> {
         0.5 * self.window_size
     }

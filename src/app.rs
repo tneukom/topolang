@@ -893,12 +893,12 @@ impl EguiApp {
         let size = ui.available_size_before_wrap();
         let (egui_rect, response) = ui.allocate_exact_size(size, egui::Sense::click_and_drag());
 
-        let viewport: Rect<f64> = egui_rect.into();
-
-        let frames = CoordinateFrames {
-            window_size,
-            viewport,
-        };
+        let mut viewport: Rect<f64> = egui_rect.into();
+        if viewport.width() < 1.0 || viewport.height() < 1.0 {
+            // Hack so app doesn't crash when window is too small and viewport has size zero.
+            viewport = Rect::low_size(Point::ZERO, Point::ONE);
+        }
+        let frames = CoordinateFrames::new(window_size, viewport);
 
         // Show compile error
         if let Some(err) = &self.compile_error {
