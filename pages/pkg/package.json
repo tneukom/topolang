@@ -1,0 +1,14 @@
+{
+  "name": "topolang_bin",
+  "version": "0.1.0",
+  "files": [
+    "topolang_bg.wasm",
+    "topolang.js",
+    "topolang.d.ts"
+  ],
+  "module": "topolang.js",
+  "types": "topolang.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
