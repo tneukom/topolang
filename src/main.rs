@@ -57,6 +57,7 @@ pub fn main_editor() {
     unsafe {
         let native_options = eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default().with_drag_and_drop(true),
+            // .with_inner_size([1920.0, 1080.0]),
             depth_buffer: 24,
             vsync: true,
             #[cfg(not(target_arch = "wasm32"))]
