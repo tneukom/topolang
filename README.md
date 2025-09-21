@@ -3,7 +3,7 @@ TopoLang ([try!](https://tneukom.github.io/topolang/))
 
 ![Turing machine](readme_resources/turing.gif)  
 *A Turing machine simulator implemented in Topolang
-([try!](https://tneukom.github.io/topolang/index.html?demo=15_puzzle.png))*
+([try!](https://tneukom.github.io/topolang/index.html?demo=turing.png))*
 
 TopoLang is an experimental programming "language" based on topological pattern
 matching in images. In the example below there is a single rule, the left side

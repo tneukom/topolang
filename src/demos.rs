@@ -117,7 +117,7 @@ impl Demo {
         RunSettings::new(RunMode::Run, RunSpeed::Hz5),
     );
 
-    pub const DEMOS: [Demo; 13] = [
+    pub const DEMOS: [Demo; 16] = [
         Self::TURING,
         Self::PUZZLE_15,
         Self::GAME_2048,
@@ -131,6 +131,9 @@ impl Demo {
         Self::AUTUMN_TREE,
         Self::HEX_WAVE,
         Self::SIMPLE_TRAIN,
+        Self::TUTORIAL_BASICS,
+        Self::TUTORIAL_SOLID,
+        Self::TUTORIAL_SLEEP,
     ];
 
     pub fn by_filename(filename: &str) -> Option<&'static Demo> {
