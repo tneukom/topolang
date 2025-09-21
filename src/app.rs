@@ -142,12 +142,12 @@ impl EguiApp {
         let demo = {
             #[cfg(target_arch = "wasm32")]
             {
-                Self::get_url_demo().unwrap_or(&Demo::BINARY_COUNTER)
+                Self::get_url_demo().unwrap_or(&Demo::TURING)
             }
 
             #[cfg(not(target_arch = "wasm32"))]
             {
-                &Demo::BINARY_COUNTER
+                &Demo::TURING
             }
         };
 
@@ -176,14 +176,14 @@ impl EguiApp {
 
         let rule_activity = RuleActivity::new(&[]);
 
-        Self {
+        let mut app = Self {
             view_painter: Arc::new(Mutex::new(view_painter)),
             view,
             view_settings,
             gl,
             show_full_ui: true,
             file_name: "".to_string(),
-            run_settings: RunSettings::new(RunMode::Paused, RunSpeed::Hz30),
+            run_settings: demo.autorun,
             view_input: ViewInput::EMPTY,
             canvas_input: CanvasInput::default(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -204,7 +204,10 @@ impl EguiApp {
             tick_timer: TickTimer::new(),
             #[cfg(feature = "link_ui")]
             link: "".to_string(),
-        }
+        };
+
+        app.compile();
+        app
     }
 
     pub fn edit_mode_icon(edit_mode: EditMode) -> egui::ImageSource<'static> {

@@ -114,7 +114,7 @@ impl Demo {
     pub const SIMPLE_TRAIN: Demo = Demo::new(
         "simple_train.png",
         include_bytes!("../resources/saves/simple_train.png"),
-        RunSettings::new(RunMode::Run, RunSpeed::Hz5),
+        RunSettings::new(RunMode::Slowmo, RunSpeed::Hz5),
     );
 
     pub const DEMOS: [Demo; 16] = [
