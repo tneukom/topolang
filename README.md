@@ -1,8 +1,7 @@
 TopoLang ([try!](https://tneukom.github.io/topolang/))
 ========
 
-![Turing machine](readme_resources/turing.gif)
-
+![Turing machine](readme_resources/turing.gif)  
 *A Turing machine simulator implemented in Topolang
 ([try!](https://tneukom.github.io/topolang/index.html?demo=15_puzzle.png))*
 
@@ -16,8 +15,7 @@ without tearing.
 The goal of this project is to explore what kind of program can be expressed
 well with this kind of language.
 
-![Train Animation](readme_resources/train.gif)
-
+![Train Animation](readme_resources/train.gif)  
 *Simple chain animation
 ([try!](https://tneukom.github.io/topolang/index.html?demo=simple_train.png))*
 
